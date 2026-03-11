@@ -1,0 +1,66 @@
+[project]
+name = "comp-model"
+version = "3.0.0"
+description = "Computational modeling toolkit with event-based task semantics."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+stan = ["cmdstanpy>=1.2"]
+dev = [
+    "cmdstanpy>=1.2",
+    "pyright>=1.1",
+    "pytest>=8.0",
+    "pytest-xdist>=3.5",
+    "ruff>=0.8",
+    "scipy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/comp_model"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+include = ["src"]
+exclude = ["**/__pycache__"]
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "TCH",
+    "RUF",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["comp_model"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "stan: tests that require cmdstan (slow, compile Stan programs)",
+    "slow: tests that take >10 seconds",
+]
+addopts = "-x --tb=short"
+
