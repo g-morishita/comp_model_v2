@@ -32,7 +32,7 @@ class _TrialSchemaProtocol(Protocol):
         """
 
 
-def _validate_payload(event: Event, trial_index: int, step_index: int) -> None:
+def validate_event_payload(event: Event, trial_index: int, step_index: int) -> None:
     """Validate required payload keys for one event.
 
     Parameters
@@ -94,7 +94,7 @@ def validate_event(event: Event, trial_index: int, step_index: int) -> None:
             f"Trial {trial_index}, event {step_index}: event_index mismatch "
             f"({event.event_index} != {step_index})"
         )
-    _validate_payload(event, trial_index, step_index)
+    validate_event_payload(event, trial_index, step_index)
 
 
 def validate_trial(trial: Trial, schema: _TrialSchemaProtocol | None = None) -> None:
@@ -214,6 +214,7 @@ __all__ = [
     "validate_block",
     "validate_dataset",
     "validate_event",
+    "validate_event_payload",
     "validate_subject",
     "validate_trial",
 ]

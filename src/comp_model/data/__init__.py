@@ -5,6 +5,7 @@ from comp_model.data.validation import (
     validate_block,
     validate_dataset,
     validate_event,
+    validate_event_payload,
     validate_subject,
     validate_trial,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "validate_block",
     "validate_dataset",
     "validate_event",
+    "validate_event_payload",
     "validate_subject",
     "validate_trial",
 ]
