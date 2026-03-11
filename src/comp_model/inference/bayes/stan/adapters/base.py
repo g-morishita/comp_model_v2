@@ -1,0 +1,98 @@
+"""Protocols for Stan model adapters."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from comp_model.data.schema import Dataset, SubjectData
+    from comp_model.inference.config import HierarchyStructure
+    from comp_model.models.condition.shared_delta import SharedDeltaLayout
+    from comp_model.models.kernels.base import ModelKernelSpec
+    from comp_model.tasks.schemas import TrialSchema
+
+
+class StanAdapter(Protocol):
+    """Protocol implemented by Stan data and program adapters."""
+
+    def kernel_spec(self) -> ModelKernelSpec:
+        """Return the kernel specification served by the adapter.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Kernel metadata used by the Stan backend.
+        """
+
+        ...
+
+    def stan_program_path(self, hierarchy: HierarchyStructure) -> str:
+        """Return the Stan program path for a hierarchy structure.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure whose Stan program is requested.
+
+        Returns
+        -------
+        str
+            Filesystem path to the Stan program.
+        """
+
+        ...
+
+    def build_stan_data(
+        self,
+        data: SubjectData | Dataset,
+        schema: TrialSchema,
+        hierarchy: HierarchyStructure,
+        layout: SharedDeltaLayout | None = None,
+    ) -> dict[str, Any]:
+        """Build Stan data for a subject or dataset.
+
+        Parameters
+        ----------
+        data
+            Subject or dataset to export.
+        schema
+            Trial schema used for replay extraction.
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+        layout
+            Optional condition-aware parameter layout.
+
+        Returns
+        -------
+        dict[str, Any]
+            Stan-ready data dictionary.
+        """
+
+        ...
+
+    def subject_param_names(self) -> tuple[str, ...]:
+        """Return subject-level Stan parameter names.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Subject-level parameter names extracted from fit results.
+        """
+
+        ...
+
+    def population_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
+        """Return population-level Stan parameter names for a hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Population-level parameter names extracted from fit results.
+        """
+
+        ...
