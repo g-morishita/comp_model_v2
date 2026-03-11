@@ -1,0 +1,24 @@
+"""Canonical event-based data structures and validation helpers."""
+
+from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectData, Trial
+from comp_model.data.validation import (
+    validate_block,
+    validate_dataset,
+    validate_event,
+    validate_subject,
+    validate_trial,
+)
+
+__all__ = [
+    "Block",
+    "Dataset",
+    "Event",
+    "EventPhase",
+    "SubjectData",
+    "Trial",
+    "validate_block",
+    "validate_dataset",
+    "validate_event",
+    "validate_subject",
+    "validate_trial",
+]
