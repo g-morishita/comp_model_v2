@@ -9,6 +9,7 @@ from comp_model.data.schema import Dataset, SubjectData
 from comp_model.inference.mle.optimize import MleFitResult, fit_mle_conditioned, fit_mle_simple
 
 if TYPE_CHECKING:
+    from comp_model.inference.bayes.result import BayesFitResult
     from comp_model.inference.config import InferenceConfig
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernel
@@ -22,7 +23,7 @@ def fit(
     schema: TrialSchema,
     layout: SharedDeltaLayout | None = None,
     adapter: object | None = None,
-) -> MleFitResult | object:
+) -> MleFitResult | BayesFitResult:
     """Dispatch a fit request to the configured inference backend.
 
     Parameters

@@ -1,0 +1,115 @@
+"""CmdStanPy-backed Bayesian fitting."""
+
+from __future__ import annotations
+
+import importlib
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast
+
+import numpy as np
+
+from comp_model.inference.bayes.result import BayesFitResult
+
+if TYPE_CHECKING:
+    from comp_model.data.schema import Dataset, SubjectData
+    from comp_model.inference.bayes.stan.adapters.base import StanAdapter
+    from comp_model.inference.config import HierarchyStructure
+    from comp_model.models.condition.shared_delta import SharedDeltaLayout
+    from comp_model.tasks.schemas import TrialSchema
+
+
+@dataclass(frozen=True, slots=True)
+class StanFitConfig:
+    """Configuration for Stan NUTS sampling.
+
+    Attributes
+    ----------
+    n_warmup
+        Number of warmup iterations per chain.
+    n_samples
+        Number of post-warmup samples per chain.
+    n_chains
+        Number of sampling chains.
+    seed
+        Optional random seed.
+    adapt_delta
+        Stan NUTS target acceptance rate.
+    max_treedepth
+        Maximum NUTS tree depth.
+    """
+
+    n_warmup: int = 1000
+    n_samples: int = 1000
+    n_chains: int = 4
+    seed: int | None = None
+    adapt_delta: float = 0.8
+    max_treedepth: int = 10
+
+
+DEFAULT_STAN_FIT_CONFIG = StanFitConfig()
+
+
+def fit_stan(
+    adapter: StanAdapter,
+    data: SubjectData | Dataset,
+    schema: TrialSchema,
+    hierarchy: HierarchyStructure,
+    layout: SharedDeltaLayout | None = None,
+    config: StanFitConfig | None = None,
+) -> BayesFitResult:
+    """Fit a model with Stan using the supplied adapter and data.
+
+    Parameters
+    ----------
+    adapter
+        Stan adapter that provides data and program paths.
+    data
+        Subject or dataset to fit.
+    schema
+        Trial schema used for replay extraction.
+    hierarchy
+        Hierarchy structure targeted by the Stan program.
+    layout
+        Optional condition-aware parameter layout.
+    config
+        Optional Stan sampling configuration.
+
+    Returns
+    -------
+    BayesFitResult
+        Posterior samples and diagnostics from the Stan fit.
+    """
+
+    resolved_config = config if config is not None else DEFAULT_STAN_FIT_CONFIG
+    cmdstanpy = cast("Any", importlib.import_module("cmdstanpy"))
+    model = cmdstanpy.CmdStanModel(stan_file=adapter.stan_program_path(hierarchy))
+    fit = model.sample(
+        data=adapter.build_stan_data(data, schema, hierarchy, layout),
+        iter_warmup=resolved_config.n_warmup,
+        iter_sampling=resolved_config.n_samples,
+        chains=resolved_config.n_chains,
+        seed=resolved_config.seed,
+        adapt_delta=resolved_config.adapt_delta,
+        max_treedepth=resolved_config.max_treedepth,
+    )
+
+    posterior_samples = {}
+    for parameter_name in adapter.subject_param_names():
+        posterior_samples[parameter_name] = np.asarray(fit.stan_variable(parameter_name))
+    for parameter_name in adapter.population_param_names(hierarchy):
+        posterior_samples[parameter_name] = np.asarray(fit.stan_variable(parameter_name))
+
+    log_lik = np.asarray(fit.stan_variable("log_lik"))
+    diagnostics = {
+        "n_divergences": int(fit.diagnose().count("divergent")),
+        "summary": fit.summary(),
+    }
+
+    return BayesFitResult(
+        model_id=adapter.kernel_spec().model_id,
+        hierarchy=hierarchy,
+        posterior_samples=posterior_samples,
+        log_lik=log_lik,
+        subject_params=None,
+        diagnostics=diagnostics,
+    )
