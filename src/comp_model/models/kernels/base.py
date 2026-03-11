@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from comp_model.data.extractors import DecisionTrialView
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,39 +102,6 @@ class ModelKernelSpec:
     description: str = ""
 
 
-class DecisionTrialViewLike(Protocol):
-    """Structural protocol for extractor output consumed by kernels.
-
-    Attributes
-    ----------
-    trial_index
-        Trial index for the decision.
-    available_actions
-        Legal actions at the decision point.
-    choice
-        Chosen action value.
-    reward
-        Observed reward, if present.
-    observation
-        Subject-facing observation payload.
-    social_action
-        Observed demonstrator action, if present.
-    social_reward
-        Observed demonstrator reward, if present.
-    metadata
-        Additional extractor metadata.
-    """
-
-    trial_index: int
-    available_actions: tuple[int, ...]
-    choice: int
-    reward: float | None
-    observation: Mapping[str, Any]
-    social_action: int | None
-    social_reward: float | None
-    metadata: Mapping[str, Any]
-
-
 StateT = TypeVar("StateT")
 ParamsT = TypeVar("ParamsT")
 
@@ -189,7 +158,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
     def action_probabilities(
         self,
         state: StateT,
-        view: DecisionTrialViewLike,
+        view: DecisionTrialView,
         params: ParamsT,
     ) -> tuple[float, ...]:
         """Return action probabilities for the current decision view.
@@ -214,7 +183,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
     def next_state(
         self,
         state: StateT,
-        view: DecisionTrialViewLike,
+        view: DecisionTrialView,
         params: ParamsT,
     ) -> StateT:
         """Update the latent state after the decision outcome.
