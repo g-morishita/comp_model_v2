@@ -1,0 +1,6 @@
+# coding agents artifacts
+AGENTS.md
+comp_model_v3_plan.md
+.pytest_cache/
+.ruff_cache/
+.venv/
