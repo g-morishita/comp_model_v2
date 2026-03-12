@@ -1,4 +1,9 @@
-"""Backend-agnostic kernel metadata and protocols."""
+"""Backend-agnostic kernel metadata and protocols.
+
+The kernel layer defines learning and choice rules only. It is deliberately
+agnostic to task structure, trial schemas, pooling hierarchies, and Stan
+implementation details.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,12 @@ class PriorSpec:
         Hyperparameters for the prior family.
     parameterization
         Scale on which the prior is defined.
+
+    Notes
+    -----
+    Priors are declared on the model side so that MLE and Bayesian backends can
+    share one kernel specification even though only the Bayesian backend uses
+    the prior values directly.
     """
 
     family: str
@@ -42,6 +53,11 @@ class InitSpec:
         Strategy-specific keyword arguments.
     default_unconstrained
         Default unconstrained starting value.
+
+    Notes
+    -----
+    Initialization is expressed on the unconstrained scale so that restart
+    generation is aligned with the kernel's transform registry.
     """
 
     strategy: str
@@ -65,6 +81,12 @@ class ParameterSpec:
         Optional prior metadata for Bayesian inference.
     mle_init
         Optional initialization metadata for MLE.
+
+    Notes
+    -----
+    ``transform_id`` links the parameter to the shared transform registry. That
+    single identifier drives constrained parsing in Python and transformed
+    parameter expressions in Stan.
     """
 
     name: str
@@ -92,6 +114,13 @@ class ModelKernelSpec:
         Policy for resetting kernel state, either ``"per_subject"`` or ``"per_block"``.
     description
         Human-readable model description.
+
+    Notes
+    -----
+    ``ModelKernelSpec`` does not reference event-order details such as
+    ``TrialSchema`` or ``node_id``. It describes the kernel's parameters and
+    replay requirements after extraction has already produced flat decision
+    views.
     """
 
     model_id: str
@@ -107,7 +136,15 @@ ParamsT = TypeVar("ParamsT")
 
 
 class ModelKernel(Protocol, Generic[StateT, ParamsT]):
-    """Protocol shared by all backend-agnostic model kernels."""
+    """Protocol shared by all backend-agnostic model kernels.
+
+    Notes
+    -----
+    Kernels only consume :class:`~comp_model.data.extractors.DecisionTrialView`
+    objects. They never inspect raw :class:`~comp_model.data.schema.Event`,
+    :class:`~comp_model.data.schema.Trial`, or
+    :class:`~comp_model.tasks.schemas.TrialSchema` objects.
+    """
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
@@ -132,7 +169,8 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         Returns
         -------
         ParamsT
-            Parsed parameter object for the kernel.
+            Parsed parameter object for the kernel, typically after applying the
+            parameter transform specified in :class:`ParameterSpec`.
         """
 
         ...
@@ -150,7 +188,8 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         Returns
         -------
         StateT
-            Initial latent state.
+            Initial latent state used at subject start or, when configured, at
+            each block boundary.
         """
 
         ...
@@ -175,7 +214,8 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         Returns
         -------
         tuple[float, ...]
-            Probabilities aligned with ``view.available_actions``.
+            Probabilities aligned with ``view.available_actions`` only. Illegal
+            actions must not appear in the returned tuple.
         """
 
         ...
@@ -200,7 +240,8 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         Returns
         -------
         StateT
-            Updated latent state.
+            Updated latent state after incorporating any outcome or social
+            information present in ``view``.
         """
 
         ...

@@ -1,4 +1,9 @@
-"""Validation helpers for canonical event-based data structures."""
+"""Validation helpers for canonical event-based data structures.
+
+The validation layer checks the structural contracts of the canonical hierarchy
+without introducing task-specific semantics. When a trial schema is supplied,
+schema validation becomes the stricter source of truth for positional meaning.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +19,7 @@ class _TrialSchemaProtocol(Protocol):
     Methods
     -------
     validate_trial(trial)
-        Validate a trial against an external schema.
+        Validate a trial against an external schema implementation.
     """
 
     def validate_trial(self, trial: Trial) -> None:
@@ -48,6 +53,16 @@ def validate_event_payload(event: Event, trial_index: int, step_index: int) -> N
     -------
     None
         This function raises on invalid payloads.
+
+    Notes
+    -----
+    Payload validation is phase-specific:
+
+    - INPUT requires ``available_actions``,
+    - DECISION requires ``action``, and
+    - OUTCOME requires ``reward``.
+
+    UPDATE currently has no required payload keys.
     """
 
     prefix = f"Trial {trial_index}, event {step_index}"
@@ -83,6 +98,12 @@ def validate_event(event: Event, trial_index: int, step_index: int) -> None:
     -------
     None
         This function raises on invalid events.
+
+    Notes
+    -----
+    This check is intentionally local to one event. It enforces non-empty
+    ``node_id`` and ``actor_id``, verifies ``event_index`` matches the event's
+    position, and then delegates payload checks to :func:`validate_event_payload`.
     """
 
     if not event.node_id or not event.node_id.strip():
@@ -111,6 +132,13 @@ def validate_trial(trial: Trial, schema: _TrialSchemaProtocol | None = None) -> 
     -------
     None
         This function raises on invalid trials.
+
+    Notes
+    -----
+    Without a schema, trial validation only enforces generic structural rules
+    such as contiguous event indices. With a schema, the schema takes over
+    positional validation so that phase order, actor identity, node identity,
+    and payload requirements all come from the same declarative contract.
     """
 
     if schema is not None:
@@ -143,6 +171,11 @@ def validate_block(block: Block, schema: _TrialSchemaProtocol | None = None) -> 
     -------
     None
         This function raises on invalid blocks.
+
+    Notes
+    -----
+    Block validation checks the block's own condition label and trial-index
+    contiguity before delegating trial validation to :func:`validate_trial`.
     """
 
     if not block.condition or not block.condition.strip():
@@ -172,6 +205,11 @@ def validate_subject(subject: SubjectData, schema: _TrialSchemaProtocol | None =
     -------
     None
         This function raises on invalid subject data.
+
+    Notes
+    -----
+    Subject validation enforces subject ID presence, contiguous block ordering,
+    and recursive validation of every block in subject order.
     """
 
     if not subject.subject_id or not subject.subject_id.strip():
@@ -201,6 +239,12 @@ def validate_dataset(dataset: Dataset, schema: _TrialSchemaProtocol | None = Non
     -------
     None
         This function raises on invalid datasets.
+
+    Notes
+    -----
+    Dataset validation currently checks for unique subject IDs and then validates
+    every subject independently. It does not impose cross-subject task-equality
+    constraints.
     """
 
     subject_ids = [subject.subject_id for subject in dataset.subjects]

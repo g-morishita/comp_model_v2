@@ -1,4 +1,9 @@
-"""Simulation engine for generating event-based subject data."""
+"""Simulation engine for generating event-based subject data.
+
+The runtime executes task structure and environment dynamics while delegating
+choice and learning to a model kernel. The resulting event traces are the same
+objects later consumed by validation, replay, and Stan export.
+"""
 
 from __future__ import annotations
 
@@ -30,6 +35,11 @@ class SimulationConfig:
     ----------
     seed
         Optional random seed for the subject-level RNG.
+
+    Notes
+    -----
+    Dataset simulation offsets this base seed by subject index so each simulated
+    subject receives an independent but reproducible random stream.
     """
 
     seed: int | None = None
@@ -65,6 +75,24 @@ def simulate_subject(
     -------
     SubjectData
         Simulated hierarchical event trace for one subject.
+
+    Notes
+    -----
+    The simulation loop follows the implementation plan directly:
+
+    1. infer the action count from task metadata,
+    2. initialize kernel state once at subject start,
+    3. reset the environment at each block,
+    4. optionally reset kernel state at block boundaries according to
+       ``kernel.spec().state_reset_policy``,
+    5. step through the schema position by position, sampling subject actions
+       from ``kernel.action_probabilities`` whenever a schema step requires an
+       action, and
+    6. after the full trial event sequence is assembled, extract decision views
+       and apply ``kernel.next_state`` for replay-consistent learning.
+
+    The same extraction path is therefore used for simulation updates and later
+    likelihood evaluation.
     """
 
     rng = np.random.default_rng(config.seed)
@@ -165,6 +193,12 @@ def simulate_dataset(
     -------
     Dataset
         Simulated dataset across all requested subjects.
+
+    Notes
+    -----
+    Subjects are simulated independently with fresh environments returned by
+    ``env_factory``. Subject order follows the insertion order of
+    ``params_per_subject``.
     """
 
     subjects: list[SubjectData] = []
@@ -202,6 +236,12 @@ def _find_subject_input(events: list[Event], node_id: str, actor_id: str) -> Eve
     -------
     Event | None
         Matching subject INPUT event, if any.
+
+    Notes
+    -----
+    This helper searches only the events accumulated for the current in-progress
+    trial, which matches the runtime contract that an action-required decision
+    must have already been preceded by its subject INPUT event.
     """
 
     for event in events:
@@ -231,6 +271,12 @@ def _infer_n_actions_from_task(task: TaskSpec) -> int:
     ------
     ValueError
         Raised when action counts are missing or inconsistent.
+
+    Notes
+    -----
+    The runtime currently relies on ``BlockSpec.metadata['n_actions']`` rather
+    than inferring action count from a model or environment. All blocks must
+    agree on the same action count.
     """
 
     n_actions_values: set[int] = set()

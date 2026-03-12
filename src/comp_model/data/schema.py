@@ -1,4 +1,10 @@
-"""Canonical hierarchical data structures for the modeling package."""
+"""Canonical hierarchical data structures for the modeling package.
+
+The repository-wide source of truth is the event hierarchy
+``Event -> Trial -> Block -> SubjectData -> Dataset``. Simulation,
+validation, replay likelihoods, and Stan export all work from these objects
+rather than from a separate flattened table representation.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +31,12 @@ class EventPhase(StrEnum):
         Scalar outcome associated with a decision point.
     UPDATE
         Explicit learning/update marker for the modeled agent.
+
+    Notes
+    -----
+    The phase vocabulary is intentionally generic. Task-specific semantics such as
+    "social observation before choice" are encoded by event order, ``actor_id``,
+    and ``node_id``, not by introducing task-specific phase enums.
     """
 
     INPUT = "input"
@@ -49,6 +61,13 @@ class Event:
         Identifier for the actor associated with the event.
     payload
         Phase-specific data carried by the event.
+
+    Notes
+    -----
+    ``node_id`` is structural rather than semantic. It links the INPUT,
+    DECISION, OUTCOME, and UPDATE events that belong to the same decision point
+    without requiring hard-coded domain labels such as ``"social"`` or
+    ``"stimulus"``.
     """
 
     phase: EventPhase
@@ -70,6 +89,11 @@ class Trial:
         Ordered events emitted during the trial.
     metadata
         Optional trial-level metadata.
+
+    Notes
+    -----
+    Trials do not include synthetic ``BLOCK_START`` or ``BLOCK_END`` events.
+    Block boundaries are represented explicitly by :class:`Block`.
     """
 
     trial_index: int
@@ -91,6 +115,11 @@ class Block:
         Ordered trials belonging to the block.
     metadata
         Optional block-level metadata.
+
+    Notes
+    -----
+    A block is the structural unit that determines condition changes and, when a
+    kernel opts into ``state_reset_policy="per_block"``, latent-state resets.
     """
 
     block_index: int
@@ -111,6 +140,11 @@ class SubjectData:
         Ordered blocks completed by the subject.
     metadata
         Optional subject-level metadata.
+
+    Notes
+    -----
+    The order of ``blocks`` is semantically important. Replay and simulation
+    assume it reflects the real sequence experienced by the subject.
     """
 
     subject_id: str
@@ -123,7 +157,8 @@ class SubjectData:
         Yields
         ------
         tuple[Block, Trial]
-            Each block-trial pair in hierarchical order.
+            Each block-trial pair in hierarchical order, preserving the exact
+            replay order used by likelihood code.
         """
 
         for block in self.blocks:
@@ -137,7 +172,8 @@ class SubjectData:
         Returns
         -------
         tuple[Trial, ...]
-            Trial records in block order.
+            Trial records in block order. This is a convenience view rather than
+            the primary ontology.
         """
 
         return tuple(trial for block in self.blocks for trial in block.trials)
@@ -153,6 +189,11 @@ class Dataset:
         Ordered subject records in the dataset.
     metadata
         Optional dataset-level metadata.
+
+    Notes
+    -----
+    Dataset-level helper properties preserve subject-major ordering so that
+    downstream exporters can reconstruct subject and block indices deterministically.
     """
 
     subjects: tuple[SubjectData, ...]
@@ -165,7 +206,7 @@ class Dataset:
         Returns
         -------
         tuple[Block, ...]
-            Blocks in subject order.
+            Blocks in subject-major order.
         """
 
         return tuple(block for subject in self.subjects for block in subject.blocks)
@@ -177,7 +218,7 @@ class Dataset:
         Returns
         -------
         tuple[Trial, ...]
-            Trials in dataset order.
+            Trials in subject-major, then block-major order.
         """
 
         return tuple(

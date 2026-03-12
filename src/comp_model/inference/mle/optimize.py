@@ -1,4 +1,8 @@
-"""Scipy-based maximum-likelihood optimization utilities."""
+"""Scipy-based maximum-likelihood optimization utilities.
+
+MLE fitting is performed on the unconstrained parameter scale using SciPy's
+local optimizers and replay-based likelihood evaluation.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +41,11 @@ class MleOptimizerConfig:
         Shared lower and upper bounds on unconstrained parameters.
     max_iter
         Maximum number of optimizer iterations.
+
+    Notes
+    -----
+    Restarts use one deterministic default start plus ``n_restarts - 1`` random
+    draws sampled uniformly inside ``z_bounds``.
     """
 
     method: str = "L-BFGS-B"
@@ -49,7 +58,41 @@ class MleOptimizerConfig:
 
 @dataclass(frozen=True, slots=True)
 class MleFitResult:
-    """Result bundle for a single-subject MLE fit."""
+    """Result bundle for a single-subject MLE fit.
+
+    Attributes
+    ----------
+    subject_id
+        Subject identifier whose data were fit.
+    model_id
+        Kernel identifier reported by :class:`~comp_model.models.kernels.base.ModelKernelSpec`.
+    log_likelihood
+        Best replay log-likelihood found across restarts.
+    n_params
+        Number of free unconstrained parameters optimized.
+    raw_params
+        Best-fitting unconstrained parameters.
+    constrained_params
+        Best-fitting constrained parameters. For conditioned fits this reports
+        the baseline condition's constrained parameters.
+    aic
+        Akaike information criterion computed from the winning fit.
+    bic
+        Bayesian information criterion computed from the winning fit.
+    n_trials
+        Number of observed trials contributing to the objective.
+    converged
+        Whether the winning SciPy run reported success.
+    n_restarts
+        Number of restart candidates evaluated.
+    all_candidates
+        Unconstrained parameter vectors returned by every restart.
+    all_log_likelihoods
+        Replay log-likelihood values corresponding to ``all_candidates``.
+    params_by_condition
+        Optional constrained parameters reconstructed per condition for
+        conditioned fits.
+    """
 
     subject_id: str
     model_id: str
@@ -93,6 +136,14 @@ def fit_mle_simple(
     -------
     MleFitResult
         Best fit found across all restart candidates.
+
+    Notes
+    -----
+    The optimizer minimizes the negative replay log-likelihood. The default
+    start comes from each parameter's ``mle_init.default_unconstrained`` when
+    available, followed by random restart points in ``config.z_bounds``. The
+    winning unconstrained solution is transformed back to the constrained
+    parameter space before reporting AIC and BIC.
     """
 
     scipy_optimize = cast("Any", importlib.import_module("scipy.optimize"))
@@ -130,6 +181,11 @@ def fit_mle_simple(
         float
             Negative log-likelihood objective for ``scipy.optimize.minimize``.
             Non-finite replay scores are converted to a large penalty value.
+
+        Notes
+        -----
+        Penalizing non-finite values keeps SciPy inside the search rather than
+        aborting when a restart wanders into a numerically unstable region.
         """
 
         raw_params = {name: float(value) for name, value in zip(param_names, z_vector, strict=True)}
@@ -222,6 +278,13 @@ def fit_mle_conditioned(
     -------
     MleFitResult
         Best fit found across all restart candidates.
+
+    Notes
+    -----
+    This routine mirrors :func:`fit_mle_simple`, but the optimized vector lives
+    in :class:`~comp_model.models.condition.shared_delta.SharedDeltaLayout`
+    order. After optimization, the winning vector is reconstructed separately
+    for each condition and transformed into constrained parameter values.
     """
 
     scipy_optimize = cast("Any", importlib.import_module("scipy.optimize"))
@@ -253,6 +316,11 @@ def fit_mle_conditioned(
         float
             Negative conditioned log-likelihood for ``scipy.optimize.minimize``.
             Non-finite replay scores are converted to a large penalty value.
+
+        Notes
+        -----
+        The conditioned objective differs from the simple objective only in how
+        the raw vector is interpreted before replay.
         """
 
         raw_params = {name: float(value) for name, value in zip(param_keys, z_vector, strict=True)}

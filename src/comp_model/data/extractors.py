@@ -1,4 +1,9 @@
-"""Schema-driven extraction from event traces to model-facing decision views."""
+"""Schema-driven extraction from event traces to model-facing decision views.
+
+This module bridges the canonical event hierarchy and backend-agnostic model
+kernels. Extraction is positional and schema-specific, while the resulting
+decision views are flat and order-agnostic.
+"""
 
 from __future__ import annotations
 
@@ -36,6 +41,13 @@ class DecisionTrialView:
         Observed demonstrator reward, if present.
     metadata
         Additional extractor metadata.
+
+    Notes
+    -----
+    Kernels consume :class:`DecisionTrialView` rather than :class:`Event`,
+    :class:`Trial`, or :class:`TrialSchema`. This allows the same kernel to work
+    with different event orders as long as the extractor produces the same flat
+    fields.
     """
 
     trial_index: int
@@ -62,6 +74,26 @@ def extract_decision_views(trial: Trial, schema: TrialSchema) -> tuple[DecisionT
     -------
     tuple[DecisionTrialView, ...]
         One flat record for each decision step in the schema.
+
+    Notes
+    -----
+    The extraction algorithm follows the implementation plan directly:
+
+    1. validate the trial against ``schema``,
+    2. iterate over each DECISION step declared by the schema,
+    3. scan the whole trial positionally to find the matching subject INPUT,
+       any demonstrator INPUT, and the OUTCOME linked by ``node_id``, and
+    4. emit one order-agnostic :class:`DecisionTrialView` for that decision.
+
+    ``node_id`` is only used for structural linking between a decision and its
+    outcome. Social information is detected from the schema's ``actor_id``
+    rather than from special node-name conventions.
+
+    Raises
+    ------
+    ValueError
+        Raised when the schema is violated or when no subject INPUT can be
+        found for a declared decision step.
     """
 
     schema.validate_trial(trial)

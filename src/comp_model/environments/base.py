@@ -1,4 +1,8 @@
-"""Environment protocol for executable task dynamics."""
+"""Environment protocol for executable task dynamics.
+
+Environments execute the task layer one schema step at a time and emit events
+that satisfy the current :class:`~comp_model.tasks.schemas.TrialSchema`.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,14 @@ if TYPE_CHECKING:
 
 
 class Environment(Protocol):
-    """Protocol implemented by executable environments."""
+    """Protocol implemented by executable environments.
+
+    Notes
+    -----
+    The runtime owns the outer loop over blocks, trials, and agent decisions.
+    The environment owns only task-side dynamics: resetting block state and
+    emitting one or more events for the next schema position.
+    """
 
     @property
     def environment_id(self) -> str:
@@ -40,6 +51,12 @@ class Environment(Protocol):
         -------
         None
             This function resets the environment in-place.
+
+        Notes
+        -----
+        ``reset`` is called once per block before any trials in that block are
+        executed. It should bind the block specification and discard any prior
+        within-block state.
         """
 
         ...
@@ -56,6 +73,12 @@ class Environment(Protocol):
         -------
         tuple[Event, ...]
             Events emitted for the current schema step.
+
+        Notes
+        -----
+        ``action`` is supplied only for schema steps whose
+        ``action_required`` flag is true. The environment is responsible for
+        converting that action into one or more canonical events.
         """
 
         ...

@@ -1,4 +1,9 @@
-"""Declarative event-order schemas for trial structure."""
+"""Declarative event-order schemas for trial structure.
+
+Trial schemas are the positional source of truth for trial semantics. The same
+schema definition is shared by environments, validators, and extractors so that
+simulation and replay operate on the same event-order contract.
+"""
 
 from __future__ import annotations
 
@@ -22,6 +27,12 @@ class TrialSchemaStep:
         Actor expected at this step.
     action_required
         Whether the simulation engine must supply an action here.
+
+    Notes
+    -----
+    ``node_id`` and ``actor_id`` are matching constraints, not semantic dispatch
+    keys. Extraction logic stays schema-driven and positional instead of
+    branching on arbitrary node-name strings.
     """
 
     phase: EventPhase
@@ -40,6 +51,14 @@ class TrialSchema:
         Stable identifier for the schema.
     steps
         Ordered schema steps that each trial must match positionally.
+
+    Notes
+    -----
+    ``TrialSchema`` does three jobs with the same positional contract:
+
+    1. it tells environments what event type should occur next,
+    2. it validates recorded trials, and
+    3. it tells the extractor how to interpret events around each decision.
     """
 
     schema_id: str
@@ -57,6 +76,12 @@ class TrialSchema:
         -------
         None
             This function raises on any mismatch.
+
+        Raises
+        ------
+        ValueError
+            Raised when event count, phase, ``node_id``, ``actor_id``, event
+            index, or required payload keys differ from the schema contract.
         """
 
         if len(trial.events) != len(self.steps):
@@ -95,7 +120,7 @@ class TrialSchema:
         Returns
         -------
         tuple[int, ...]
-            Positions of decision steps.
+            Positions whose phase is :class:`~comp_model.data.schema.EventPhase.DECISION`.
         """
 
         return tuple(
@@ -109,7 +134,7 @@ class TrialSchema:
         Returns
         -------
         tuple[int, ...]
-            Positions whose `action_required` flag is true.
+            Positions whose ``action_required`` flag is true.
         """
 
         return tuple(index for index, step in enumerate(self.steps) if step.action_required)

@@ -1,4 +1,8 @@
-"""Asocial Q-learning kernel."""
+"""Asocial Q-learning kernel.
+
+This kernel implements a standard Rescorla-Wagner update with softmax action
+selection over latent action values.
+"""
 
 from __future__ import annotations
 
@@ -43,7 +47,15 @@ class QState:
 
 
 class AsocialQLearningKernel:
-    """Standard softmax Q-learning kernel for asocial bandit tasks."""
+    """Standard softmax Q-learning kernel for asocial bandit tasks.
+
+    Notes
+    -----
+    The kernel is schema-agnostic. It relies only on the extracted
+    :class:`~comp_model.data.extractors.DecisionTrialView`, so the same kernel
+    can be replayed against any task schema that yields compatible asocial
+    decision views.
+    """
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
@@ -52,7 +64,9 @@ class AsocialQLearningKernel:
         Returns
         -------
         ModelKernelSpec
-            Static kernel specification.
+            Static kernel specification declaring two parameters:
+            ``alpha`` on the unit interval and ``beta`` on the positive real
+            line.
         """
 
         return ModelKernelSpec(
@@ -96,7 +110,7 @@ class AsocialQLearningKernel:
         Returns
         -------
         QParams
-            Typed parameter object.
+            Typed parameter object after applying the shared transform registry.
         """
 
         return QParams(
@@ -144,6 +158,13 @@ class AsocialQLearningKernel:
         -------
         tuple[float, ...]
             Probabilities aligned with ``view.available_actions``.
+
+        Notes
+        -----
+        The kernel scores only the currently legal actions, multiplies their
+        latent values by ``beta``, and normalizes them with a numerically stable
+        softmax. The returned tuple is aligned exactly with the order of
+        ``view.available_actions``.
         """
 
         logits = [params.beta * state.q_values[action] for action in view.available_actions]
@@ -170,6 +191,14 @@ class AsocialQLearningKernel:
         -------
         QState
             Updated latent state.
+
+        Notes
+        -----
+        When a reward is present, the chosen action is updated according to
+
+        ``Q[a] <- Q[a] + alpha * (reward - Q[a])``.
+
+        Unchosen actions are left unchanged.
         """
 
         updated_q_values = list(state.q_values)

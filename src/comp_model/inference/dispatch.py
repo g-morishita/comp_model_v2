@@ -1,4 +1,8 @@
-"""Unified inference dispatch entry point."""
+"""Unified inference dispatch entry point.
+
+The dispatch layer chooses between backend implementations while preserving one
+shared kernel/task/data interface.
+"""
 
 from __future__ import annotations
 
@@ -45,6 +49,15 @@ def fit(
     -------
     MleFitResult | object
         Fit result for the selected backend.
+
+    Notes
+    -----
+    Dispatch enforces the current scope of each backend:
+
+    - MLE is single-subject only,
+    - conditioned MLE is selected when ``layout`` is provided, and
+    - the Stan backend requires an explicit adapter that knows how to build data
+      and select a Stan program for the requested hierarchy.
     """
 
     if config.backend == "mle":

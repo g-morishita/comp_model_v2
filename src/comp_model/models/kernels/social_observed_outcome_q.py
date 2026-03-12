@@ -1,4 +1,8 @@
-"""Social Q-learning kernel with observed demonstrator outcomes."""
+"""Social Q-learning kernel with observed demonstrator outcomes.
+
+This kernel extends the asocial Q-learning rule with a second learning rate for
+observed demonstrator outcomes.
+"""
 
 from __future__ import annotations
 
@@ -46,7 +50,14 @@ class SocialQState:
 
 
 class SocialObservedOutcomeQKernel:
-    """Q-learning kernel that updates from self and demonstrator outcomes."""
+    """Q-learning kernel that updates from self and demonstrator outcomes.
+
+    Notes
+    -----
+    The kernel still consumes only flat decision views. Whether demonstrator
+    information appeared before the subject's choice or after the outcome is a
+    schema concern handled by extraction.
+    """
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
@@ -55,7 +66,8 @@ class SocialObservedOutcomeQKernel:
         Returns
         -------
         ModelKernelSpec
-            Static kernel specification.
+            Static kernel specification declaring separate self and social
+            learning rates plus a shared inverse temperature.
         """
 
         return ModelKernelSpec(
@@ -92,7 +104,7 @@ class SocialObservedOutcomeQKernel:
         Returns
         -------
         SocialQParams
-            Typed parameter object.
+            Typed parameter object after applying the shared transform registry.
         """
 
         return SocialQParams(
@@ -141,6 +153,12 @@ class SocialObservedOutcomeQKernel:
         -------
         tuple[float, ...]
             Probabilities aligned with ``view.available_actions``.
+
+        Notes
+        -----
+        Choice probabilities depend only on the agent's current latent Q-values
+        and the legal actions in ``view``. Social information influences choice
+        indirectly through past updates.
         """
 
         logits = [params.beta * state.q_values[action] for action in view.available_actions]
@@ -167,6 +185,12 @@ class SocialObservedOutcomeQKernel:
         -------
         SocialQState
             Updated latent state.
+
+        Notes
+        -----
+        The subject's chosen action is updated with ``alpha_self`` when a reward
+        is present. If demonstrator action and reward are both present, the
+        observed action is updated separately with ``alpha_other``.
         """
 
         updated_q_values = list(state.q_values)
