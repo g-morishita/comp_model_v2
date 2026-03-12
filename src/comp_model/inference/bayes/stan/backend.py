@@ -1,4 +1,9 @@
-"""CmdStanPy-backed Bayesian fitting."""
+"""CmdStanPy-backed Bayesian fitting.
+
+The Stan backend compiles the program selected by an adapter, delegates data
+construction to the adapter, and translates a completed CmdStanPy fit into the
+package's backend-agnostic result container.
+"""
 
 from __future__ import annotations
 
@@ -36,6 +41,11 @@ class StanFitConfig:
         Stan NUTS target acceptance rate.
     max_treedepth
         Maximum NUTS tree depth.
+
+    Notes
+    -----
+    These fields are passed through to ``CmdStanModel.sample`` with matching
+    names where possible.
     """
 
     n_warmup: int = 1000
@@ -78,6 +88,12 @@ def fit_stan(
     -------
     BayesFitResult
         Posterior samples and diagnostics from the Stan fit.
+
+    Notes
+    -----
+    The backend imports CmdStanPy lazily so the package can be imported without
+    Stan installed. The adapter determines both the Stan program path and the
+    exact data dictionary to pass into sampling.
     """
 
     resolved_config = config if config is not None else DEFAULT_STAN_FIT_CONFIG

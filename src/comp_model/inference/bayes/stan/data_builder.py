@@ -1,4 +1,9 @@
-"""Stan data builders for event-based subject and dataset structures."""
+"""Stan data builders for event-based subject and dataset structures.
+
+The Stan exporter is a derived view over the canonical event hierarchy. It does
+not define the primary ontology; it flattens extracted decision views into the
+array layout expected by the Stan programs.
+"""
 
 from __future__ import annotations
 
@@ -30,6 +35,14 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     -------
     dict[str, Any]
         Stan-ready flat arrays with contiguous 1-based action indexing.
+
+    Notes
+    -----
+    The exporter iterates over blocks and trials in observed order, extracts
+    :class:`~comp_model.data.extractors.DecisionTrialView` records, remaps any
+    raw action identifiers to contiguous 1-based Stan indices, and emits arrays
+    aligned trial-by-trial for choice, reward, availability mask, block index,
+    and optional social information.
     """
 
     trials_flat: list[DecisionTrialView] = []
@@ -94,6 +107,12 @@ def dataset_to_stan_data(dataset: Dataset, schema: TrialSchema) -> dict[str, Any
     -------
     dict[str, Any]
         Stan-ready hierarchical arrays with subject indexing.
+
+    Notes
+    -----
+    Dataset export is implemented by first exporting each subject independently
+    with :func:`subject_to_stan_data`, then concatenating those subject chunks in
+    subject-major order while adding a 1-based ``subj`` index.
     """
 
     subject_chunks = [subject_to_stan_data(subject, schema) for subject in dataset.subjects]
@@ -157,6 +176,12 @@ def add_condition_data(
     -------
     None
         This function mutates ``stan_data`` in-place.
+
+    Notes
+    -----
+    Condition IDs are assigned in ``layout.conditions`` order. The baseline
+    condition is exported separately so Stan programs can reconstruct
+    shared-plus-delta parameterizations consistently with Python.
     """
 
     condition_to_id = {
@@ -189,6 +214,12 @@ def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> N
     -------
     None
         This function mutates ``stan_data`` in-place.
+
+    Notes
+    -----
+    Prior means and scales are exported on the unconstrained parameterization
+    used by the kernel specification. Parameters without an explicit prior fall
+    back to a weak ``Normal(0, 2)`` convention.
     """
 
     for parameter in kernel_spec.parameter_specs:
@@ -221,6 +252,11 @@ def add_state_reset_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec
     ------
     ValueError
         Raised when the kernel exposes an unknown reset policy.
+
+    Notes
+    -----
+    Stan receives the reset policy as an integer flag because the compiled
+    program cannot inspect Python-side kernel metadata directly.
     """
 
     if kernel_spec.state_reset_policy == "per_subject":
@@ -244,6 +280,12 @@ def _action_index_mapping(trials_flat: Iterable[DecisionTrialView]) -> dict[int,
     -------
     dict[int, int]
         Mapping from raw action identifier to 1-based Stan index.
+
+    Notes
+    -----
+    Actions are assigned indices in first-seen order across available actions,
+    realized subject choices, and any observed social actions. This keeps Stan
+    arrays compact even when raw action IDs are sparse.
     """
 
     ordered_actions: list[int] = []

@@ -1,4 +1,8 @@
-"""Concrete stationary bandit environment."""
+"""Concrete stationary bandit environment.
+
+This environment executes the current trial schema one step at a time while
+sampling Bernoulli rewards from fixed arm probabilities.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +20,14 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class StationaryBanditEnvironment:
-    """Simple k-armed bandit with fixed reward probabilities."""
+    """Simple k-armed bandit with fixed reward probabilities.
+
+    Notes
+    -----
+    The environment is intentionally schema-agnostic beyond the current step's
+    declared phase. It can therefore execute any schema whose steps follow the
+    INPUT/DECISION/OUTCOME/UPDATE contract expected by the runtime.
+    """
 
     n_actions: int
     reward_probs: tuple[float, ...]
@@ -52,6 +63,12 @@ class StationaryBanditEnvironment:
         -------
         None
             This function resets the environment in-place.
+
+        Notes
+        -----
+        Reset clears step and trial counters, stores the block specification,
+        and binds the random generator that will be used for stochastic outcome
+        sampling throughout the block.
         """
 
         self._block_spec = block_spec
@@ -72,6 +89,15 @@ class StationaryBanditEnvironment:
         -------
         tuple[Event, ...]
             Events emitted for the current step.
+
+        Notes
+        -----
+        The emitted event is determined purely by the current schema step:
+
+        - INPUT emits legal actions and a simple observation payload,
+        - DECISION records the externally supplied action,
+        - OUTCOME samples a Bernoulli reward from ``reward_probs[action]``, and
+        - UPDATE emits an explicit update marker.
         """
 
         if self._block_spec is None or self._rng is None:
@@ -149,6 +175,12 @@ class StationaryBanditEnvironment:
         -------
         None
             This function mutates the environment in-place.
+
+        Notes
+        -----
+        Advancing wraps the step counter to zero at the end of the schema,
+        increments the trial counter, and clears the cached last action so the
+        next trial must begin with a fresh decision sequence.
         """
 
         n_steps = len(schema.steps)

@@ -29,6 +29,9 @@ class SharedDeltaLayout:
     ``state_reset_policy="per_subject"``, state learned in one condition carries into
     the next condition within the same subject unless the kernel itself uses
     ``state_reset_policy="per_block"``.
+
+    Shared parameters are represented once, and each non-baseline condition gets
+    an additive delta on the unconstrained scale.
     """
 
     kernel_spec: ModelKernelSpec
@@ -57,7 +60,8 @@ class SharedDeltaLayout:
         Returns
         -------
         tuple[str, ...]
-            Shared keys followed by non-baseline delta keys.
+            Shared keys followed by non-baseline delta keys, both in kernel
+            parameter order.
         """
 
         keys: list[str] = []
@@ -76,7 +80,8 @@ class SharedDeltaLayout:
         Returns
         -------
         dict[str, float]
-            Zero-valued unconstrained parameter dictionary.
+            Zero-valued unconstrained parameter dictionary. A zero vector means
+            baseline and non-baseline conditions initially coincide.
         """
 
         return {key: 0.0 for key in self.parameter_keys()}
@@ -106,6 +111,12 @@ class SharedDeltaLayout:
         -------
         dict[str, float]
             Unconstrained kernel parameters keyed by parameter name.
+
+        Notes
+        -----
+        For the baseline condition, reconstruction returns only the shared
+        terms. For any other condition, reconstruction adds that condition's
+        delta term to each shared parameter on the unconstrained scale.
         """
 
         if condition not in self.conditions:
@@ -130,7 +141,8 @@ class SharedDeltaLayout:
         Returns
         -------
         dict[str, dict[str, float]]
-            Reconstructed unconstrained parameter dictionaries per condition.
+            Reconstructed unconstrained parameter dictionaries for every
+            condition in layout order.
         """
 
         return {condition: self.reconstruct(raw, condition) for condition in self.conditions}

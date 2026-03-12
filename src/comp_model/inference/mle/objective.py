@@ -1,4 +1,8 @@
-"""Replay log-likelihood functions for maximum-likelihood estimation."""
+"""Replay log-likelihood functions for maximum-likelihood estimation.
+
+These functions replay observed event traces through a model kernel using the
+same extracted decision views used during simulation.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +41,14 @@ def log_likelihood_simple(
     -------
     float
         Total log-likelihood across all decision views.
+
+    Notes
+    -----
+    Replay parses the unconstrained parameters once, initializes latent state,
+    loops over blocks and trials in observed order, and accumulates
+    ``log(p(choice))`` from the action-probability vector aligned to
+    ``view.available_actions``. Probabilities are clipped away from zero before
+    taking logs to avoid ``-inf`` from numerical underflow.
     """
 
     params = kernel.parse_params(raw_params)
@@ -76,6 +88,11 @@ def _infer_n_actions_from_data(subject_data: SubjectData) -> int:
     ------
     ValueError
         Raised when no INPUT event with available actions is found.
+
+    Notes
+    -----
+    This helper scans the observed data rather than trusting task metadata so
+    replay can work directly from canonical subject traces.
     """
 
     for block in subject_data.blocks:
@@ -118,6 +135,10 @@ def log_likelihood_conditioned(
     Conditioned replay changes parameters by block condition, but it still follows the
     kernel's state reset policy. With ``state_reset_policy="per_subject"``, latent
     state carries across condition boundaries within a subject.
+
+    For each block, the shared-plus-delta layout reconstructs that block's
+    unconstrained parameter vector before replay continues through the block's
+    trials.
     """
 
     reset_policy = kernel.spec().state_reset_policy

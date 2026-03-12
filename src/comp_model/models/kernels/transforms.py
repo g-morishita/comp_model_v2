@@ -1,4 +1,9 @@
-"""Parameter transform registry shared across inference backends."""
+"""Parameter transform registry shared across inference backends.
+
+Every free parameter is optimized on an unconstrained scale and mapped into its
+support through this registry. The same transform metadata is reused by Python
+MLE code and Stan code generation.
+"""
 
 from __future__ import annotations
 
@@ -30,6 +35,11 @@ def _sigmoid(value: float) -> float:
     -------
     float
         Sigmoid-transformed scalar in `(0, 1)`.
+
+    Notes
+    -----
+    SciPy's numerically stable logistic implementation is used so the forward
+    transform matches the inverse and Stan's ``inv_logit`` behavior closely.
     """
 
     return float(special.expit(value))
@@ -47,6 +57,11 @@ def _inverse_sigmoid(value: float) -> float:
     -------
     float
         Logit-transformed scalar.
+
+    Notes
+    -----
+    Inputs are clamped away from exactly ``0`` and ``1`` so restart generation
+    and inverse-round-trip tests stay finite at closed-domain boundaries.
     """
 
     clamped_value = min(max(value, _PROBABILITY_LOWER_BOUND), _PROBABILITY_UPPER_BOUND)
@@ -65,6 +80,11 @@ def _softplus(value: float) -> float:
     -------
     float
         Positive softplus-transformed scalar.
+
+    Notes
+    -----
+    Large positive values bypass ``exp`` and return the input directly, matching
+    the asymptotic behavior of softplus while avoiding overflow.
     """
 
     if value > 20.0:
@@ -84,6 +104,11 @@ def _inverse_softplus(value: float) -> float:
     -------
     float
         Inverse softplus-transformed scalar.
+
+    Notes
+    -----
+    Inputs are clamped above zero and evaluated with two stable branches so
+    extremely small or moderately large positive values both remain finite.
     """
 
     clamped_value = max(value, _POSITIVE_LOWER_BOUND)
@@ -104,6 +129,11 @@ class Transform:
         Function mapping a constrained scalar to the unconstrained space.
     stan_expression
         Stan template string using `{x}` as the placeholder variable.
+
+    Notes
+    -----
+    ``stan_expression`` keeps the Stan backend tied to the same conceptual
+    transform as the Python backend without having Stan call back into Python.
     """
 
     forward: Callable[[float], float]
@@ -152,6 +182,11 @@ def get_transform(transform_id: str) -> Transform:
     ------
     ValueError
         Raised when the requested transform is not registered.
+
+    Notes
+    -----
+    All backends should resolve transforms through this function instead of
+    assuming hard-coded transform logic at individual call sites.
     """
 
     if transform_id not in TRANSFORM_REGISTRY:

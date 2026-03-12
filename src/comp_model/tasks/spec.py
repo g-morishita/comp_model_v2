@@ -1,4 +1,9 @@
-"""Task-level design specifications."""
+"""Task-level design specifications.
+
+Task objects describe experimental structure independently of any agent or
+inference backend. They own block order, condition labels, trial counts,
+schemas, and task metadata consumed by environments.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +32,12 @@ class BlockSpec:
         Trial schema executed by the environment.
     metadata
         Optional block-level task metadata.
+
+    Notes
+    -----
+    Environments read ``metadata`` to configure block-specific dynamics such as
+    action count or reward contingencies. Kernels do not read ``BlockSpec``
+    directly.
     """
 
     condition: str
@@ -45,6 +56,12 @@ class TaskSpec:
         Stable task identifier.
     blocks
         Ordered block specifications for the task.
+
+    Notes
+    -----
+    ``TaskSpec`` is the structural design layer. The runtime executes it, while
+    fitted models only ever see extracted decision views derived from the event
+    traces it generates.
     """
 
     task_id: str
@@ -57,7 +74,7 @@ class TaskSpec:
         Returns
         -------
         int
-            Number of block specifications.
+            Number of block specifications in execution order.
         """
 
         return len(self.blocks)
@@ -69,7 +86,8 @@ class TaskSpec:
         Returns
         -------
         tuple[str, ...]
-            Ordered unique condition labels.
+            Ordered unique condition labels, preserving the first occurrence of
+            each condition in ``blocks``.
         """
 
         seen: set[str] = set()

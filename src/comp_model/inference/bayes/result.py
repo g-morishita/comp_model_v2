@@ -29,6 +29,12 @@ class BayesFitResult:
         Optional per-subject posterior draws for hierarchical models.
     diagnostics
         Backend diagnostics and summaries.
+
+    Notes
+    -----
+    The container is backend-agnostic at the API level, but the current Stan
+    backend fills ``posterior_samples`` and ``log_lik`` directly from CmdStanPy
+    variables extracted from a completed fit.
     """
 
     model_id: str

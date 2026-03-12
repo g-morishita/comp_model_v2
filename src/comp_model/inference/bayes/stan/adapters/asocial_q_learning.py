@@ -1,4 +1,8 @@
-"""Stan adapter for the asocial Q-learning kernel."""
+"""Stan adapter for the asocial Q-learning kernel.
+
+Adapters isolate Stan-specific choices such as program filenames, data export,
+and which posterior variables should be read back from a completed fit.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +27,13 @@ if TYPE_CHECKING:
 
 
 class AsocialQLearningStanAdapter:
-    """Stan adapter for the asocial Q-learning kernel."""
+    """Stan adapter for the asocial Q-learning kernel.
+
+    Notes
+    -----
+    The adapter currently supports the asocial Q-learning family only and uses a
+    simple filename convention based on ``model_id`` and hierarchy name.
+    """
 
     def kernel_spec(self) -> ModelKernelSpec:
         """Return the kernel specification served by this adapter.
@@ -48,6 +58,12 @@ class AsocialQLearningStanAdapter:
         -------
         str
             Absolute path to the Stan program file.
+
+        Notes
+        -----
+        Program filenames follow
+        ``{model_id}__{hierarchy.value}.stan`` inside the adapter's sibling
+        ``programs`` directory.
         """
 
         programs_dir = Path(__file__).resolve().parent.parent / "programs"
@@ -78,6 +94,12 @@ class AsocialQLearningStanAdapter:
         -------
         dict[str, Any]
             Stan-ready data dictionary.
+
+        Notes
+        -----
+        The adapter always exports replay data, prior hyperparameters, and the
+        integer reset-policy flag. Condition indices are added only for
+        condition-aware hierarchies and only when fitting a single subject.
         """
 
         if isinstance(data, SubjectData):
@@ -105,7 +127,8 @@ class AsocialQLearningStanAdapter:
         Returns
         -------
         tuple[str, ...]
-            Subject-level parameter names.
+            Subject-level parameter names expected in the Stan generated
+            quantities or transformed parameters blocks.
         """
 
         return ("alpha", "beta")
@@ -121,7 +144,8 @@ class AsocialQLearningStanAdapter:
         Returns
         -------
         tuple[str, ...]
-            Population-level parameter names.
+            Population-level parameter names. Subject-shared fits have no
+            separate population-level outputs.
         """
 
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:

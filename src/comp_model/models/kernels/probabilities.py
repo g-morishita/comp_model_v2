@@ -27,6 +27,13 @@ def stable_softmax(logits: Sequence[float]) -> tuple[float, ...]:
     ------
     ValueError
         Raised when ``logits`` is empty.
+
+    Notes
+    -----
+    The implementation subtracts the maximum logit before exponentiation, then
+    clips the resulting probabilities away from exactly zero before
+    renormalizing. That keeps replay likelihoods finite when downstream code
+    takes logarithms of action probabilities.
     """
 
     logits_array = np.asarray(tuple(logits), dtype=float)
