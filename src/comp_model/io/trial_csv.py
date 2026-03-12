@@ -1,0 +1,1177 @@
+"""Schema-specific CSV converters for fitting-oriented trial tables.
+
+This module provides a registry of trial-level CSV converters keyed by
+``TrialSchema.schema_id``. Each converter owns its explicit columns and knows
+how to flatten one canonical trial into a fitting-oriented CSV row and rebuild
+that row back into the current canonical event sequence for the same schema.
+"""
+
+from __future__ import annotations
+
+import csv
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol
+
+from comp_model.data import (
+    Block,
+    Dataset,
+    DecisionTrialView,
+    Event,
+    EventPhase,
+    SubjectData,
+    Trial,
+    extract_decision_views,
+    validate_dataset,
+)
+from comp_model.tasks import (
+    ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_SCHEMA,
+    TrialSchema,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+
+_COMMON_FIELDNAMES = (
+    "subject_id",
+    "block_index",
+    "condition",
+    "trial_index",
+    "available_actions",
+    "choice",
+    "reward",
+)
+_SOCIAL_FIELDNAMES = (*_COMMON_FIELDNAMES, "demonstrator_action", "demonstrator_reward")
+
+
+class TrialCsvConverter(Protocol):
+    """Protocol for schema-specific trial-row CSV converters.
+
+    Attributes
+    ----------
+    schema_id
+        Schema identifier handled by this converter.
+    fieldnames
+        Exact CSV header expected by the converter.
+    """
+
+    @property
+    def schema_id(self) -> str:
+        """Return the schema identifier handled by the converter.
+
+        Returns
+        -------
+        str
+            Stable schema identifier.
+        """
+
+        ...
+
+    @property
+    def fieldnames(self) -> tuple[str, ...]:
+        """Return the exact CSV header expected by the converter.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Ordered CSV header columns.
+        """
+
+        ...
+
+    def trial_to_row(
+        self,
+        *,
+        subject_id: str,
+        block_index: int,
+        condition: str,
+        trial: Trial,
+    ) -> dict[str, str]:
+        """Flatten one canonical trial into one CSV row.
+
+        Parameters
+        ----------
+        subject_id
+            Subject identifier for the containing subject.
+        block_index
+            Block index for the containing block.
+        condition
+            Condition label for the containing block.
+        trial
+            Canonical trial to flatten.
+
+        Returns
+        -------
+        dict[str, str]
+            String-valued CSV row matching ``fieldnames`` exactly.
+        """
+
+        ...
+
+    def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
+        """Rebuild one canonical trial from one CSV row.
+
+        Parameters
+        ----------
+        row
+            Parsed CSV row keyed by header name.
+        trial_index
+            Trial index assigned by the caller.
+
+        Returns
+        -------
+        Trial
+            Canonical trial rebuilt in the converter's schema order.
+        """
+
+        ...
+
+
+def _empty_trial_mapping() -> dict[int, Trial]:
+    """Create an empty trial-index mapping for CSV loading.
+
+    Returns
+    -------
+    dict[int, Trial]
+        Empty mutable mapping keyed by trial index.
+    """
+
+    return {}
+
+
+@dataclass(slots=True)
+class _BlockAccumulator:
+    """Mutable block accumulator used while loading CSV rows.
+
+    Attributes
+    ----------
+    condition
+        Condition label associated with the block.
+    trials
+        Trials keyed by trial index until final reconstruction.
+    """
+
+    condition: str
+    trials: dict[int, Trial] = field(default_factory=_empty_trial_mapping)
+
+
+@dataclass(frozen=True, slots=True)
+class _AsocialBanditTrialCsvConverter:
+    """Trial-row CSV converter for the asocial bandit schema."""
+
+    schema: TrialSchema = field(default=ASOCIAL_BANDIT_SCHEMA, init=False, repr=False)
+    schema_id: str = field(default=ASOCIAL_BANDIT_SCHEMA.schema_id, init=False)
+    fieldnames: tuple[str, ...] = field(default=_COMMON_FIELDNAMES, init=False)
+
+    def trial_to_row(
+        self,
+        *,
+        subject_id: str,
+        block_index: int,
+        condition: str,
+        trial: Trial,
+    ) -> dict[str, str]:
+        """Flatten one asocial trial into one CSV row.
+
+        Parameters
+        ----------
+        subject_id
+            Subject identifier for the containing subject.
+        block_index
+            Block index for the containing block.
+        condition
+            Condition label for the containing block.
+        trial
+            Canonical trial to flatten.
+
+        Returns
+        -------
+        dict[str, str]
+            String-valued CSV row for the asocial schema.
+        """
+
+        view = _extract_single_view(trial, self.schema)
+        return _build_common_row(
+            subject_id=subject_id,
+            block_index=block_index,
+            condition=condition,
+            trial_index=trial.trial_index,
+            available_actions=view.available_actions,
+            choice=view.choice,
+            reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
+        )
+
+    def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
+        """Rebuild one asocial trial from one CSV row.
+
+        Parameters
+        ----------
+        row
+            Parsed CSV row keyed by header name.
+        trial_index
+            Trial index assigned by the caller.
+
+        Returns
+        -------
+        Trial
+            Canonical asocial trial in schema order.
+        """
+
+        available_actions = _parse_available_actions(row["available_actions"])
+        choice = _parse_int_field(row, "choice")
+        reward = _parse_float_field(row, "reward")
+        _validate_action_in_available_set(
+            action=choice,
+            available_actions=available_actions,
+            field_name="choice",
+        )
+        return _build_trial_from_schema(
+            schema=self.schema,
+            trial_index=trial_index,
+            available_actions=available_actions,
+            choice=choice,
+            reward=reward,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _SocialPreChoiceTrialCsvConverter:
+    """Trial-row CSV converter for pre-choice demonstrator input."""
+
+    schema: TrialSchema = field(default=SOCIAL_PRE_CHOICE_SCHEMA, init=False, repr=False)
+    schema_id: str = field(default=SOCIAL_PRE_CHOICE_SCHEMA.schema_id, init=False)
+    fieldnames: tuple[str, ...] = field(default=_SOCIAL_FIELDNAMES, init=False)
+
+    def trial_to_row(
+        self,
+        *,
+        subject_id: str,
+        block_index: int,
+        condition: str,
+        trial: Trial,
+    ) -> dict[str, str]:
+        """Flatten one pre-choice social trial into one CSV row.
+
+        Parameters
+        ----------
+        subject_id
+            Subject identifier for the containing subject.
+        block_index
+            Block index for the containing block.
+        condition
+            Condition label for the containing block.
+        trial
+            Canonical trial to flatten.
+
+        Returns
+        -------
+        dict[str, str]
+            String-valued CSV row for the pre-choice social schema.
+        """
+
+        view = _extract_single_view(trial, self.schema)
+        return {
+            **_build_common_row(
+                subject_id=subject_id,
+                block_index=block_index,
+                condition=condition,
+                trial_index=trial.trial_index,
+                available_actions=view.available_actions,
+                choice=view.choice,
+                reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
+            ),
+            "demonstrator_action": str(
+                _require_social_action(view.social_action, self.schema_id, trial.trial_index)
+            ),
+            "demonstrator_reward": str(
+                _require_social_reward(view.social_reward, self.schema_id, trial.trial_index)
+            ),
+        }
+
+    def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
+        """Rebuild one pre-choice social trial from one CSV row.
+
+        Parameters
+        ----------
+        row
+            Parsed CSV row keyed by header name.
+        trial_index
+            Trial index assigned by the caller.
+
+        Returns
+        -------
+        Trial
+            Canonical pre-choice social trial in schema order.
+        """
+
+        available_actions = _parse_available_actions(row["available_actions"])
+        choice = _parse_int_field(row, "choice")
+        reward = _parse_float_field(row, "reward")
+        demonstrator_action = _parse_int_field(row, "demonstrator_action")
+        demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
+        _validate_action_in_available_set(
+            action=choice,
+            available_actions=available_actions,
+            field_name="choice",
+        )
+        _validate_action_in_available_set(
+            action=demonstrator_action,
+            available_actions=available_actions,
+            field_name="demonstrator_action",
+        )
+        return _build_trial_from_schema(
+            schema=self.schema,
+            trial_index=trial_index,
+            available_actions=available_actions,
+            choice=choice,
+            reward=reward,
+            demonstrator_observation={
+                "social_action": demonstrator_action,
+                "social_reward": demonstrator_reward,
+            },
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _SocialPostOutcomeTrialCsvConverter:
+    """Trial-row CSV converter for post-outcome demonstrator input."""
+
+    schema: TrialSchema = field(default=SOCIAL_POST_OUTCOME_SCHEMA, init=False, repr=False)
+    schema_id: str = field(default=SOCIAL_POST_OUTCOME_SCHEMA.schema_id, init=False)
+    fieldnames: tuple[str, ...] = field(default=_SOCIAL_FIELDNAMES, init=False)
+
+    def trial_to_row(
+        self,
+        *,
+        subject_id: str,
+        block_index: int,
+        condition: str,
+        trial: Trial,
+    ) -> dict[str, str]:
+        """Flatten one post-outcome social trial into one CSV row.
+
+        Parameters
+        ----------
+        subject_id
+            Subject identifier for the containing subject.
+        block_index
+            Block index for the containing block.
+        condition
+            Condition label for the containing block.
+        trial
+            Canonical trial to flatten.
+
+        Returns
+        -------
+        dict[str, str]
+            String-valued CSV row for the post-outcome social schema.
+        """
+
+        view = _extract_single_view(trial, self.schema)
+        return {
+            **_build_common_row(
+                subject_id=subject_id,
+                block_index=block_index,
+                condition=condition,
+                trial_index=trial.trial_index,
+                available_actions=view.available_actions,
+                choice=view.choice,
+                reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
+            ),
+            "demonstrator_action": str(
+                _require_social_action(view.social_action, self.schema_id, trial.trial_index)
+            ),
+            "demonstrator_reward": str(
+                _require_social_reward(view.social_reward, self.schema_id, trial.trial_index)
+            ),
+        }
+
+    def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
+        """Rebuild one post-outcome social trial from one CSV row.
+
+        Parameters
+        ----------
+        row
+            Parsed CSV row keyed by header name.
+        trial_index
+            Trial index assigned by the caller.
+
+        Returns
+        -------
+        Trial
+            Canonical post-outcome social trial in schema order.
+        """
+
+        available_actions = _parse_available_actions(row["available_actions"])
+        choice = _parse_int_field(row, "choice")
+        reward = _parse_float_field(row, "reward")
+        demonstrator_action = _parse_int_field(row, "demonstrator_action")
+        demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
+        _validate_action_in_available_set(
+            action=choice,
+            available_actions=available_actions,
+            field_name="choice",
+        )
+        _validate_action_in_available_set(
+            action=demonstrator_action,
+            available_actions=available_actions,
+            field_name="demonstrator_action",
+        )
+        return _build_trial_from_schema(
+            schema=self.schema,
+            trial_index=trial_index,
+            available_actions=available_actions,
+            choice=choice,
+            reward=reward,
+            demonstrator_observation={
+                "social_action": demonstrator_action,
+                "social_reward": demonstrator_reward,
+            },
+        )
+
+
+_TRIAL_CSV_CONVERTERS: dict[str, TrialCsvConverter] = {}
+
+
+def register_trial_csv_converter(converter: TrialCsvConverter) -> None:
+    """Register a schema-specific trial CSV converter.
+
+    Parameters
+    ----------
+    converter
+        Converter instance keyed by its ``schema_id``.
+
+    Returns
+    -------
+    None
+        This function mutates the module-level converter registry.
+
+    Raises
+    ------
+    ValueError
+        Raised when a converter is already registered for the same schema id.
+    """
+
+    existing_converter = _TRIAL_CSV_CONVERTERS.get(converter.schema_id)
+    if existing_converter is not None:
+        raise ValueError(f"CSV converter already registered for schema_id {converter.schema_id!r}")
+    _TRIAL_CSV_CONVERTERS[converter.schema_id] = converter
+
+
+def get_trial_csv_converter(schema: TrialSchema | str) -> TrialCsvConverter:
+    """Return the registered converter for a schema.
+
+    Parameters
+    ----------
+    schema
+        Trial schema object or schema identifier.
+
+    Returns
+    -------
+    TrialCsvConverter
+        Registered converter for the requested schema.
+
+    Raises
+    ------
+    ValueError
+        Raised when no converter is registered for the requested schema id.
+    """
+
+    schema_id = schema if isinstance(schema, str) else schema.schema_id
+    converter = _TRIAL_CSV_CONVERTERS.get(schema_id)
+    if converter is None:
+        raise ValueError(f"No CSV converter registered for schema_id {schema_id!r}")
+    return converter
+
+
+def save_dataset_to_csv(dataset: Dataset, *, schema: TrialSchema, path: str | Path) -> None:
+    """Save a dataset to a schema-specific trial CSV file.
+
+    Parameters
+    ----------
+    dataset
+        Dataset to export.
+    schema
+        Trial schema shared by every exported row.
+    path
+        Destination CSV path.
+
+    Returns
+    -------
+    None
+        This function writes the CSV file to disk.
+
+    Raises
+    ------
+    ValueError
+        Raised when a trial does not match the schema or cannot be flattened by
+        the selected converter.
+    """
+
+    converter = get_trial_csv_converter(schema)
+    destination = Path(path)
+    with destination.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(converter.fieldnames))
+        writer.writeheader()
+        for subject in dataset.subjects:
+            for block in subject.blocks:
+                for trial in block.trials:
+                    schema.validate_trial(trial)
+                    writer.writerow(
+                        _normalize_output_row(
+                            converter.trial_to_row(
+                                subject_id=subject.subject_id,
+                                block_index=block.block_index,
+                                condition=block.condition,
+                                trial=trial,
+                            ),
+                            expected_fields=converter.fieldnames,
+                        )
+                    )
+
+
+def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
+    """Load a dataset from a schema-specific trial CSV file.
+
+    Parameters
+    ----------
+    path
+        Source CSV path.
+    schema
+        Trial schema shared by every row in the file.
+
+    Returns
+    -------
+    Dataset
+        Reconstructed canonical dataset.
+
+    Raises
+    ------
+    ValueError
+        Raised when headers are invalid, block conditions conflict, duplicate
+        trial keys appear, or rows cannot be reconstructed for ``schema``.
+    """
+
+    converter = get_trial_csv_converter(schema)
+    source = Path(path)
+    subjects_by_id: dict[str, dict[int, _BlockAccumulator]] = {}
+    seen_trial_keys: set[tuple[str, int, int]] = set()
+
+    with source.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        _validate_header_row(reader.fieldnames, expected_fields=converter.fieldnames)
+        for row_number, raw_row in enumerate(reader, start=2):
+            row = _normalize_input_row(
+                raw_row,
+                expected_fields=converter.fieldnames,
+                row_number=row_number,
+            )
+            subject_id = row["subject_id"]
+            block_index = _parse_non_negative_int(row["block_index"], field_name="block_index")
+            condition = row["condition"]
+            trial_index = _parse_non_negative_int(row["trial_index"], field_name="trial_index")
+            trial_key = (subject_id, block_index, trial_index)
+            if trial_key in seen_trial_keys:
+                raise ValueError(
+                    "Duplicate trial key encountered for "
+                    f"subject_id={subject_id!r}, block_index={block_index}, "
+                    f"trial_index={trial_index}"
+                )
+            seen_trial_keys.add(trial_key)
+
+            try:
+                trial = converter.row_to_trial(row, trial_index=trial_index)
+            except ValueError as error:
+                raise ValueError(f"Row {row_number}: {error}") from error
+            schema.validate_trial(trial)
+
+            subject_blocks = subjects_by_id.setdefault(subject_id, {})
+            block = subject_blocks.get(block_index)
+            if block is None:
+                block = _BlockAccumulator(condition=condition)
+                subject_blocks[block_index] = block
+            elif block.condition != condition:
+                raise ValueError(
+                    "Inconsistent condition for "
+                    f"subject_id={subject_id!r}, block_index={block_index}: "
+                    f"{block.condition!r} != {condition!r}"
+                )
+            block.trials[trial_index] = trial
+
+    dataset = Dataset(
+        subjects=tuple(
+            SubjectData(
+                subject_id=subject_id,
+                blocks=tuple(
+                    Block(
+                        block_index=block_index,
+                        condition=block.condition,
+                        trials=tuple(
+                            trial
+                            for _, trial in sorted(block.trials.items(), key=lambda item: item[0])
+                        ),
+                    )
+                    for block_index, block in sorted(
+                        subject_blocks.items(),
+                        key=lambda item: item[0],
+                    )
+                ),
+            )
+            for subject_id, subject_blocks in subjects_by_id.items()
+        )
+    )
+    validate_dataset(dataset, schema)
+    return dataset
+
+
+def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView:
+    """Extract the sole decision view expected by built-in row converters.
+
+    Parameters
+    ----------
+    trial
+        Canonical trial to flatten.
+    schema
+        Schema used to validate and extract the trial.
+
+    Returns
+    -------
+    DecisionTrialView
+        The single extracted decision view.
+
+    Raises
+    ------
+    ValueError
+        Raised when the schema does not yield exactly one decision view.
+    """
+
+    views = extract_decision_views(trial, schema)
+    if len(views) != 1:
+        raise ValueError(
+            f"Schema {schema.schema_id!r} expected exactly one decision view, got {len(views)}"
+        )
+    return views[0]
+
+
+def _build_common_row(
+    *,
+    subject_id: str,
+    block_index: int,
+    condition: str,
+    trial_index: int,
+    available_actions: tuple[int, ...],
+    choice: int,
+    reward: float,
+) -> dict[str, str]:
+    """Build the shared CSV columns for one trial row.
+
+    Parameters
+    ----------
+    subject_id
+        Subject identifier for the containing subject.
+    block_index
+        Block index for the containing block.
+    condition
+        Condition label for the containing block.
+    trial_index
+        Trial index within the block.
+    available_actions
+        Legal action values for the trial.
+    choice
+        Chosen action value.
+    reward
+        Observed reward.
+
+    Returns
+    -------
+    dict[str, str]
+        Shared CSV row columns as strings.
+    """
+
+    return {
+        "subject_id": subject_id,
+        "block_index": str(block_index),
+        "condition": condition,
+        "trial_index": str(trial_index),
+        "available_actions": _format_available_actions(available_actions),
+        "choice": str(choice),
+        "reward": str(reward),
+    }
+
+
+def _build_trial_from_schema(
+    *,
+    schema: TrialSchema,
+    trial_index: int,
+    available_actions: tuple[int, ...],
+    choice: int,
+    reward: float,
+    demonstrator_observation: Mapping[str, Any] | None = None,
+) -> Trial:
+    """Build one canonical trial using the declared schema order.
+
+    Parameters
+    ----------
+    schema
+        Schema whose positional steps define event order.
+    trial_index
+        Trial index assigned to the rebuilt trial.
+    available_actions
+        Legal actions for subject and demonstrator input events.
+    choice
+        Chosen action value.
+    reward
+        Observed reward value.
+    demonstrator_observation
+        Demonstrator observation payload for non-subject input events, if any.
+
+    Returns
+    -------
+    Trial
+        Canonical trial rebuilt in schema order.
+
+    Raises
+    ------
+    ValueError
+        Raised when the schema expects a demonstrator input but no observation
+        payload was supplied.
+    """
+
+    events: list[Event] = []
+    for step_index, step in enumerate(schema.steps):
+        if step.phase == EventPhase.INPUT:
+            if step.actor_id == "subject":
+                payload: dict[str, Any] = {"available_actions": available_actions}
+            else:
+                if demonstrator_observation is None:
+                    raise ValueError(
+                        f"Schema {schema.schema_id!r} requires demonstrator observation data"
+                    )
+                payload = {
+                    "available_actions": available_actions,
+                    "observation": dict(demonstrator_observation),
+                }
+        elif step.phase == EventPhase.DECISION:
+            payload = {"action": choice}
+        elif step.phase == EventPhase.OUTCOME:
+            payload = {"reward": reward}
+        elif step.phase == EventPhase.UPDATE:
+            payload = {}
+        else:
+            raise ValueError(f"Unsupported event phase {step.phase!r}")
+
+        events.append(
+            Event(
+                phase=step.phase,
+                event_index=step_index,
+                node_id=step.node_id,
+                actor_id=step.actor_id,
+                payload=payload,
+            )
+        )
+    return Trial(trial_index=trial_index, events=tuple(events))
+
+
+def _normalize_output_row(
+    row: Mapping[str, str], *, expected_fields: tuple[str, ...]
+) -> dict[str, str]:
+    """Validate and order a converter-produced CSV row.
+
+    Parameters
+    ----------
+    row
+        Converter-produced row mapping.
+    expected_fields
+        Exact field order required by the converter.
+
+    Returns
+    -------
+    dict[str, str]
+        Ordered row containing exactly the required fields.
+
+    Raises
+    ------
+    ValueError
+        Raised when the converter omits a required field or emits an unknown
+        field.
+    """
+
+    missing_fields = [field for field in expected_fields if field not in row]
+    unknown_fields = sorted(field for field in row if field not in expected_fields)
+    if missing_fields:
+        raise ValueError(f"Converter row is missing required fields: {missing_fields}")
+    if unknown_fields:
+        raise ValueError(f"Converter row includes unknown fields: {unknown_fields}")
+    return {field: row[field] for field in expected_fields}
+
+
+def _validate_header_row(
+    fieldnames: Sequence[str] | None,
+    *,
+    expected_fields: tuple[str, ...],
+) -> None:
+    """Validate a CSV header against a converter's declared columns.
+
+    Parameters
+    ----------
+    fieldnames
+        Header row returned by :class:`csv.DictReader`.
+    expected_fields
+        Exact field set required by the converter.
+
+    Returns
+    -------
+    None
+        This function raises on header mismatch.
+
+    Raises
+    ------
+    ValueError
+        Raised when the header is missing required columns or contains unknown
+        columns.
+    """
+
+    if fieldnames is None:
+        raise ValueError("CSV file is missing a header row")
+    actual_fields = set(fieldnames)
+    expected_field_set = set(expected_fields)
+    missing_fields = sorted(expected_field_set - actual_fields)
+    unknown_fields = sorted(actual_fields - expected_field_set)
+    if missing_fields:
+        raise ValueError(f"Missing required columns: {missing_fields}")
+    if unknown_fields:
+        raise ValueError(f"Unknown columns: {unknown_fields}")
+
+
+def _normalize_input_row(
+    raw_row: Mapping[str | None, object],
+    *,
+    expected_fields: tuple[str, ...],
+    row_number: int,
+) -> dict[str, str]:
+    """Normalize one parsed CSV row to a strict string mapping.
+
+    Parameters
+    ----------
+    raw_row
+        Raw row mapping returned by :class:`csv.DictReader`.
+    expected_fields
+        Exact field set required by the converter.
+    row_number
+        One-based row number in the CSV file, including the header row.
+
+    Returns
+    -------
+    dict[str, str]
+        Row keyed only by expected fields with string values.
+
+    Raises
+    ------
+    ValueError
+        Raised when the row contains too many columns or missing cells.
+    """
+
+    if None in raw_row:
+        raise ValueError(f"Row {row_number}: row has more columns than the header")
+    normalized_row: dict[str, str] = {}
+    for column_name in expected_fields:
+        value = raw_row.get(column_name)
+        if value is None:
+            raise ValueError(f"Row {row_number}: field {column_name!r} is missing")
+        if not isinstance(value, str):
+            raise ValueError(f"Row {row_number}: field {column_name!r} must be a string")
+        normalized_row[column_name] = value
+    return normalized_row
+
+
+def _format_available_actions(available_actions: tuple[int, ...]) -> str:
+    """Encode legal actions into the stable CSV string form.
+
+    Parameters
+    ----------
+    available_actions
+        Legal actions for one trial.
+
+    Returns
+    -------
+    str
+        ``|``-delimited integer encoding such as ``"0|1|2"``.
+    """
+
+    return "|".join(str(action) for action in available_actions)
+
+
+def _parse_available_actions(value: str) -> tuple[int, ...]:
+    """Parse the stable CSV encoding for legal actions.
+
+    Parameters
+    ----------
+    value
+        ``|``-delimited integer action list.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Parsed legal actions in file order.
+
+    Raises
+    ------
+    ValueError
+        Raised when the field is empty or contains invalid integers.
+    """
+
+    if value == "":
+        raise ValueError("Field 'available_actions' must not be empty")
+    tokens = value.split("|")
+    if any(token == "" for token in tokens):
+        raise ValueError("Field 'available_actions' contains an empty token")
+    try:
+        available_actions = tuple(int(token) for token in tokens)
+    except ValueError as error:
+        raise ValueError("Field 'available_actions' must contain only integers") from error
+    if len(available_actions) == 0:
+        raise ValueError("Field 'available_actions' must contain at least one action")
+    return available_actions
+
+
+def _parse_non_negative_int(value: str, *, field_name: str) -> int:
+    """Parse a non-negative integer CSV field.
+
+    Parameters
+    ----------
+    value
+        Raw CSV cell value.
+    field_name
+        Field name used in error messages.
+
+    Returns
+    -------
+    int
+        Parsed non-negative integer.
+
+    Raises
+    ------
+    ValueError
+        Raised when the field is not a non-negative integer.
+    """
+
+    parsed_value = _parse_int_value(value, field_name=field_name)
+    if parsed_value < 0:
+        raise ValueError(f"Field {field_name!r} must be non-negative")
+    return parsed_value
+
+
+def _parse_int_field(row: Mapping[str, str], field_name: str) -> int:
+    """Parse an integer field from one normalized row.
+
+    Parameters
+    ----------
+    row
+        Normalized CSV row.
+    field_name
+        Field name to parse.
+
+    Returns
+    -------
+    int
+        Parsed integer value.
+    """
+
+    return _parse_int_value(row[field_name], field_name=field_name)
+
+
+def _parse_int_value(value: str, *, field_name: str) -> int:
+    """Parse a raw string as an integer field value.
+
+    Parameters
+    ----------
+    value
+        Raw CSV cell value.
+    field_name
+        Field name used in error messages.
+
+    Returns
+    -------
+    int
+        Parsed integer value.
+
+    Raises
+    ------
+    ValueError
+        Raised when the value is not an integer.
+    """
+
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError(f"Field {field_name!r} must be an integer") from error
+
+
+def _parse_float_field(row: Mapping[str, str], field_name: str) -> float:
+    """Parse a floating-point field from one normalized row.
+
+    Parameters
+    ----------
+    row
+        Normalized CSV row.
+    field_name
+        Field name to parse.
+
+    Returns
+    -------
+    float
+        Parsed floating-point value.
+
+    Raises
+    ------
+    ValueError
+        Raised when the field is not a floating-point value.
+    """
+
+    try:
+        return float(row[field_name])
+    except ValueError as error:
+        raise ValueError(f"Field {field_name!r} must be a float") from error
+
+
+def _validate_action_in_available_set(
+    *, action: int, available_actions: tuple[int, ...], field_name: str
+) -> None:
+    """Validate that an action appears in the legal action set.
+
+    Parameters
+    ----------
+    action
+        Parsed action value to validate.
+    available_actions
+        Legal actions for the row.
+    field_name
+        Field name used in error messages.
+
+    Returns
+    -------
+    None
+        This function raises when the action is illegal.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``action`` is not present in ``available_actions``.
+    """
+
+    if action not in available_actions:
+        raise ValueError(
+            f"Field {field_name!r} must be one of available_actions {available_actions!r}"
+        )
+
+
+def _require_reward(reward: float | None, schema_id: str, trial_index: int) -> float:
+    """Require a reward value during CSV export.
+
+    Parameters
+    ----------
+    reward
+        Extracted reward value.
+    schema_id
+        Schema identifier used in the error message.
+    trial_index
+        Trial index used in the error message.
+
+    Returns
+    -------
+    float
+        Concrete reward value.
+
+    Raises
+    ------
+    ValueError
+        Raised when the extracted trial has no reward.
+    """
+
+    if reward is None:
+        raise ValueError(
+            f"Schema {schema_id!r}, trial {trial_index}: reward is required for CSV export"
+        )
+    return reward
+
+
+def _require_social_action(action: int | None, schema_id: str, trial_index: int) -> int:
+    """Require a demonstrator action during social CSV export.
+
+    Parameters
+    ----------
+    action
+        Extracted demonstrator action.
+    schema_id
+        Schema identifier used in the error message.
+    trial_index
+        Trial index used in the error message.
+
+    Returns
+    -------
+    int
+        Concrete demonstrator action value.
+
+    Raises
+    ------
+    ValueError
+        Raised when the extracted trial has no demonstrator action.
+    """
+
+    if action is None:
+        raise ValueError(
+            f"Schema {schema_id!r}, trial {trial_index}: demonstrator action is required "
+            "for CSV export"
+        )
+    return action
+
+
+def _require_social_reward(reward: float | None, schema_id: str, trial_index: int) -> float:
+    """Require a demonstrator reward during social CSV export.
+
+    Parameters
+    ----------
+    reward
+        Extracted demonstrator reward.
+    schema_id
+        Schema identifier used in the error message.
+    trial_index
+        Trial index used in the error message.
+
+    Returns
+    -------
+    float
+        Concrete demonstrator reward value.
+
+    Raises
+    ------
+    ValueError
+        Raised when the extracted trial has no demonstrator reward.
+    """
+
+    if reward is None:
+        raise ValueError(
+            f"Schema {schema_id!r}, trial {trial_index}: demonstrator reward is required "
+            "for CSV export"
+        )
+    return reward
+
+
+def _register_builtin_converters() -> None:
+    """Populate the module registry with built-in schema converters.
+
+    Returns
+    -------
+    None
+        This function mutates the module-level registry during import.
+    """
+
+    register_trial_csv_converter(_AsocialBanditTrialCsvConverter())
+    register_trial_csv_converter(_SocialPreChoiceTrialCsvConverter())
+    register_trial_csv_converter(_SocialPostOutcomeTrialCsvConverter())
+
+
+_register_builtin_converters()
