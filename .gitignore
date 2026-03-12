@@ -5,3 +5,5 @@ comp_model_v3_plan.md
 .ruff_cache/
 .venv/
 __pycache__/
+tests/test_inference/stan/condition_reconstruction
+tests/test_inference/stan/q_learning_loglik_fixed_params
