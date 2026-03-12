@@ -1,9 +1,13 @@
 """Tests for Stan data export builders."""
 
+from dataclasses import replace
+
+from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
     add_prior_data,
+    add_state_reset_data,
     dataset_to_stan_data,
     subject_to_stan_data,
 )
@@ -60,8 +64,7 @@ def test_subject_to_stan_data_exports_expected_shapes() -> None:
 
     assert stan_data["A"] == 2
     assert stan_data["T"] == 4
-    assert stan_data["B"] == 1
-    assert stan_data["block_start"] == [1]
+    assert stan_data["block_of_trial"] == [1, 1, 1, 1]
     assert all(choice in (1, 2) for choice in stan_data["choice"])
 
 
@@ -91,13 +94,13 @@ def test_dataset_to_stan_data_adds_subject_indices() -> None:
     assert set(stan_data["subj"]) == {1, 2}
 
 
-def test_condition_and_prior_data_are_added() -> None:
-    """Ensure condition and prior metadata extend the Stan data dictionary.
+def test_condition_prior_and_reset_data_are_added() -> None:
+    """Ensure condition, prior, and reset metadata extend the Stan data dictionary.
 
     Returns
     -------
     None
-        This test asserts condition and prior exports.
+        This test asserts condition, prior, and reset exports.
     """
 
     task = TaskSpec(
@@ -136,9 +139,85 @@ def test_condition_and_prior_data_are_added() -> None:
 
     add_condition_data(stan_data, subject, layout)
     add_prior_data(stan_data, kernel.spec())
+    add_state_reset_data(stan_data, kernel.spec())
 
     assert stan_data["C"] == 2
     assert stan_data["baseline_cond"] == 1
     assert stan_data["cond"] == [1, 1, 2, 2]
     assert "alpha_prior_mu" in stan_data
     assert "beta_prior_sigma" in stan_data
+    assert stan_data["reset_on_block"] == 0
+
+
+def test_add_state_reset_data_exports_per_block_policy() -> None:
+    """Ensure per-block kernels export the Stan reset flag.
+
+    Returns
+    -------
+    None
+        This test asserts per-block reset metadata.
+    """
+
+    kernel = AsocialQLearningKernel()
+    per_block_spec = replace(kernel.spec(), state_reset_policy="per_block")
+    stan_data: dict[str, int] = {}
+
+    add_state_reset_data(stan_data, per_block_spec)
+
+    assert stan_data["reset_on_block"] == 1
+
+
+def test_subject_to_stan_data_remaps_noncontiguous_actions() -> None:
+    """Ensure Stan export remaps sparse action identifiers to contiguous indices.
+
+    Returns
+    -------
+    None
+        This test asserts contiguous Stan action encoding.
+    """
+
+    subject = SubjectData(
+        subject_id="sparse-actions",
+        blocks=(
+            Block(
+                block_index=0,
+                condition="baseline",
+                trials=(
+                    Trial(
+                        trial_index=0,
+                        events=(
+                            Event(
+                                phase=EventPhase.INPUT,
+                                event_index=0,
+                                node_id="main",
+                                payload={"available_actions": (2, 5)},
+                            ),
+                            Event(
+                                phase=EventPhase.DECISION,
+                                event_index=1,
+                                node_id="main",
+                                payload={"action": 5},
+                            ),
+                            Event(
+                                phase=EventPhase.OUTCOME,
+                                event_index=2,
+                                node_id="main",
+                                payload={"reward": 1.0},
+                            ),
+                            Event(
+                                phase=EventPhase.UPDATE,
+                                event_index=3,
+                                node_id="main",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+
+    assert stan_data["A"] == 2
+    assert stan_data["choice"] == [2]
+    assert stan_data["avail_mask"] == [[1.0, 1.0]]

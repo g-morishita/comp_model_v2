@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from comp_model.inference.mle.optimize import MleOptimizerConfig
+
+if TYPE_CHECKING:
+    from comp_model.inference.bayes.stan import StanFitConfig
 
 
 class HierarchyStructure(StrEnum):
@@ -39,4 +43,4 @@ class InferenceConfig:
     backend: str = "stan"
     sampler: str = "nuts"
     mle_config: MleOptimizerConfig = field(default_factory=MleOptimizerConfig)
-    stan_config: object | None = None
+    stan_config: StanFitConfig | None = None

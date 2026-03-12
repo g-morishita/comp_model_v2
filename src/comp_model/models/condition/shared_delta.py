@@ -21,6 +21,14 @@ class SharedDeltaLayout:
         Ordered condition labels included in the layout.
     baseline_condition
         Condition that receives only shared parameters and no delta term.
+
+    Notes
+    -----
+    This layout only changes parameter values across conditions. It does not reset
+    latent kernel state on condition changes. When a kernel uses
+    ``state_reset_policy="per_subject"``, state learned in one condition carries into
+    the next condition within the same subject unless the kernel itself uses
+    ``state_reset_policy="per_block"``.
     """
 
     kernel_spec: ModelKernelSpec

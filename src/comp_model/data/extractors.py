@@ -5,24 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from comp_model._defaults import empty_mapping
 from comp_model.data.schema import EventPhase, Trial
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from comp_model.tasks.schemas import TrialSchema
-
-
-def _empty_metadata() -> Mapping[str, Any]:
-    """Create an empty metadata mapping with explicit typing.
-
-    Returns
-    -------
-    Mapping[str, Any]
-        Empty metadata mapping.
-    """
-
-    return {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,10 +42,10 @@ class DecisionTrialView:
     available_actions: tuple[int, ...]
     choice: int
     reward: float | None = None
-    observation: Mapping[str, Any] = field(default_factory=_empty_metadata)
+    observation: Mapping[str, Any] = field(default_factory=empty_mapping)
     social_action: int | None = None
     social_reward: float | None = None
-    metadata: Mapping[str, Any] = field(default_factory=_empty_metadata)
+    metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
 
 def extract_decision_views(trial: Trial, schema: TrialSchema) -> tuple[DecisionTrialView, ...]:

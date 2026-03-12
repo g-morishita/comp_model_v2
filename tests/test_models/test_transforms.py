@@ -62,3 +62,38 @@ def test_transform_registry_contains_expected_entries() -> None:
     """
 
     assert set(TRANSFORM_REGISTRY) == {"sigmoid", "exp", "softplus", "identity"}
+
+
+@pytest.mark.parametrize(
+    ("transform_id", "value"),
+    (
+        ("sigmoid", 0.0),
+        ("sigmoid", 1.0),
+        ("softplus", 0.0),
+    ),
+)
+def test_inverse_transforms_clamp_closed_domain_boundaries(
+    transform_id: str,
+    value: float,
+) -> None:
+    """Ensure inverse transforms stay finite at closed-domain boundaries.
+
+    Parameters
+    ----------
+    transform_id
+        Name of the transform under test.
+    value
+        Boundary value that would previously overflow.
+
+    Returns
+    -------
+    None
+        This test asserts clamped finite inverse values.
+    """
+
+    transform = get_transform(transform_id)
+
+    recovered = transform.inverse(value)
+
+    assert math.isfinite(recovered)
+    assert math.isfinite(transform.forward(recovered))

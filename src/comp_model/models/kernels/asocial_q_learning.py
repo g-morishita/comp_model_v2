@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec, PriorSpec
+from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
 
 if TYPE_CHECKING:
@@ -147,15 +146,8 @@ class AsocialQLearningKernel:
             Probabilities aligned with ``view.available_actions``.
         """
 
-        logits = np.array(
-            [params.beta * state.q_values[action] for action in view.available_actions]
-        )
-        logits -= logits.max()
-        exp_logits = np.exp(logits)
-        probabilities = exp_logits / exp_logits.sum()
-        probabilities = np.clip(probabilities, 1e-15, None)
-        probabilities /= probabilities.sum()
-        return tuple(float(value) for value in probabilities)
+        logits = [params.beta * state.q_values[action] for action in view.available_actions]
+        return stable_softmax(logits)
 
     def next_state(
         self,

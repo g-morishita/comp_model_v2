@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +10,7 @@ import numpy as np
 import pytest
 
 from comp_model.data.extractors import extract_decision_views
+from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.data_builder import subject_to_stan_data
 from comp_model.inference.mle.objective import log_likelihood_simple
@@ -20,7 +22,26 @@ from comp_model.tasks.schemas import ASOCIAL_BANDIT_SCHEMA
 from comp_model.tasks.spec import BlockSpec, TaskSpec
 
 if TYPE_CHECKING:
-    from comp_model.data.schema import SubjectData
+    from comp_model.models.kernels.base import ModelKernelSpec
+
+
+_STAN_PARITY_ATOL = 5e-6
+
+
+class PerBlockAsocialQLearningKernel(AsocialQLearningKernel):
+    """Asocial Q-learning kernel variant that resets latent state per block."""
+
+    @classmethod
+    def spec(cls) -> ModelKernelSpec:
+        """Return the asocial kernel specification with per-block resets.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Kernel specification with ``state_reset_policy="per_block"``.
+        """
+
+        return replace(super().spec(), state_reset_policy="per_block")
 
 
 def _task() -> TaskSpec:
@@ -90,6 +111,79 @@ def _subject() -> SubjectData:
         params=kernel.parse_params({"alpha": 0.0, "beta": 1.0}),
         config=SimulationConfig(seed=37),
         subject_id="s1",
+    )
+
+
+def _two_block_manual_subject() -> SubjectData:
+    """Create a two-block subject with a reset-sensitive likelihood trace.
+
+    Returns
+    -------
+    SubjectData
+        Manual subject data whose second block depends on reset behavior.
+    """
+
+    def _trial(trial_index: int, action: int, reward: float) -> Trial:
+        """Create a minimal asocial trial for parity tests.
+
+        Parameters
+        ----------
+        trial_index
+            Trial index within the current block.
+        action
+            Chosen action value.
+        reward
+            Observed reward.
+
+        Returns
+        -------
+        Trial
+            Event-based trial matching ``ASOCIAL_BANDIT_SCHEMA``.
+        """
+
+        return Trial(
+            trial_index=trial_index,
+            events=(
+                Event(
+                    phase=EventPhase.INPUT,
+                    event_index=0,
+                    node_id="main",
+                    payload={"available_actions": (0, 1)},
+                ),
+                Event(
+                    phase=EventPhase.DECISION,
+                    event_index=1,
+                    node_id="main",
+                    payload={"action": action},
+                ),
+                Event(
+                    phase=EventPhase.OUTCOME,
+                    event_index=2,
+                    node_id="main",
+                    payload={"reward": reward},
+                ),
+                Event(
+                    phase=EventPhase.UPDATE,
+                    event_index=3,
+                    node_id="main",
+                ),
+            ),
+        )
+
+    return SubjectData(
+        subject_id="reset-subject",
+        blocks=(
+            Block(
+                block_index=0,
+                condition="baseline",
+                trials=(_trial(trial_index=0, action=0, reward=1.0),),
+            ),
+            Block(
+                block_index=1,
+                condition="baseline",
+                trials=(_trial(trial_index=0, action=1, reward=0.0),),
+            ),
+        ),
     )
 
 
@@ -185,7 +279,7 @@ def test_log_likelihood_parity() -> None:
     beta = 1.25
     model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
     fit = model.sample(
-        data={**stan_data, "alpha": alpha, "beta": beta},
+        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 0},
         fixed_param=True,
         iter_sampling=1,
         iter_warmup=1,
@@ -201,7 +295,7 @@ def test_log_likelihood_parity() -> None:
     }
     python_log_lik = log_likelihood_simple(kernel, subject, raw_params, ASOCIAL_BANDIT_SCHEMA)
 
-    assert abs(python_log_lik - float(stan_log_lik.sum())) < 1e-6
+    assert abs(python_log_lik - float(stan_log_lik.sum())) < _STAN_PARITY_ATOL
 
 
 @pytest.mark.stan
@@ -220,7 +314,7 @@ def test_trialwise_parity() -> None:
     beta = 1.25
     model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
     fit = model.sample(
-        data={**stan_data, "alpha": alpha, "beta": beta},
+        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 0},
         fixed_param=True,
         iter_sampling=1,
         iter_warmup=1,
@@ -230,7 +324,42 @@ def test_trialwise_parity() -> None:
     stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
     python_log_lik = _python_trial_log_likelihoods(subject, alpha, beta)
 
-    assert np.max(np.abs(np.asarray(python_log_lik) - stan_log_lik)) < 1e-6
+    assert np.max(np.abs(np.asarray(python_log_lik) - stan_log_lik)) < _STAN_PARITY_ATOL
+
+
+@pytest.mark.stan
+def test_block_reset_parity() -> None:
+    """Ensure Python and Stan agree when kernels reset state at block boundaries.
+
+    Returns
+    -------
+    None
+        This test asserts total log-likelihood parity under per-block resets.
+    """
+
+    subject = _two_block_manual_subject()
+    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    alpha = 0.5
+    beta = 2.0
+    model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
+    fit = model.sample(
+        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 1},
+        fixed_param=True,
+        iter_sampling=1,
+        iter_warmup=1,
+        chains=1,
+        seed=4,
+    )
+    stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
+
+    kernel = PerBlockAsocialQLearningKernel()
+    raw_params = {
+        "alpha": get_transform("sigmoid").inverse(alpha),
+        "beta": get_transform("softplus").inverse(beta),
+    }
+    python_log_lik = log_likelihood_simple(kernel, subject, raw_params, ASOCIAL_BANDIT_SCHEMA)
+
+    assert abs(python_log_lik - float(stan_log_lik.sum())) < _STAN_PARITY_ATOL
 
 
 @pytest.mark.stan

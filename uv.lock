@@ -40,6 +40,7 @@ version = "3.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -53,13 +54,13 @@ dev = [
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "scipy" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cmdstanpy", marker = "extra == 'stan'", specifier = ">=1.2" },
     { name = "numpy", specifier = ">=1.24" },
+    { name = "scipy", specifier = ">=1.11" },
 ]
 provides-extras = ["stan"]
 
@@ -69,7 +70,6 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "ruff", specifier = ">=0.8" },
-    { name = "scipy", specifier = ">=1.11" },
 ]
 
 [[package]]
