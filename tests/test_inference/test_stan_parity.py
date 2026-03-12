@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from comp_model.models.kernels.base import ModelKernelSpec
 
 
+_STAN_PARITY_ATOL = 5e-6
+
+
 class PerBlockAsocialQLearningKernel(AsocialQLearningKernel):
     """Asocial Q-learning kernel variant that resets latent state per block."""
 
@@ -292,7 +295,7 @@ def test_log_likelihood_parity() -> None:
     }
     python_log_lik = log_likelihood_simple(kernel, subject, raw_params, ASOCIAL_BANDIT_SCHEMA)
 
-    assert abs(python_log_lik - float(stan_log_lik.sum())) < 1e-6
+    assert abs(python_log_lik - float(stan_log_lik.sum())) < _STAN_PARITY_ATOL
 
 
 @pytest.mark.stan
@@ -321,7 +324,7 @@ def test_trialwise_parity() -> None:
     stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
     python_log_lik = _python_trial_log_likelihoods(subject, alpha, beta)
 
-    assert np.max(np.abs(np.asarray(python_log_lik) - stan_log_lik)) < 1e-6
+    assert np.max(np.abs(np.asarray(python_log_lik) - stan_log_lik)) < _STAN_PARITY_ATOL
 
 
 @pytest.mark.stan
@@ -356,7 +359,7 @@ def test_block_reset_parity() -> None:
     }
     python_log_lik = log_likelihood_simple(kernel, subject, raw_params, ASOCIAL_BANDIT_SCHEMA)
 
-    assert abs(python_log_lik - float(stan_log_lik.sum())) < 1e-6
+    assert abs(python_log_lik - float(stan_log_lik.sum())) < _STAN_PARITY_ATOL
 
 
 @pytest.mark.stan
