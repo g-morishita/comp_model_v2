@@ -1,7 +1,6 @@
 """Kernel implementations and shared parameter transforms."""
 
 from comp_model.models.kernels.base import (
-    DecisionTrialViewLike,
     InitSpec,
     ModelKernel,
     ModelKernelSpec,
@@ -12,7 +11,6 @@ from comp_model.models.kernels.transforms import TRANSFORM_REGISTRY, Transform, 
 
 __all__ = [
     "TRANSFORM_REGISTRY",
-    "DecisionTrialViewLike",
     "InitSpec",
     "ModelKernel",
     "ModelKernelSpec",
