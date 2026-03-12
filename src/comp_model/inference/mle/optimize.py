@@ -118,6 +118,20 @@ def fit_mle_simple(
     bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
 
     def objective(z_vector: np.ndarray) -> float:
+        """Evaluate the negative replay log-likelihood for one parameter vector.
+
+        Parameters
+        ----------
+        z_vector
+            Candidate unconstrained parameter vector in kernel parameter order.
+
+        Returns
+        -------
+        float
+            Negative log-likelihood objective for ``scipy.optimize.minimize``.
+            Non-finite replay scores are converted to a large penalty value.
+        """
+
         raw_params = {name: float(value) for name, value in zip(param_names, z_vector, strict=True)}
         log_likelihood = log_likelihood_simple(kernel, subject_data, raw_params, schema)
         if not np.isfinite(log_likelihood):
@@ -227,6 +241,20 @@ def fit_mle_conditioned(
     bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
 
     def objective(z_vector: np.ndarray) -> float:
+        """Evaluate the conditioned negative replay log-likelihood.
+
+        Parameters
+        ----------
+        z_vector
+            Candidate unconstrained parameter vector in layout key order.
+
+        Returns
+        -------
+        float
+            Negative conditioned log-likelihood for ``scipy.optimize.minimize``.
+            Non-finite replay scores are converted to a large penalty value.
+        """
+
         raw_params = {name: float(value) for name, value in zip(param_keys, z_vector, strict=True)}
         log_likelihood = log_likelihood_conditioned(
             kernel,
