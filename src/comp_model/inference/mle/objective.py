@@ -9,6 +9,7 @@ from comp_model.data.extractors import extract_decision_views
 from comp_model.data.schema import EventPhase, SubjectData
 
 if TYPE_CHECKING:
+    from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernel
     from comp_model.tasks.schemas import TrialSchema
 
@@ -83,3 +84,51 @@ def _infer_n_actions_from_data(subject_data: SubjectData) -> int:
                 if event.phase == EventPhase.INPUT and "available_actions" in event.payload:
                     return len(event.payload["available_actions"])
     raise ValueError("Cannot infer n_actions: no INPUT events found")
+
+
+def log_likelihood_conditioned(
+    kernel: ModelKernel[object, object],
+    layout: SharedDeltaLayout,
+    subject_data: SubjectData,
+    raw_params: dict[str, float],
+    schema: TrialSchema,
+) -> float:
+    """Compute replay log-likelihood with shared-plus-delta condition parameters.
+
+    Parameters
+    ----------
+    kernel
+        Model kernel used for replay.
+    layout
+        Shared-plus-delta parameter layout across conditions.
+    subject_data
+        Subject data being evaluated.
+    raw_params
+        Unconstrained layout parameter values keyed by layout names.
+    schema
+        Trial schema shared across evaluated trials.
+
+    Returns
+    -------
+    float
+        Total log-likelihood across all decision views.
+    """
+
+    reset_policy = kernel.spec().state_reset_policy
+    n_actions = _infer_n_actions_from_data(subject_data)
+    total_log_likelihood = 0.0
+    state: object | None = None
+
+    for block in subject_data.blocks:
+        condition_params = kernel.parse_params(layout.reconstruct(raw_params, block.condition))
+        if state is None or reset_policy == "per_block":
+            state = kernel.initial_state(n_actions, condition_params)
+
+        for trial in block.trials:
+            for view in extract_decision_views(trial, schema):
+                probabilities = kernel.action_probabilities(state, view, condition_params)
+                choice_index = view.available_actions.index(view.choice)
+                total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
+                state = kernel.next_state(state, view, condition_params)
+
+    return total_log_likelihood
