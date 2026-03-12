@@ -1,0 +1,317 @@
+"""Parity tests between Python replay and Stan exports."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+import pytest
+
+from comp_model.data.extractors import extract_decision_views
+from comp_model.environments.bandit import StationaryBanditEnvironment
+from comp_model.inference.bayes.stan.data_builder import subject_to_stan_data
+from comp_model.inference.mle.objective import log_likelihood_simple
+from comp_model.models.condition.shared_delta import SharedDeltaLayout
+from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
+from comp_model.models.kernels.transforms import get_transform
+from comp_model.runtime.engine import SimulationConfig, simulate_subject
+from comp_model.tasks.schemas import ASOCIAL_BANDIT_SCHEMA
+from comp_model.tasks.spec import BlockSpec, TaskSpec
+
+if TYPE_CHECKING:
+    from comp_model.data.schema import SubjectData
+
+
+def _task() -> TaskSpec:
+    """Create a small one-block task for parity tests.
+
+    Returns
+    -------
+    TaskSpec
+        One-block task with four asocial trials.
+    """
+
+    return TaskSpec(
+        task_id="parity",
+        blocks=(
+            BlockSpec(
+                condition="baseline",
+                n_trials=4,
+                schema=ASOCIAL_BANDIT_SCHEMA,
+                metadata={"n_actions": 2},
+            ),
+        ),
+    )
+
+
+def _condition_task() -> TaskSpec:
+    """Create a two-condition task for structural parity tests.
+
+    Returns
+    -------
+    TaskSpec
+        Two-block task with one decision per trial.
+    """
+
+    return TaskSpec(
+        task_id="parity-conditioned",
+        blocks=(
+            BlockSpec(
+                condition="baseline",
+                n_trials=2,
+                schema=ASOCIAL_BANDIT_SCHEMA,
+                metadata={"n_actions": 2},
+            ),
+            BlockSpec(
+                condition="social",
+                n_trials=2,
+                schema=ASOCIAL_BANDIT_SCHEMA,
+                metadata={"n_actions": 2},
+            ),
+        ),
+    )
+
+
+def _subject() -> SubjectData:
+    """Simulate a single subject for parity tests.
+
+    Returns
+    -------
+    object
+        Simulated subject data.
+    """
+
+    kernel = AsocialQLearningKernel()
+    return simulate_subject(
+        task=_task(),
+        env=StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params=kernel.parse_params({"alpha": 0.0, "beta": 1.0}),
+        config=SimulationConfig(seed=37),
+        subject_id="s1",
+    )
+
+
+def _python_trial_log_likelihoods(subject: SubjectData, alpha: float, beta: float) -> list[float]:
+    """Compute Python replay log-likelihood contributions per trial.
+
+    Parameters
+    ----------
+    subject
+        Subject data to replay.
+    alpha
+        Constrained learning rate.
+    beta
+        Constrained inverse temperature.
+
+    Returns
+    -------
+    list[float]
+        Per-trial log-likelihood values.
+    """
+
+    kernel = AsocialQLearningKernel()
+    raw_params = {
+        "alpha": get_transform("sigmoid").inverse(alpha),
+        "beta": get_transform("softplus").inverse(beta),
+    }
+    params = kernel.parse_params(raw_params)
+    state = kernel.initial_state(2, params)
+    trial_log_likelihoods: list[float] = []
+
+    for block in subject.blocks:
+        for trial in block.trials:
+            trial_log_likelihood = 0.0
+            for view in extract_decision_views(trial, ASOCIAL_BANDIT_SCHEMA):
+                probabilities = kernel.action_probabilities(state, view, params)
+                choice_index = view.choice
+                trial_log_likelihood += float(np.log(probabilities[choice_index]))
+                state = kernel.next_state(state, view, params)
+            trial_log_likelihoods.append(trial_log_likelihood)
+
+    return trial_log_likelihoods
+
+
+def _cmdstanpy() -> Any:
+    """Import CmdStanPy or skip the Stan-marked tests.
+
+    Returns
+    -------
+    Any
+        Imported ``cmdstanpy`` module.
+    """
+
+    cmdstanpy = pytest.importorskip("cmdstanpy")
+    try:
+        cmdstanpy.cmdstan_path()
+    except Exception as exc:  # pragma: no cover - environment dependent
+        pytest.skip(f"CmdStan is not installed: {exc}")
+    return cmdstanpy
+
+
+def _fixed_param_model(filename: str) -> Any:
+    """Compile a fixed-parameter Stan test program.
+
+    Parameters
+    ----------
+    filename
+        Test Stan filename under ``tests/test_inference/stan``.
+
+    Returns
+    -------
+    Any
+        Compiled ``CmdStanModel`` instance.
+    """
+
+    cmdstanpy = _cmdstanpy()
+    stan_file = Path(__file__).parent / "stan" / filename
+    return cmdstanpy.CmdStanModel(stan_file=str(stan_file))
+
+
+@pytest.mark.stan
+def test_log_likelihood_parity() -> None:
+    """Ensure Python and Stan agree on total log-likelihood.
+
+    Returns
+    -------
+    None
+        This test asserts near-exact total log-likelihood parity.
+    """
+
+    subject = _subject()
+    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    alpha = 0.5
+    beta = 1.25
+    model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
+    fit = model.sample(
+        data={**stan_data, "alpha": alpha, "beta": beta},
+        fixed_param=True,
+        iter_sampling=1,
+        iter_warmup=1,
+        chains=1,
+        seed=1,
+    )
+    stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
+
+    kernel = AsocialQLearningKernel()
+    raw_params = {
+        "alpha": get_transform("sigmoid").inverse(alpha),
+        "beta": get_transform("softplus").inverse(beta),
+    }
+    python_log_lik = log_likelihood_simple(kernel, subject, raw_params, ASOCIAL_BANDIT_SCHEMA)
+
+    assert abs(python_log_lik - float(stan_log_lik.sum())) < 1e-6
+
+
+@pytest.mark.stan
+def test_trialwise_parity() -> None:
+    """Ensure Python and Stan agree trial by trial on log-likelihood.
+
+    Returns
+    -------
+    None
+        This test asserts near-exact trialwise parity.
+    """
+
+    subject = _subject()
+    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    alpha = 0.5
+    beta = 1.25
+    model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
+    fit = model.sample(
+        data={**stan_data, "alpha": alpha, "beta": beta},
+        fixed_param=True,
+        iter_sampling=1,
+        iter_warmup=1,
+        chains=1,
+        seed=2,
+    )
+    stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
+    python_log_lik = _python_trial_log_likelihoods(subject, alpha, beta)
+
+    assert np.max(np.abs(np.asarray(python_log_lik) - stan_log_lik)) < 1e-6
+
+
+@pytest.mark.stan
+def test_condition_reconstruction_parity() -> None:
+    """Ensure Python and Stan reconstruct condition parameters identically.
+
+    Returns
+    -------
+    None
+        This test asserts exact reconstruction parity.
+    """
+
+    layout = SharedDeltaLayout(
+        kernel_spec=AsocialQLearningKernel.spec(),
+        conditions=("baseline", "social"),
+        baseline_condition="baseline",
+    )
+    raw = {
+        "alpha__shared_z": 0.1,
+        "beta__shared_z": 1.2,
+        "alpha__delta_z__social": 0.3,
+        "beta__delta_z__social": -0.5,
+    }
+    model = _fixed_param_model("condition_reconstruction.stan")
+    fit = model.sample(
+        data={
+            "alpha_shared_z": raw["alpha__shared_z"],
+            "beta_shared_z": raw["beta__shared_z"],
+            "alpha_delta_z_social": raw["alpha__delta_z__social"],
+            "beta_delta_z_social": raw["beta__delta_z__social"],
+        },
+        fixed_param=True,
+        iter_sampling=1,
+        iter_warmup=1,
+        chains=1,
+        seed=3,
+    )
+
+    reconstructed = layout.reconstruct_all(raw)
+    assert reconstructed["baseline"]["alpha"] == pytest.approx(
+        float(np.asarray(fit.stan_variable("alpha_baseline"))[0])
+    )
+    assert reconstructed["baseline"]["beta"] == pytest.approx(
+        float(np.asarray(fit.stan_variable("beta_baseline"))[0])
+    )
+    assert reconstructed["social"]["alpha"] == pytest.approx(
+        float(np.asarray(fit.stan_variable("alpha_social"))[0])
+    )
+    assert reconstructed["social"]["beta"] == pytest.approx(
+        float(np.asarray(fit.stan_variable("beta_social"))[0])
+    )
+
+
+def test_simulation_fit_structural_parity() -> None:
+    """Ensure simulation traces and Stan export agree structurally.
+
+    Returns
+    -------
+    None
+        This test asserts choices, rewards, and trial counts survive export.
+    """
+
+    kernel = AsocialQLearningKernel()
+    subject = simulate_subject(
+        task=_condition_task(),
+        env=StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params=kernel.parse_params({"alpha": 0.0, "beta": 1.0}),
+        config=SimulationConfig(seed=41),
+        subject_id="s1",
+    )
+    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    views = [
+        view
+        for block in subject.blocks
+        for trial in block.trials
+        for view in extract_decision_views(trial, ASOCIAL_BANDIT_SCHEMA)
+    ]
+
+    assert stan_data["T"] == len(views)
+    assert stan_data["choice"] == [view.choice + 1 for view in views]
+    assert stan_data["reward"] == [
+        float(view.reward) if view.reward is not None else 0.0 for view in views
+    ]
