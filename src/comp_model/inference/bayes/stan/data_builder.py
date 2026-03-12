@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 from comp_model.data.extractors import extract_decision_views
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from comp_model.data.extractors import DecisionTrialView
     from comp_model.data.schema import Dataset, SubjectData
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
@@ -27,33 +29,23 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     Returns
     -------
     dict[str, Any]
-        Stan-ready flat arrays with 1-based action indexing.
+        Stan-ready flat arrays with contiguous 1-based action indexing.
     """
 
     trials_flat: list[DecisionTrialView] = []
     block_of_trial: list[int] = []
-    block_starts: list[int] = []
-    n_trials_in_block: list[int] = []
 
-    trial_counter = 0
     for block in subject_data.blocks:
-        block_starts.append(trial_counter + 1)
-        block_trial_count = 0
         for trial in block.trials:
             for view in extract_decision_views(trial, schema):
                 trials_flat.append(view)
                 block_of_trial.append(block.block_index + 1)
-                trial_counter += 1
-                block_trial_count += 1
-        n_trials_in_block.append(block_trial_count)
 
     if not trials_flat:
         raise ValueError("No decision trials found in subject data")
 
-    action_counts: set[int] = {max(view.available_actions) + 1 for view in trials_flat}
-    if len(action_counts) != 1:
-        raise ValueError("All decision views must agree on the number of actions")
-    n_actions = action_counts.pop()
+    action_to_index = _action_index_mapping(trials_flat)
+    n_actions = len(action_to_index)
     total_trials = len(trials_flat)
 
     choice = [0] * total_trials
@@ -64,13 +56,13 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     has_social = [0] * total_trials
 
     for index, view in enumerate(trials_flat):
-        choice[index] = view.choice + 1
+        choice[index] = action_to_index[view.choice]
         reward[index] = float(view.reward) if view.reward is not None else 0.0
         for action in view.available_actions:
-            avail_mask[index][action] = 1.0
+            avail_mask[index][action_to_index[action] - 1] = 1.0
         if view.social_action is not None:
             has_social[index] = 1
-            social_action[index] = view.social_action + 1
+            social_action[index] = action_to_index[view.social_action]
             social_reward[index] = (
                 float(view.social_reward) if view.social_reward is not None else 0.0
             )
@@ -78,13 +70,10 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     return {
         "A": n_actions,
         "T": total_trials,
-        "B": len(block_starts),
         "choice": choice,
         "reward": reward,
         "avail_mask": avail_mask,
         "block_of_trial": block_of_trial,
-        "block_start": block_starts,
-        "n_trials_in_block": n_trials_in_block,
         "social_action": social_action,
         "social_reward": social_reward,
         "has_social": has_social,
@@ -211,3 +200,65 @@ def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> N
             sigma = 2.0
         stan_data[f"{parameter.name}_prior_mu"] = float(mu)
         stan_data[f"{parameter.name}_prior_sigma"] = float(sigma)
+
+
+def add_state_reset_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
+    """Add kernel state-reset metadata to a Stan data dictionary.
+
+    Parameters
+    ----------
+    stan_data
+        Stan data dictionary to mutate.
+    kernel_spec
+        Kernel specification whose reset policy should be exported.
+
+    Returns
+    -------
+    None
+        This function mutates ``stan_data`` in-place.
+
+    Raises
+    ------
+    ValueError
+        Raised when the kernel exposes an unknown reset policy.
+    """
+
+    if kernel_spec.state_reset_policy == "per_subject":
+        stan_data["reset_on_block"] = 0
+        return
+    if kernel_spec.state_reset_policy == "per_block":
+        stan_data["reset_on_block"] = 1
+        return
+    raise ValueError(f"Unknown state_reset_policy: {kernel_spec.state_reset_policy!r}")
+
+
+def _action_index_mapping(trials_flat: Iterable[DecisionTrialView]) -> dict[int, int]:
+    """Build a contiguous Stan action index for observed action identifiers.
+
+    Parameters
+    ----------
+    trials_flat
+        Decision views whose action identifiers should be encoded.
+
+    Returns
+    -------
+    dict[int, int]
+        Mapping from raw action identifier to 1-based Stan index.
+    """
+
+    ordered_actions: list[int] = []
+    seen_actions: set[int] = set()
+
+    for view in trials_flat:
+        for action in view.available_actions:
+            if action not in seen_actions:
+                seen_actions.add(action)
+                ordered_actions.append(action)
+        if view.choice not in seen_actions:
+            seen_actions.add(view.choice)
+            ordered_actions.append(view.choice)
+        if view.social_action is not None and view.social_action not in seen_actions:
+            seen_actions.add(view.social_action)
+            ordered_actions.append(view.social_action)
+
+    return {action: index for index, action in enumerate(ordered_actions, start=1)}

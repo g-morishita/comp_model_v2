@@ -6,8 +6,16 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from scipy import special
+
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+_PROBABILITY_LOWER_BOUND = math.nextafter(0.0, 1.0)
+_PROBABILITY_UPPER_BOUND = math.nextafter(1.0, 0.0)
+_POSITIVE_LOWER_BOUND = math.nextafter(0.0, 1.0)
+_SOFTPLUS_STABLE_SWITCH = math.log(2.0)
 
 
 def _sigmoid(value: float) -> float:
@@ -24,11 +32,7 @@ def _sigmoid(value: float) -> float:
         Sigmoid-transformed scalar in `(0, 1)`.
     """
 
-    if value >= 0.0:
-        exp_term = math.exp(-value)
-        return 1.0 / (1.0 + exp_term)
-    exp_term = math.exp(value)
-    return exp_term / (1.0 + exp_term)
+    return float(special.expit(value))
 
 
 def _inverse_sigmoid(value: float) -> float:
@@ -45,7 +49,8 @@ def _inverse_sigmoid(value: float) -> float:
         Logit-transformed scalar.
     """
 
-    return math.log(value / (1.0 - value))
+    clamped_value = min(max(value, _PROBABILITY_LOWER_BOUND), _PROBABILITY_UPPER_BOUND)
+    return float(special.logit(clamped_value))
 
 
 def _softplus(value: float) -> float:
@@ -81,7 +86,10 @@ def _inverse_softplus(value: float) -> float:
         Inverse softplus-transformed scalar.
     """
 
-    return math.log(math.expm1(value))
+    clamped_value = max(value, _POSITIVE_LOWER_BOUND)
+    if clamped_value < _SOFTPLUS_STABLE_SWITCH:
+        return math.log(math.expm1(clamped_value))
+    return clamped_value + math.log1p(-math.exp(-clamped_value))
 
 
 @dataclass(frozen=True, slots=True)

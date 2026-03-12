@@ -6,20 +6,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from comp_model._defaults import empty_mapping
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
-
-
-def _empty_mapping() -> Mapping[str, Any]:
-    """Create an empty mapping with stable typing.
-
-    Returns
-    -------
-    Mapping[str, Any]
-        Empty metadata or payload mapping.
-    """
-
-    return {}
 
 
 class EventPhase(StrEnum):
@@ -65,7 +55,7 @@ class Event:
     event_index: int
     node_id: str = "default"
     actor_id: str = "subject"
-    payload: Mapping[str, Any] = field(default_factory=_empty_mapping)
+    payload: Mapping[str, Any] = field(default_factory=empty_mapping)
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +74,7 @@ class Trial:
 
     trial_index: int
     events: tuple[Event, ...]
-    metadata: Mapping[str, Any] = field(default_factory=_empty_mapping)
+    metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +96,7 @@ class Block:
     block_index: int
     condition: str
     trials: tuple[Trial, ...]
-    metadata: Mapping[str, Any] = field(default_factory=_empty_mapping)
+    metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +115,7 @@ class SubjectData:
 
     subject_id: str
     blocks: tuple[Block, ...]
-    metadata: Mapping[str, Any] = field(default_factory=_empty_mapping)
+    metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
     def iter_block_trials(self) -> Iterator[tuple[Block, Trial]]:
         """Yield each trial together with its containing block.
@@ -166,7 +156,7 @@ class Dataset:
     """
 
     subjects: tuple[SubjectData, ...]
-    metadata: Mapping[str, Any] = field(default_factory=_empty_mapping)
+    metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
     @property
     def blocks(self) -> tuple[Block, ...]:

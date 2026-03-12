@@ -1,15 +1,28 @@
 """Stan-specific Bayesian inference utilities."""
 
+from comp_model.inference.bayes.stan.adapters import AsocialQLearningStanAdapter, StanAdapter
+from comp_model.inference.bayes.stan.backend import (
+    DEFAULT_STAN_FIT_CONFIG,
+    StanFitConfig,
+    fit_stan,
+)
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
     add_prior_data,
+    add_state_reset_data,
     dataset_to_stan_data,
     subject_to_stan_data,
 )
 
-__all__ = [
+__all__ = (
+    "DEFAULT_STAN_FIT_CONFIG",
+    "AsocialQLearningStanAdapter",
+    "StanAdapter",
+    "StanFitConfig",
     "add_condition_data",
     "add_prior_data",
+    "add_state_reset_data",
     "dataset_to_stan_data",
+    "fit_stan",
     "subject_to_stan_data",
-]
+)

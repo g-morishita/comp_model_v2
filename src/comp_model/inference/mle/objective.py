@@ -112,6 +112,12 @@ def log_likelihood_conditioned(
     -------
     float
         Total log-likelihood across all decision views.
+
+    Notes
+    -----
+    Conditioned replay changes parameters by block condition, but it still follows the
+    kernel's state reset policy. With ``state_reset_policy="per_subject"``, latent
+    state carries across condition boundaries within a subject.
     """
 
     reset_policy = kernel.spec().state_reset_policy

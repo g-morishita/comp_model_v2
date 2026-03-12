@@ -5,6 +5,7 @@ data {
   vector[T] reward;
   array[T] vector<lower=0,upper=1>[A] avail_mask;
   array[T] int block_of_trial;
+  int<lower=0,upper=1> reset_on_block;
 
   real alpha_prior_mu;
   real<lower=0> alpha_prior_sigma;
@@ -26,6 +27,9 @@ model {
   beta_z ~ normal(beta_prior_mu, beta_prior_sigma);
 
   for (t in 1:T) {
+    if (reset_on_block == 1 && t > 1 && block_of_trial[t] != block_of_trial[t - 1]) {
+      Q = rep_vector(0.5, A);
+    }
     if (choice[t] > 0) {
       vector[A] u = beta * Q;
       for (a in 1:A) if (avail_mask[t][a] == 0) u[a] = negative_infinity();
@@ -44,6 +48,9 @@ generated quantities {
     vector[A] Q = rep_vector(0.5, A);
 
     for (t in 1:T) {
+      if (reset_on_block == 1 && t > 1 && block_of_trial[t] != block_of_trial[t - 1]) {
+        Q = rep_vector(0.5, A);
+      }
       if (choice[t] > 0) {
         vector[A] u = beta * Q;
         for (a in 1:A) if (avail_mask[t][a] == 0) u[a] = negative_infinity();
@@ -56,4 +63,3 @@ generated quantities {
     }
   }
 }
-

@@ -9,6 +9,7 @@ from comp_model.data.schema import Dataset, SubjectData
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
     add_prior_data,
+    add_state_reset_data,
     dataset_to_stan_data,
     subject_to_stan_data,
 )
@@ -85,6 +86,7 @@ class AsocialQLearningStanAdapter:
             stan_data = dataset_to_stan_data(data, schema)
 
         add_prior_data(stan_data, self.kernel_spec())
+        add_state_reset_data(stan_data, self.kernel_spec())
 
         if layout is not None and hierarchy in (
             HierarchyStructure.SUBJECT_BLOCK_CONDITION,

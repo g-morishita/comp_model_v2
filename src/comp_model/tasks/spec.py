@@ -5,22 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from comp_model._defaults import empty_mapping
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from comp_model.tasks.schemas import TrialSchema
-
-
-def _empty_metadata() -> Mapping[str, Any]:
-    """Create an empty metadata mapping with explicit typing.
-
-    Returns
-    -------
-    Mapping[str, Any]
-        Empty metadata mapping.
-    """
-
-    return {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +32,7 @@ class BlockSpec:
     condition: str
     n_trials: int
     schema: TrialSchema
-    metadata: Mapping[str, Any] = field(default_factory=_empty_metadata)
+    metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
 
 @dataclass(frozen=True, slots=True)
