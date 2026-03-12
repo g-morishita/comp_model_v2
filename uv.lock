@@ -43,30 +43,34 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-dev = [
+stan = [
     { name = "cmdstanpy" },
+]
+
+[package.dev-dependencies]
+dev = [
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "scipy" },
 ]
-stan = [
-    { name = "cmdstanpy" },
-]
 
 [package.metadata]
 requires-dist = [
-    { name = "cmdstanpy", marker = "extra == 'dev'", specifier = ">=1.2" },
     { name = "cmdstanpy", marker = "extra == 'stan'", specifier = ">=1.2" },
     { name = "numpy", specifier = ">=1.24" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-    { name = "scipy", marker = "extra == 'dev'", specifier = ">=1.11" },
 ]
-provides-extras = ["stan", "dev"]
+provides-extras = ["stan"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-xdist", specifier = ">=3.5" },
+    { name = "ruff", specifier = ">=0.8" },
+    { name = "scipy", specifier = ">=1.11" },
+]
 
 [[package]]
 name = "execnet"
