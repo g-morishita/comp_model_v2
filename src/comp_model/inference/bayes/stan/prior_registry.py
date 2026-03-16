@@ -65,10 +65,7 @@ def prior_spec_to_stan_data(
     """
 
     if family not in PRIOR_FAMILIES:
-        raise ValueError(
-            f"Unknown prior family {family!r}. "
-            f"Available: {sorted(PRIOR_FAMILIES)}"
-        )
+        raise ValueError(f"Unknown prior family {family!r}. Available: {sorted(PRIOR_FAMILIES)}")
 
     definition = PRIOR_FAMILIES[family]
     params = [0.0] * _MAX_PRIOR_PARAMS

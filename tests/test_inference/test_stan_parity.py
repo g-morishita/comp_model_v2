@@ -459,7 +459,5 @@ def test_simulation_fit_structural_parity() -> None:
 
     assert stan_data["E"] == len(views)
     assert stan_data["step_choice"] == [view.choice + 1 for view in views]
-    expected_rewards = [
-        float(view.reward) if view.reward is not None else 0.0 for view in views
-    ]
+    expected_rewards = [float(view.reward) if view.reward is not None else 0.0 for view in views]
     assert stan_data["step_reward"] == expected_rewards

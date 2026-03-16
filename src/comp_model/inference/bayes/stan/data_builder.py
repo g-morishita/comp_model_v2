@@ -551,9 +551,7 @@ def _views_to_step_dict(
     step_choice = [0] * total_steps
     step_update_action = [0] * total_steps
     step_reward = [0.0] * total_steps
-    step_avail_mask: list[list[float]] = [
-        [0.0] * n_actions for _ in range(total_steps)
-    ]
+    step_avail_mask: list[list[float]] = [[0.0] * n_actions for _ in range(total_steps)]
     step_block = list(block_indices)
     step_condition = list(condition_indices)
     step_social_action = [0] * total_steps

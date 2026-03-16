@@ -110,9 +110,7 @@ class AsocialQLearningStanAdapter:
             HierarchyStructure.SUBJECT_BLOCK_CONDITION,
             HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
         ):
-            condition_map = {
-                cond: idx for idx, cond in enumerate(layout.conditions, start=1)
-            }
+            condition_map = {cond: idx for idx, cond in enumerate(layout.conditions, start=1)}
 
         # Build step-stream data
         if isinstance(data, SubjectData):

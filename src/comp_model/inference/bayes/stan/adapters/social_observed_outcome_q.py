@@ -102,20 +102,24 @@ class SocialObservedOutcomeQStanAdapter:
             HierarchyStructure.SUBJECT_BLOCK_CONDITION,
             HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
         ):
-            condition_map = {
-                cond: idx for idx, cond in enumerate(layout.conditions, start=1)
-            }
+            condition_map = {cond: idx for idx, cond in enumerate(layout.conditions, start=1)}
 
         # Build step-stream data with social fields
         if isinstance(data, SubjectData):
             stan_data = subject_to_step_data(
-                data, schema, kernel_spec=kspec,
-                condition_map=condition_map, include_social=True,
+                data,
+                schema,
+                kernel_spec=kspec,
+                condition_map=condition_map,
+                include_social=True,
             )
         else:
             stan_data = dataset_to_step_data(
-                data, schema, kernel_spec=kspec,
-                condition_map=condition_map, include_social=True,
+                data,
+                schema,
+                kernel_spec=kspec,
+                condition_map=condition_map,
+                include_social=True,
             )
 
         # Add prior, reset, and initial value data

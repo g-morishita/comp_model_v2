@@ -250,9 +250,7 @@ def test_subject_to_step_data_exports_step_stream() -> None:
         subject_id="s1",
     )
 
-    stan_data = subject_to_step_data(
-        subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
-    )
+    stan_data = subject_to_step_data(subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec())
 
     assert stan_data["A"] == 2
     assert stan_data["E"] == 4
@@ -287,9 +285,7 @@ def test_dataset_to_step_data_adds_subject_indices() -> None:
         config=SimulationConfig(seed=17),
     )
 
-    stan_data = dataset_to_step_data(
-        dataset, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
-    )
+    stan_data = dataset_to_step_data(dataset, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec())
 
     assert stan_data["N"] == 2
     assert len(stan_data["step_subject"]) == stan_data["E"]
@@ -335,7 +331,8 @@ def test_subject_to_step_data_with_conditions() -> None:
     condition_map = {"baseline": 1, "social": 2}
 
     stan_data = subject_to_step_data(
-        subject, ASOCIAL_BANDIT_SCHEMA,
+        subject,
+        ASOCIAL_BANDIT_SCHEMA,
         kernel_spec=kernel.spec(),
         condition_map=condition_map,
     )
@@ -393,9 +390,7 @@ def test_step_data_remaps_noncontiguous_actions() -> None:
     )
     kernel = AsocialQLearningKernel()
 
-    stan_data = subject_to_step_data(
-        subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
-    )
+    stan_data = subject_to_step_data(subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec())
 
     assert stan_data["A"] == 2
     assert stan_data["step_choice"] == [2]
@@ -468,7 +463,8 @@ def test_step_data_includes_social_fields_when_requested() -> None:
 
     kernel = AsocialQLearningKernel()
     stan_data = subject_to_step_data(
-        subject, SOCIAL_PRE_CHOICE_SCHEMA,
+        subject,
+        SOCIAL_PRE_CHOICE_SCHEMA,
         kernel_spec=kernel.spec(),
         include_social=True,
     )
@@ -499,9 +495,7 @@ def test_step_data_excludes_social_fields_by_default() -> None:
         subject_id="s1",
     )
 
-    stan_data = subject_to_step_data(
-        subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
-    )
+    stan_data = subject_to_step_data(subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec())
 
     assert "step_social_action" not in stan_data
     assert "step_social_reward" not in stan_data

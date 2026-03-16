@@ -217,8 +217,10 @@ def _social_step_data(subject: SubjectData) -> dict[str, Any]:
 
     kernel_spec = SocialObservedOutcomeQKernel.spec()
     return subject_to_step_data(
-        subject, SOCIAL_PRE_CHOICE_SCHEMA,
-        kernel_spec=kernel_spec, include_social=True,
+        subject,
+        SOCIAL_PRE_CHOICE_SCHEMA,
+        kernel_spec=kernel_spec,
+        include_social=True,
     )
 
 
