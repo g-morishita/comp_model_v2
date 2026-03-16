@@ -237,9 +237,7 @@ def _resolve_policy(
     # Kernel: duck-type check for action_probabilities method
     if hasattr(policy, "action_probabilities"):
         if demo_params is None:
-            raise ValueError(
-                "demo_params is required when demonstrator_policy is a ModelKernel"
-            )
+            raise ValueError("demo_params is required when demonstrator_policy is a ModelKernel")
         return _KernelPolicy(policy, demo_params)  # type: ignore[arg-type]
 
     # tuple — disambiguate probabilities vs int sequence
@@ -318,9 +316,7 @@ class SocialBanditEnvironment:
 
         # Generate demonstrator action
         if isinstance(resolved, _KernelPolicy):
-            demo_action = self._kernel_demo_action(
-                resolved, available_actions, trial_index
-            )
+            demo_action = self._kernel_demo_action(resolved, available_actions, trial_index)
         elif isinstance(resolved, _ProbabilityPolicy):
             probs = resolved.probs if resolved.probs else self.inner.reward_probs
             demo_action = int(self._rng.choice(n_actions, p=np.array(probs)))
