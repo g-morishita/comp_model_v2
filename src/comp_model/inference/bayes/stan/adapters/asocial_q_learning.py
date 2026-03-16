@@ -11,12 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 from comp_model.data.schema import Dataset, SubjectData
 from comp_model.inference.bayes.stan.data_builder import (
-    add_condition_data,
-    add_condition_data_dataset,
+    add_initial_value_data,
     add_prior_data,
     add_state_reset_data,
-    dataset_to_stan_data,
-    subject_to_stan_data,
+    dataset_to_step_data,
+    subject_to_step_data,
 )
 from comp_model.inference.config import HierarchyStructure
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
@@ -98,27 +97,42 @@ class AsocialQLearningStanAdapter:
 
         Notes
         -----
-        The adapter always exports replay data, prior hyperparameters, and the
-        integer reset-policy flag. Condition indices are added only for
-        condition-aware hierarchies and only when fitting a single subject.
+        The adapter exports step-stream data, prior hyperparameters, state-reset
+        flags, and initial value data. Condition indices are added for
+        condition-aware hierarchies when a layout is provided.
         """
 
-        if isinstance(data, SubjectData):
-            stan_data = subject_to_stan_data(data, schema)
-        else:
-            stan_data = dataset_to_stan_data(data, schema)
+        kspec = self.kernel_spec()
 
-        add_prior_data(stan_data, self.kernel_spec())
-        add_state_reset_data(stan_data, self.kernel_spec())
-
+        # Build condition map if needed
+        condition_map: dict[str, int] | None = None
         if layout is not None and hierarchy in (
             HierarchyStructure.SUBJECT_BLOCK_CONDITION,
             HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
         ):
-            if isinstance(data, SubjectData):
-                add_condition_data(stan_data, data, layout)
-            else:
-                add_condition_data_dataset(stan_data, data, layout)
+            condition_map = {
+                cond: idx for idx, cond in enumerate(layout.conditions, start=1)
+            }
+
+        # Build step-stream data
+        if isinstance(data, SubjectData):
+            stan_data = subject_to_step_data(
+                data, schema, kernel_spec=kspec, condition_map=condition_map
+            )
+        else:
+            stan_data = dataset_to_step_data(
+                data, schema, kernel_spec=kspec, condition_map=condition_map
+            )
+
+        # Add prior, reset, and initial value data
+        add_prior_data(stan_data, kspec)
+        add_state_reset_data(stan_data, kspec)
+        add_initial_value_data(stan_data, kspec)
+
+        # Add condition metadata for condition-aware hierarchies
+        if layout is not None and condition_map is not None:
+            stan_data["C"] = len(layout.conditions)
+            stan_data["baseline_cond"] = condition_map[layout.baseline_condition]
 
         return stan_data
 

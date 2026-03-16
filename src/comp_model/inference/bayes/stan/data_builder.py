@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from comp_model.data.extractors import extract_decision_views
+from comp_model.inference.bayes.stan.prior_registry import prior_spec_to_stan_data
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -239,6 +240,25 @@ def add_condition_data_dataset(
     stan_data["cond"] = condition_index
 
 
+def add_initial_value_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
+    """Add the initial state value to a Stan data dictionary.
+
+    Parameters
+    ----------
+    stan_data
+        Stan data dictionary to mutate.
+    kernel_spec
+        Kernel specification whose initial value should be exported.
+
+    Returns
+    -------
+    None
+        This function mutates ``stan_data`` in-place.
+    """
+
+    stan_data["q_init"] = float(kernel_spec.initial_value)
+
+
 def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
     """Add prior hyperparameters from kernel metadata to a Stan data dictionary.
 
@@ -256,20 +276,22 @@ def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> N
 
     Notes
     -----
-    Prior means and scales are exported on the unconstrained parameterization
-    used by the kernel specification. Parameters without an explicit prior fall
-    back to a weak ``Normal(0, 2)`` convention.
+    Each parameter exports a ``(family, p1, p2, p3)`` tuple consumed by the
+    shared ``prior_lpdf`` Stan function. Parameters without an explicit prior
+    fall back to ``Normal(0, 2)``.
     """
 
     for parameter in kernel_spec.parameter_specs:
         if parameter.prior is not None:
-            mu = parameter.prior.kwargs.get("mu", 0.0)
-            sigma = parameter.prior.kwargs.get("sigma", 2.0)
+            family_id, p1, p2, p3 = prior_spec_to_stan_data(
+                parameter.prior.family, parameter.prior.kwargs
+            )
         else:
-            mu = 0.0
-            sigma = 2.0
-        stan_data[f"{parameter.name}_prior_mu"] = float(mu)
-        stan_data[f"{parameter.name}_prior_sigma"] = float(sigma)
+            family_id, p1, p2, p3 = 1, 0.0, 2.0, 0.0  # Normal(0, 2) default
+        stan_data[f"{parameter.name}_prior_family"] = family_id
+        stan_data[f"{parameter.name}_prior_p1"] = p1
+        stan_data[f"{parameter.name}_prior_p2"] = p2
+        stan_data[f"{parameter.name}_prior_p3"] = p3
 
 
 def add_state_reset_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
@@ -343,3 +365,206 @@ def _action_index_mapping(trials_flat: Iterable[DecisionTrialView]) -> dict[int,
             ordered_actions.append(view.social_action)
 
     return {action: index for index, action in enumerate(ordered_actions, start=1)}
+
+
+# ---------------------------------------------------------------------------
+# Step-based Stan data builders
+# ---------------------------------------------------------------------------
+
+
+def subject_to_step_data(
+    subject_data: SubjectData,
+    schema: TrialSchema,
+    *,
+    kernel_spec: ModelKernelSpec,
+    condition_map: dict[str, int] | None = None,
+    subject_idx: int = 1,
+) -> dict[str, Any]:
+    """Export one subject's data as a step stream for Stan.
+
+    Parameters
+    ----------
+    subject_data
+        Subject data to flatten.
+    schema
+        Trial schema used to extract decision views.
+    kernel_spec
+        Kernel specification (provides reset policy, priors, initial value).
+    condition_map
+        Optional mapping from condition label to 1-based Stan condition ID.
+    subject_idx
+        1-based subject index for hierarchical models.
+
+    Returns
+    -------
+    dict[str, Any]
+        Stan-ready step-stream arrays including prior and initial value data.
+    """
+
+    views_flat: list[DecisionTrialView] = []
+    block_indices: list[int] = []
+    condition_indices: list[int] = []
+
+    for block in subject_data.blocks:
+        block_id = block.block_index + 1
+        cond_id = condition_map[block.condition] if condition_map is not None else 0
+        for trial in block.trials:
+            for view in extract_decision_views(trial, schema):
+                views_flat.append(view)
+                block_indices.append(block_id)
+                condition_indices.append(cond_id)
+
+    if not views_flat:
+        raise ValueError("No decision trials found in subject data")
+
+    action_to_index = _action_index_mapping(views_flat)
+    n_actions = len(action_to_index)
+
+    return _views_to_step_dict(
+        views_flat,
+        action_to_index,
+        n_actions,
+        block_indices,
+        condition_indices,
+        subject_idx=subject_idx,
+    )
+
+
+def dataset_to_step_data(
+    dataset: Dataset,
+    schema: TrialSchema,
+    *,
+    kernel_spec: ModelKernelSpec,
+    condition_map: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Export a multi-subject dataset as a step stream for Stan.
+
+    Parameters
+    ----------
+    dataset
+        Dataset to flatten.
+    schema
+        Trial schema used to extract decision views.
+    kernel_spec
+        Kernel specification (provides reset policy, priors, initial value).
+    condition_map
+        Optional mapping from condition label to 1-based Stan condition ID.
+
+    Returns
+    -------
+    dict[str, Any]
+        Stan-ready step-stream arrays with hierarchical subject indexing.
+    """
+
+    all_views: list[DecisionTrialView] = []
+    all_blocks: list[int] = []
+    all_conditions: list[int] = []
+    all_subjects: list[int] = []
+
+    for subj_idx, subject in enumerate(dataset.subjects, start=1):
+        for block in subject.blocks:
+            block_id = block.block_index + 1
+            cond_id = condition_map[block.condition] if condition_map is not None else 0
+            for trial in block.trials:
+                for view in extract_decision_views(trial, schema):
+                    all_views.append(view)
+                    all_blocks.append(block_id)
+                    all_conditions.append(cond_id)
+                    all_subjects.append(subj_idx)
+
+    if not all_views:
+        raise ValueError("No decision trials found in dataset")
+
+    action_to_index = _action_index_mapping(all_views)
+    n_actions = len(action_to_index)
+    action_counts_per_subject: set[int] = set()
+    for subject in dataset.subjects:
+        subj_views: list[DecisionTrialView] = []
+        for block in subject.blocks:
+            for trial in block.trials:
+                subj_views.extend(extract_decision_views(trial, schema))
+        subj_action_map = _action_index_mapping(subj_views)
+        action_counts_per_subject.add(len(subj_action_map))
+    if len(action_counts_per_subject) > 1:
+        raise ValueError("All subjects must have the same number of actions")
+
+    step_dict = _views_to_step_dict(
+        all_views,
+        action_to_index,
+        n_actions,
+        all_blocks,
+        all_conditions,
+        subject_idx=0,  # placeholder, overridden below
+    )
+    step_dict["N"] = len(dataset.subjects)
+    step_dict["step_subject"] = all_subjects
+    return step_dict
+
+
+def _views_to_step_dict(
+    views: list[DecisionTrialView],
+    action_to_index: dict[int, int],
+    n_actions: int,
+    block_indices: list[int],
+    condition_indices: list[int],
+    *,
+    subject_idx: int,
+) -> dict[str, Any]:
+    """Convert extracted views to the step-stream Stan data dict.
+
+    Parameters
+    ----------
+    views
+        Flat list of decision views in observed order.
+    action_to_index
+        Mapping from raw action to 1-based Stan index.
+    n_actions
+        Total number of actions.
+    block_indices
+        1-based block index per view.
+    condition_indices
+        1-based condition index per view (0 if no conditions).
+    subject_idx
+        1-based subject index (unused for dataset-level export).
+
+    Returns
+    -------
+    dict[str, Any]
+        Core step-stream arrays.
+    """
+
+    total_steps = len(views)
+
+    step_choice = [0] * total_steps
+    step_update_action = [0] * total_steps
+    step_reward = [0.0] * total_steps
+    step_avail_mask: list[list[float]] = [
+        [0.0] * n_actions for _ in range(total_steps)
+    ]
+    step_block = list(block_indices)
+    step_condition = list(condition_indices)
+
+    n_decisions = 0
+    for idx, view in enumerate(views):
+        mapped_choice = action_to_index[view.choice]
+        step_choice[idx] = mapped_choice
+        n_decisions += 1
+        for action in view.available_actions:
+            step_avail_mask[idx][action_to_index[action] - 1] = 1.0
+        if view.reward is not None:
+            step_update_action[idx] = mapped_choice
+            step_reward[idx] = float(view.reward)
+
+    result: dict[str, Any] = {
+        "A": n_actions,
+        "E": total_steps,
+        "D": n_decisions,
+        "step_choice": step_choice,
+        "step_update_action": step_update_action,
+        "step_reward": step_reward,
+        "step_avail_mask": step_avail_mask,
+        "step_block": step_block,
+    }
+    if any(c > 0 for c in step_condition):
+        result["step_condition"] = step_condition
+    return result

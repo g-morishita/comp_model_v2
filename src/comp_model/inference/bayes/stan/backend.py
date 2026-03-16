@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -98,7 +99,12 @@ def fit_stan(
 
     resolved_config = config if config is not None else DEFAULT_STAN_FIT_CONFIG
     cmdstanpy = cast("Any", importlib.import_module("cmdstanpy"))
-    model = cmdstanpy.CmdStanModel(stan_file=adapter.stan_program_path(hierarchy))
+    stan_file = adapter.stan_program_path(hierarchy)
+    functions_dir = str(Path(stan_file).parent / "functions")
+    model = cmdstanpy.CmdStanModel(
+        stan_file=stan_file,
+        stanc_options={"include-paths": [functions_dir]},
+    )
     fit = model.sample(
         data=adapter.build_stan_data(data, schema, hierarchy, layout),
         iter_warmup=resolved_config.n_warmup,

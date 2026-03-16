@@ -1,18 +1,28 @@
+functions {
+#include "prior_lpdf.stanfunctions"
+}
 data {
   int<lower=1> N;
   int<lower=1> A;
-  int<lower=1> T;
-  array[T] int<lower=1,upper=N> subj;
-  array[T] int<lower=0,upper=A> choice;
-  vector[T] reward;
-  array[T] vector<lower=0,upper=1>[A] avail_mask;
-  array[T] int block_of_trial;
+  int<lower=1> E;
+  int<lower=0> D;
+  array[E] int<lower=1,upper=N> step_subject;
+  array[E] int<lower=0,upper=A> step_choice;
+  array[E] int<lower=0,upper=A> step_update_action;
+  vector[E] step_reward;
+  array[E] vector<lower=0,upper=1>[A] step_avail_mask;
+  array[E] int step_block;
   int<lower=0,upper=1> reset_on_block;
+  real q_init;
 
-  real alpha_prior_mu;
-  real<lower=0> alpha_prior_sigma;
-  real beta_prior_mu;
-  real<lower=0> beta_prior_sigma;
+  int alpha_prior_family;
+  real alpha_prior_p1;
+  real alpha_prior_p2;
+  real alpha_prior_p3;
+  int beta_prior_family;
+  real beta_prior_p1;
+  real beta_prior_p2;
+  real beta_prior_p3;
 }
 parameters {
   real mu_alpha_z;
@@ -32,53 +42,55 @@ transformed parameters {
 model {
   array[N] vector[A] Q;
 
-  mu_alpha_z ~ normal(alpha_prior_mu, alpha_prior_sigma);
+  target += prior_lpdf(mu_alpha_z | alpha_prior_family, alpha_prior_p1, alpha_prior_p2, alpha_prior_p3);
   sd_alpha_z ~ normal(0, 1);
   raw_alpha_z ~ normal(0, 1);
 
-  mu_beta_z ~ normal(beta_prior_mu, beta_prior_sigma);
+  target += prior_lpdf(mu_beta_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
   sd_beta_z ~ normal(0, 1);
   raw_beta_z ~ normal(0, 1);
 
-  for (n in 1:N) Q[n] = rep_vector(0.5, A);
+  for (n in 1:N) Q[n] = rep_vector(q_init, A);
 
-  for (t in 1:T) {
-    int n = subj[t];
-    if (reset_on_block == 1 && t > 1 && subj[t] == subj[t - 1] &&
-        block_of_trial[t] != block_of_trial[t - 1]) {
-      Q[n] = rep_vector(0.5, A);
+  for (e in 1:E) {
+    int n = step_subject[e];
+    if (reset_on_block == 1 && e > 1 && step_subject[e] == step_subject[e - 1] &&
+        step_block[e] != step_block[e - 1]) {
+      Q[n] = rep_vector(q_init, A);
     }
-    if (choice[t] > 0) {
+    if (step_choice[e] > 0) {
       vector[A] u = beta[n] * Q[n];
-      for (a in 1:A) if (avail_mask[t][a] == 0) u[a] = negative_infinity();
-      target += categorical_logit_lpmf(choice[t] | u);
+      for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
+      target += categorical_logit_lpmf(step_choice[e] | u);
     }
-    if (choice[t] > 0) {
-      int a = choice[t];
-      Q[n][a] = Q[n][a] + alpha[n] * (reward[t] - Q[n][a]);
+    if (step_update_action[e] > 0) {
+      int a = step_update_action[e];
+      Q[n][a] = Q[n][a] + alpha[n] * (step_reward[e] - Q[n][a]);
     }
   }
 }
 generated quantities {
-  vector[T] log_lik = rep_vector(0.0, T);
+  vector[D] log_lik = rep_vector(0.0, D);
   {
     array[N] vector[A] Q;
-    for (n in 1:N) Q[n] = rep_vector(0.5, A);
+    for (n in 1:N) Q[n] = rep_vector(q_init, A);
+    int d = 0;
 
-    for (t in 1:T) {
-      int n = subj[t];
-      if (reset_on_block == 1 && t > 1 && subj[t] == subj[t - 1] &&
-          block_of_trial[t] != block_of_trial[t - 1]) {
-        Q[n] = rep_vector(0.5, A);
+    for (e in 1:E) {
+      int n = step_subject[e];
+      if (reset_on_block == 1 && e > 1 && step_subject[e] == step_subject[e - 1] &&
+          step_block[e] != step_block[e - 1]) {
+        Q[n] = rep_vector(q_init, A);
       }
-      if (choice[t] > 0) {
+      if (step_choice[e] > 0) {
+        d += 1;
         vector[A] u = beta[n] * Q[n];
-        for (a in 1:A) if (avail_mask[t][a] == 0) u[a] = negative_infinity();
-        log_lik[t] = categorical_logit_lpmf(choice[t] | u);
+        for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
+        log_lik[d] = categorical_logit_lpmf(step_choice[e] | u);
       }
-      if (choice[t] > 0) {
-        int a = choice[t];
-        Q[n][a] = Q[n][a] + alpha[n] * (reward[t] - Q[n][a]);
+      if (step_update_action[e] > 0) {
+        int a = step_update_action[e];
+        Q[n][a] = Q[n][a] + alpha[n] * (step_reward[e] - Q[n][a]);
       }
     }
   }

@@ -9,7 +9,9 @@ from comp_model.inference.bayes.stan.data_builder import (
     add_prior_data,
     add_state_reset_data,
     dataset_to_stan_data,
+    dataset_to_step_data,
     subject_to_stan_data,
+    subject_to_step_data,
 )
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
@@ -144,8 +146,8 @@ def test_condition_prior_and_reset_data_are_added() -> None:
     assert stan_data["C"] == 2
     assert stan_data["baseline_cond"] == 1
     assert stan_data["cond"] == [1, 1, 2, 2]
-    assert "alpha_prior_mu" in stan_data
-    assert "beta_prior_sigma" in stan_data
+    assert "alpha_prior_family" in stan_data
+    assert "beta_prior_p2" in stan_data
     assert stan_data["reset_on_block"] == 0
 
 
@@ -221,3 +223,181 @@ def test_subject_to_stan_data_remaps_noncontiguous_actions() -> None:
     assert stan_data["A"] == 2
     assert stan_data["choice"] == [2]
     assert stan_data["avail_mask"] == [[1.0, 1.0]]
+
+
+# ---------------------------------------------------------------------------
+# Step-based builder tests
+# ---------------------------------------------------------------------------
+
+
+def test_subject_to_step_data_exports_step_stream() -> None:
+    """Ensure step-based subject export produces expected step-stream fields.
+
+    Returns
+    -------
+    None
+        This test asserts step-stream array structure.
+    """
+
+    kernel = AsocialQLearningKernel()
+    params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
+    subject = simulate_subject(
+        task=_task(),
+        env=StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params=params,
+        config=SimulationConfig(seed=13),
+        subject_id="s1",
+    )
+
+    stan_data = subject_to_step_data(
+        subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
+    )
+
+    assert stan_data["A"] == 2
+    assert stan_data["E"] == 4
+    assert stan_data["D"] == 4
+    assert len(stan_data["step_choice"]) == 4
+    assert len(stan_data["step_update_action"]) == 4
+    assert len(stan_data["step_reward"]) == 4
+    assert len(stan_data["step_avail_mask"]) == 4
+    assert len(stan_data["step_block"]) == 4
+    assert stan_data["step_block"] == [1, 1, 1, 1]
+    assert all(c in (1, 2) for c in stan_data["step_choice"])
+    # Each step should have update_action matching choice (immediate reward)
+    assert stan_data["step_update_action"] == stan_data["step_choice"]
+
+
+def test_dataset_to_step_data_adds_subject_indices() -> None:
+    """Ensure step-based dataset export includes hierarchical subject indexing.
+
+    Returns
+    -------
+    None
+        This test asserts hierarchical step-stream export fields.
+    """
+
+    kernel = AsocialQLearningKernel()
+    params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
+    dataset = simulate_dataset(
+        task=_task(),
+        env_factory=lambda: StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params_per_subject={"s1": params, "s2": params},
+        config=SimulationConfig(seed=17),
+    )
+
+    stan_data = dataset_to_step_data(
+        dataset, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
+    )
+
+    assert stan_data["N"] == 2
+    assert len(stan_data["step_subject"]) == stan_data["E"]
+    assert set(stan_data["step_subject"]) == {1, 2}
+
+
+def test_subject_to_step_data_with_conditions() -> None:
+    """Ensure step-based export includes condition indices when condition map provided.
+
+    Returns
+    -------
+    None
+        This test asserts condition-aware step-stream fields.
+    """
+
+    task = TaskSpec(
+        task_id="stan-conditioned",
+        blocks=(
+            BlockSpec(
+                condition="baseline",
+                n_trials=2,
+                schema=ASOCIAL_BANDIT_SCHEMA,
+                metadata={"n_actions": 2},
+            ),
+            BlockSpec(
+                condition="social",
+                n_trials=2,
+                schema=ASOCIAL_BANDIT_SCHEMA,
+                metadata={"n_actions": 2},
+            ),
+        ),
+    )
+    kernel = AsocialQLearningKernel()
+    params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
+    subject = simulate_subject(
+        task=task,
+        env=StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params=params,
+        config=SimulationConfig(seed=19),
+        subject_id="s1",
+    )
+    condition_map = {"baseline": 1, "social": 2}
+
+    stan_data = subject_to_step_data(
+        subject, ASOCIAL_BANDIT_SCHEMA,
+        kernel_spec=kernel.spec(),
+        condition_map=condition_map,
+    )
+
+    assert stan_data["step_condition"] == [1, 1, 2, 2]
+
+
+def test_step_data_remaps_noncontiguous_actions() -> None:
+    """Ensure step-based export remaps sparse action identifiers.
+
+    Returns
+    -------
+    None
+        This test asserts contiguous Stan action encoding in step format.
+    """
+
+    subject = SubjectData(
+        subject_id="sparse-actions",
+        blocks=(
+            Block(
+                block_index=0,
+                condition="baseline",
+                trials=(
+                    Trial(
+                        trial_index=0,
+                        events=(
+                            Event(
+                                phase=EventPhase.INPUT,
+                                event_index=0,
+                                node_id="main",
+                                payload={"available_actions": (2, 5)},
+                            ),
+                            Event(
+                                phase=EventPhase.DECISION,
+                                event_index=1,
+                                node_id="main",
+                                payload={"action": 5},
+                            ),
+                            Event(
+                                phase=EventPhase.OUTCOME,
+                                event_index=2,
+                                node_id="main",
+                                payload={"reward": 1.0},
+                            ),
+                            Event(
+                                phase=EventPhase.UPDATE,
+                                event_index=3,
+                                node_id="main",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    kernel = AsocialQLearningKernel()
+
+    stan_data = subject_to_step_data(
+        subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
+    )
+
+    assert stan_data["A"] == 2
+    assert stan_data["step_choice"] == [2]
+    assert stan_data["step_update_action"] == [2]
+    assert stan_data["step_avail_mask"] == [[1.0, 1.0]]

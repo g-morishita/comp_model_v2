@@ -135,7 +135,7 @@ class AsocialQLearningKernel:
         """
 
         del params
-        return QState(q_values=[0.5] * n_actions)
+        return QState(q_values=[self.spec().initial_value] * n_actions)
 
     def action_probabilities(
         self,
