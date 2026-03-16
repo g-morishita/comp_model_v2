@@ -379,6 +379,7 @@ def subject_to_step_data(
     kernel_spec: ModelKernelSpec,
     condition_map: dict[str, int] | None = None,
     subject_idx: int = 1,
+    include_social: bool = False,
 ) -> dict[str, Any]:
     """Export one subject's data as a step stream for Stan.
 
@@ -394,6 +395,9 @@ def subject_to_step_data(
         Optional mapping from condition label to 1-based Stan condition ID.
     subject_idx
         1-based subject index for hierarchical models.
+    include_social
+        When ``True``, emit ``step_social_action`` and ``step_social_reward``
+        arrays for social kernels.
 
     Returns
     -------
@@ -427,6 +431,7 @@ def subject_to_step_data(
         block_indices,
         condition_indices,
         subject_idx=subject_idx,
+        include_social=include_social,
     )
 
 
@@ -436,6 +441,7 @@ def dataset_to_step_data(
     *,
     kernel_spec: ModelKernelSpec,
     condition_map: dict[str, int] | None = None,
+    include_social: bool = False,
 ) -> dict[str, Any]:
     """Export a multi-subject dataset as a step stream for Stan.
 
@@ -449,6 +455,9 @@ def dataset_to_step_data(
         Kernel specification (provides reset policy, priors, initial value).
     condition_map
         Optional mapping from condition label to 1-based Stan condition ID.
+    include_social
+        When ``True``, emit ``step_social_action`` and ``step_social_reward``
+        arrays for social kernels.
 
     Returns
     -------
@@ -495,6 +504,7 @@ def dataset_to_step_data(
         all_blocks,
         all_conditions,
         subject_idx=0,  # placeholder, overridden below
+        include_social=include_social,
     )
     step_dict["N"] = len(dataset.subjects)
     step_dict["step_subject"] = all_subjects
@@ -509,6 +519,7 @@ def _views_to_step_dict(
     condition_indices: list[int],
     *,
     subject_idx: int,
+    include_social: bool = False,
 ) -> dict[str, Any]:
     """Convert extracted views to the step-stream Stan data dict.
 
@@ -526,6 +537,8 @@ def _views_to_step_dict(
         1-based condition index per view (0 if no conditions).
     subject_idx
         1-based subject index (unused for dataset-level export).
+    include_social
+        When ``True``, emit ``step_social_action`` and ``step_social_reward``.
 
     Returns
     -------
@@ -543,6 +556,8 @@ def _views_to_step_dict(
     ]
     step_block = list(block_indices)
     step_condition = list(condition_indices)
+    step_social_action = [0] * total_steps
+    step_social_reward = [0.0] * total_steps
 
     n_decisions = 0
     for idx, view in enumerate(views):
@@ -554,6 +569,9 @@ def _views_to_step_dict(
         if view.reward is not None:
             step_update_action[idx] = mapped_choice
             step_reward[idx] = float(view.reward)
+        if view.social_action is not None and view.social_reward is not None:
+            step_social_action[idx] = action_to_index[view.social_action]
+            step_social_reward[idx] = float(view.social_reward)
 
     result: dict[str, Any] = {
         "A": n_actions,
@@ -567,4 +585,7 @@ def _views_to_step_dict(
     }
     if any(c > 0 for c in step_condition):
         result["step_condition"] = step_condition
+    if include_social:
+        result["step_social_action"] = step_social_action
+        result["step_social_reward"] = step_social_reward
     return result

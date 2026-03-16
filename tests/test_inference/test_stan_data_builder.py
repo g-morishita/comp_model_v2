@@ -401,3 +401,107 @@ def test_step_data_remaps_noncontiguous_actions() -> None:
     assert stan_data["step_choice"] == [2]
     assert stan_data["step_update_action"] == [2]
     assert stan_data["step_avail_mask"] == [[1.0, 1.0]]
+
+
+def test_step_data_includes_social_fields_when_requested() -> None:
+    """Ensure step-based export includes social arrays when include_social=True.
+
+    Returns
+    -------
+    None
+        This test asserts social step-stream fields.
+    """
+
+    subject = SubjectData(
+        subject_id="social-test",
+        blocks=(
+            Block(
+                block_index=0,
+                condition="baseline",
+                trials=(
+                    Trial(
+                        trial_index=0,
+                        events=(
+                            Event(
+                                phase=EventPhase.INPUT,
+                                event_index=0,
+                                node_id="main",
+                                payload={"available_actions": (0, 1)},
+                            ),
+                            Event(
+                                phase=EventPhase.INPUT,
+                                event_index=1,
+                                node_id="main",
+                                actor_id="demonstrator",
+                                payload={
+                                    "available_actions": (0, 1),
+                                    "observation": {
+                                        "social_action": 1,
+                                        "social_reward": 0.5,
+                                    },
+                                },
+                            ),
+                            Event(
+                                phase=EventPhase.DECISION,
+                                event_index=2,
+                                node_id="main",
+                                payload={"action": 0},
+                            ),
+                            Event(
+                                phase=EventPhase.OUTCOME,
+                                event_index=3,
+                                node_id="main",
+                                payload={"reward": 1.0},
+                            ),
+                            Event(
+                                phase=EventPhase.UPDATE,
+                                event_index=4,
+                                node_id="main",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    from comp_model.tasks.schemas import SOCIAL_PRE_CHOICE_SCHEMA
+
+    kernel = AsocialQLearningKernel()
+    stan_data = subject_to_step_data(
+        subject, SOCIAL_PRE_CHOICE_SCHEMA,
+        kernel_spec=kernel.spec(),
+        include_social=True,
+    )
+
+    assert "step_social_action" in stan_data
+    assert "step_social_reward" in stan_data
+    assert stan_data["step_social_action"] == [2]  # action 1 → 1-based index 2
+    assert stan_data["step_social_reward"] == [0.5]
+
+
+def test_step_data_excludes_social_fields_by_default() -> None:
+    """Ensure step-based export omits social arrays by default.
+
+    Returns
+    -------
+    None
+        This test asserts backward compatibility.
+    """
+
+    kernel = AsocialQLearningKernel()
+    params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
+    subject = simulate_subject(
+        task=_task(),
+        env=StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params=params,
+        config=SimulationConfig(seed=13),
+        subject_id="s1",
+    )
+
+    stan_data = subject_to_step_data(
+        subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec()
+    )
+
+    assert "step_social_action" not in stan_data
+    assert "step_social_reward" not in stan_data
