@@ -198,6 +198,63 @@ class StationaryBanditEnvironment:
             self._last_action = None
 
 
+class _KernelPolicy:
+    """Resolved kernel-based demonstrator policy (internal)."""
+
+    __slots__ = ("kernel", "params")
+
+    def __init__(self, kernel: ModelKernel[Any, Any], params: Any) -> None:
+        self.kernel = kernel
+        self.params = params
+
+
+class _ProbabilityPolicy:
+    """Resolved fixed-probability demonstrator policy (internal)."""
+
+    __slots__ = ("probs",)
+
+    def __init__(self, probs: tuple[float, ...]) -> None:
+        self.probs = probs
+
+
+class _SequencePolicy:
+    """Resolved fixed-sequence demonstrator policy (internal)."""
+
+    __slots__ = ("actions",)
+
+    def __init__(self, actions: Sequence[int]) -> None:
+        self.actions = actions
+
+
+_ResolvedPolicy = _KernelPolicy | _ProbabilityPolicy | _SequencePolicy
+
+
+def _resolve_policy(
+    policy: ModelKernel[Any, Any] | tuple[float, ...] | Sequence[int],
+    demo_params: Any,
+) -> _ResolvedPolicy:
+    """Classify and wrap the user-supplied demonstrator policy."""
+    # Kernel: duck-type check for action_probabilities method
+    if hasattr(policy, "action_probabilities"):
+        if demo_params is None:
+            raise ValueError(
+                "demo_params is required when demonstrator_policy is a ModelKernel"
+            )
+        return _KernelPolicy(policy, demo_params)  # type: ignore[arg-type]
+
+    # tuple — disambiguate probabilities vs int sequence
+    if isinstance(policy, tuple):
+        if len(policy) > 0 and all(isinstance(x, int) for x in policy):
+            return _SequencePolicy(policy)  # type: ignore[arg-type]
+        return _ProbabilityPolicy(policy)  # type: ignore[arg-type]
+
+    # list or other Sequence[int]
+    if isinstance(policy, (list, Sequence)) and not isinstance(policy, (str, bytes)):
+        return _SequencePolicy(policy)
+
+    raise TypeError(f"Unsupported demonstrator_policy type: {type(policy)}")
+
+
 @dataclass(slots=True)
 class SocialBanditEnvironment:
     """Bandit environment with a configurable demonstrator for social schemas.
@@ -219,50 +276,33 @@ class SocialBanditEnvironment:
     """
 
     inner: StationaryBanditEnvironment
-    demonstrator_policy: ModelKernel | tuple[float, ...] | Sequence[int]
+    demonstrator_policy: ModelKernel[Any, Any] | tuple[float, ...] | Sequence[int]
     demo_params: Any = None
 
+    _resolved: _ResolvedPolicy = field(init=False, repr=False)
     _rng: np.random.Generator | None = field(default=None, init=False, repr=False)
     _demo_state: Any = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._resolved = _resolve_policy(self.demonstrator_policy, self.demo_params)
 
     @property
     def environment_id(self) -> str:
         return "social_bandit"
 
-    def _is_kernel_policy(self) -> bool:
-        return hasattr(self.demonstrator_policy, "action_probabilities")
-
-    def _is_sequence_policy(self) -> bool:
-        if isinstance(self.demonstrator_policy, tuple):
-            return len(self.demonstrator_policy) > 0 and all(
-                isinstance(x, int) for x in self.demonstrator_policy
-            )
-        return isinstance(self.demonstrator_policy, (list, Sequence)) and not isinstance(
-            self.demonstrator_policy, (str, bytes)
-        )
-
-    def _is_probability_policy(self) -> bool:
-        return isinstance(self.demonstrator_policy, tuple) and (
-            len(self.demonstrator_policy) == 0
-            or any(isinstance(x, float) for x in self.demonstrator_policy)
-        )
-
     def reset(self, block_spec: BlockSpec, *, rng: np.random.Generator) -> None:
         self._rng = rng
         self.inner.reset(block_spec, rng=rng)
 
-        if self._is_kernel_policy():
-            kernel = self.demonstrator_policy  # type: ignore[assignment]
-            if self.demo_params is None:
-                raise ValueError(
-                    "demo_params is required when demonstrator_policy is a ModelKernel"
-                )
-            self._demo_state = kernel.initial_state(self.inner.n_actions, self.demo_params)
+        if isinstance(self._resolved, _KernelPolicy):
+            self._demo_state = self._resolved.kernel.initial_state(
+                self.inner.n_actions, self._resolved.params
+            )
 
     def step(self, action: int | None = None) -> tuple[Event, ...]:
-        assert self.inner._block_spec is not None
-        schema = self.inner._block_spec.schema
-        schema_step = schema.steps[self.inner._step_index]
+        assert self.inner._block_spec is not None  # pyright: ignore[reportPrivateUsage]
+        schema = self.inner._block_spec.schema  # pyright: ignore[reportPrivateUsage]
+        schema_step = schema.steps[self.inner._step_index]  # pyright: ignore[reportPrivateUsage]
 
         if schema_step.phase == EventPhase.INPUT and schema_step.actor_id != "subject":
             return self._demonstrator_step()
@@ -272,28 +312,29 @@ class SocialBanditEnvironment:
     def _demonstrator_step(self) -> tuple[Event, ...]:
         assert self._rng is not None
         n_actions = self.inner.n_actions
-        trial_index = self.inner._trial_index
+        trial_index = self.inner._trial_index  # pyright: ignore[reportPrivateUsage]
         available_actions = tuple(range(n_actions))
+        resolved = self._resolved
 
         # Generate demonstrator action
-        if self._is_kernel_policy():
-            demo_action = self._kernel_demo_action(available_actions, trial_index)
-        elif self._is_probability_policy():
-            probs = self.demonstrator_policy
-            if not probs:
-                probs = self.inner.reward_probs
+        if isinstance(resolved, _KernelPolicy):
+            demo_action = self._kernel_demo_action(
+                resolved, available_actions, trial_index
+            )
+        elif isinstance(resolved, _ProbabilityPolicy):
+            probs = resolved.probs if resolved.probs else self.inner.reward_probs
             demo_action = int(self._rng.choice(n_actions, p=np.array(probs)))
         else:
-            # Sequence policy
-            seq = self.demonstrator_policy
-            demo_action = int(seq[trial_index])  # type: ignore[index]
+            demo_action = int(resolved.actions[trial_index])
 
         # Sample reward
         demo_reward = float(self._rng.random() < self.inner.reward_probs[demo_action])
 
         # Update kernel demonstrator state
-        if self._is_kernel_policy():
-            self._kernel_demo_update(available_actions, trial_index, demo_action, demo_reward)
+        if isinstance(resolved, _KernelPolicy):
+            self._kernel_demo_update(
+                resolved, available_actions, trial_index, demo_action, demo_reward
+            )
 
         # Advance inner env step counter and build patched event
         events = self.inner.step(action=None)
@@ -314,33 +355,37 @@ class SocialBanditEnvironment:
         return (patched,)
 
     def _kernel_demo_action(
-        self, available_actions: tuple[int, ...], trial_index: int
+        self,
+        resolved: _KernelPolicy,
+        available_actions: tuple[int, ...],
+        trial_index: int,
     ) -> int:
         assert self._rng is not None
-        kernel = self.demonstrator_policy  # type: ignore[assignment]
         partial_view = DecisionTrialView(
             trial_index=trial_index,
             available_actions=available_actions,
             choice=-1,
         )
-        probs = kernel.action_probabilities(self._demo_state, partial_view, self.demo_params)
+        probs = resolved.kernel.action_probabilities(
+            self._demo_state, partial_view, resolved.params
+        )
         action_index = int(self._rng.choice(len(available_actions), p=np.array(probs)))
         return available_actions[action_index]
 
     def _kernel_demo_update(
         self,
+        resolved: _KernelPolicy,
         available_actions: tuple[int, ...],
         trial_index: int,
         demo_action: int,
         demo_reward: float,
     ) -> None:
-        kernel = self.demonstrator_policy  # type: ignore[assignment]
         complete_view = DecisionTrialView(
             trial_index=trial_index,
             available_actions=available_actions,
             choice=demo_action,
             reward=demo_reward,
         )
-        self._demo_state = kernel.next_state(
-            self._demo_state, complete_view, self.demo_params
+        self._demo_state = resolved.kernel.next_state(
+            self._demo_state, complete_view, resolved.params
         )
