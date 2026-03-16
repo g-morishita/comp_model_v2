@@ -34,8 +34,8 @@ def inv_softplus_vec(x: np.ndarray) -> np.ndarray:
 
 # ── 1. Define task ──────────────────────────────────────────────────────────
 N_ACTIONS = 2
-N_TRIALS = 100
-N_SUBJECTS = 5
+N_TRIALS = 200
+N_SUBJECTS = 15
 
 task = TaskSpec(
     task_id="asocial_bandit",

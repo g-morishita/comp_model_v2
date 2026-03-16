@@ -150,4 +150,4 @@ class AsocialQLearningStanAdapter:
 
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
             return ()
-        return ("mu_alpha", "sd_alpha", "mu_beta", "sd_beta", "alpha_pop", "beta_pop")
+        return ("mu_alpha_z", "sd_alpha_z", "mu_beta_z", "sd_beta_z", "alpha_pop", "beta_pop")
