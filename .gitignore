@@ -8,5 +8,9 @@ __pycache__/
 tests/test_inference/stan/condition_reconstruction
 tests/test_inference/stan/q_learning_loglik_fixed_params
 
+# compiled Stan binaries
+src/comp_model/inference/bayes/stan/programs/asocial_q_learning__*
+!src/comp_model/inference/bayes/stan/programs/*.stan
+
 # generated example data
 example/*.csv
