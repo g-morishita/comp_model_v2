@@ -12,15 +12,13 @@ from pathlib import Path
 
 import numpy as np
 
-from comp_model.data import Dataset
 from comp_model.data.schema import Event, EventPhase
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
-from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter, StanFitConfig
+from comp_model.inference.bayes.stan import SocialObservedOutcomeQStanAdapter, StanFitConfig
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.io import save_dataset_to_csv
 from comp_model.models.kernels import SocialObservedOutcomeQKernel, SocialQParams
-from comp_model.models.kernels.transforms import get_transform
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_PRE_CHOICE_SCHEMA, BlockSpec, TaskSpec
 
@@ -121,10 +119,42 @@ save_dataset_to_csv(dataset, schema=SOCIAL_PRE_CHOICE_SCHEMA, path=csv_path)
 print(f"Saved {len(dataset.subjects)} subjects to {csv_path}")
 
 # ── 5. Fit with Stan ───────────────────────────────────────────────────────
-# NOTE: There is currently only an AsocialQLearningStanAdapter.
-# A social Stan adapter and program would need to be implemented for this to
-# work end-to-end. This script demonstrates the intended API shape.
-print("\nWARNING: No social Stan adapter is currently implemented.")
-print("This script shows the intended API but cannot run Stan fitting yet.")
-print("Use the MLE variant (social_pre_choice_social_q_mle.py) instead.")
+stan_config = InferenceConfig(
+    hierarchy=HierarchyStructure.STUDY_SUBJECT,
+    backend="stan",
+    stan_config=StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42),
+)
+
+adapter = SocialObservedOutcomeQStanAdapter()
+result = fit(stan_config, kernel, dataset, SOCIAL_PRE_CHOICE_SCHEMA, adapter=adapter)
+
+# ── 6. Report results ──────────────────────────────────────────────────────
+print(f"\nModel: {result.model_id}")
+print(f"Hierarchy: {result.hierarchy}")
+
+if "alpha_self_pop" in result.posterior_samples:
+    alpha_self_pop = result.posterior_samples["alpha_self_pop"]
+    alpha_other_pop = result.posterior_samples["alpha_other_pop"]
+    beta_pop = result.posterior_samples["beta_pop"]
+    print("\nPopulation posterior means (constrained):")
+    print(f"  alpha_self:  {np.mean(alpha_self_pop):.3f}  (true: {TRUE_ALPHA_SELF:.3f})")
+    print(f"  alpha_other: {np.mean(alpha_other_pop):.3f}  (true: {TRUE_ALPHA_OTHER:.3f})")
+    print(f"  beta:        {np.mean(beta_pop):.3f}  (true: {TRUE_BETA:.3f})")
+
+if "alpha_self" in result.posterior_samples:
+    alpha_self_all = result.posterior_samples["alpha_self"]
+    alpha_other_all = result.posterior_samples["alpha_other"]
+    beta_all = result.posterior_samples["beta"]
+    print(f"\n{'Subject':<12} {'True α_s':>8} {'Post α_s':>10} "
+          f"{'True α_o':>8} {'Post α_o':>10} "
+          f"{'True β':>8} {'Post β':>10}")
+    print("-" * 72)
+    for i in range(N_SUBJECTS):
+        sid = f"sub_{i:02d}"
+        print(
+            f"{sid:<12} {TRUE_ALPHA_SELF:>8.3f} {np.mean(alpha_self_all[:, i]):>10.3f} "
+            f"{TRUE_ALPHA_OTHER:>8.3f} {np.mean(alpha_other_all[:, i]):>10.3f} "
+            f"{TRUE_BETA:>8.3f} {np.mean(beta_all[:, i]):>10.3f}"
+        )
+
 print("\nDone.")
