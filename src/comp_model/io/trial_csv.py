@@ -163,8 +163,19 @@ class _AsocialBanditTrialCsvConverter:
     """Trial-row CSV converter for the asocial bandit schema."""
 
     schema: TrialSchema = field(default=ASOCIAL_BANDIT_SCHEMA, init=False, repr=False)
-    schema_id: str = field(default=ASOCIAL_BANDIT_SCHEMA.schema_id, init=False)
     fieldnames: tuple[str, ...] = field(default=_COMMON_FIELDNAMES, init=False)
+
+    @property
+    def schema_id(self) -> str:
+        """Return the schema identifier for the asocial bandit schema.
+
+        Returns
+        -------
+        str
+            Stable schema identifier derived from the bound schema.
+        """
+
+        return self.schema.schema_id
 
     def trial_to_row(
         self,
@@ -238,12 +249,29 @@ class _AsocialBanditTrialCsvConverter:
 
 
 @dataclass(frozen=True, slots=True)
-class _SocialPreChoiceTrialCsvConverter:
-    """Trial-row CSV converter for pre-choice demonstrator input."""
+class _SocialTrialCsvConverter:
+    """Trial-row CSV converter shared by all social schemas.
 
-    schema: TrialSchema = field(default=SOCIAL_PRE_CHOICE_SCHEMA, init=False, repr=False)
-    schema_id: str = field(default=SOCIAL_PRE_CHOICE_SCHEMA.schema_id, init=False)
+    Both pre-choice and post-outcome social schemas export the same flat
+    columns; only the canonical event order differs, which is fully determined
+    by the bound ``schema``.  A single converter class is therefore sufficient
+    for every social schema variant.
+    """
+
+    schema: TrialSchema
     fieldnames: tuple[str, ...] = field(default=_SOCIAL_FIELDNAMES, init=False)
+
+    @property
+    def schema_id(self) -> str:
+        """Return the schema identifier for the bound social schema.
+
+        Returns
+        -------
+        str
+            Stable schema identifier derived from the bound schema.
+        """
+
+        return self.schema.schema_id
 
     def trial_to_row(
         self,
@@ -253,7 +281,7 @@ class _SocialPreChoiceTrialCsvConverter:
         condition: str,
         trial: Trial,
     ) -> dict[str, str]:
-        """Flatten one pre-choice social trial into one CSV row.
+        """Flatten one social trial into one CSV row.
 
         Parameters
         ----------
@@ -269,7 +297,7 @@ class _SocialPreChoiceTrialCsvConverter:
         Returns
         -------
         dict[str, str]
-            String-valued CSV row for the pre-choice social schema.
+            String-valued CSV row for the social schema.
         """
 
         view = _extract_single_view(trial, self.schema)
@@ -292,7 +320,7 @@ class _SocialPreChoiceTrialCsvConverter:
         }
 
     def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
-        """Rebuild one pre-choice social trial from one CSV row.
+        """Rebuild one social trial from one CSV row.
 
         Parameters
         ----------
@@ -304,105 +332,7 @@ class _SocialPreChoiceTrialCsvConverter:
         Returns
         -------
         Trial
-            Canonical pre-choice social trial in schema order.
-        """
-
-        available_actions = _parse_available_actions(row["available_actions"])
-        choice = _parse_int_field(row, "choice")
-        reward = _parse_float_field(row, "reward")
-        demonstrator_action = _parse_int_field(row, "demonstrator_action")
-        demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
-        _validate_action_in_available_set(
-            action=choice,
-            available_actions=available_actions,
-            field_name="choice",
-        )
-        _validate_action_in_available_set(
-            action=demonstrator_action,
-            available_actions=available_actions,
-            field_name="demonstrator_action",
-        )
-        return _build_trial_from_schema(
-            schema=self.schema,
-            trial_index=trial_index,
-            available_actions=available_actions,
-            choice=choice,
-            reward=reward,
-            demonstrator_observation={
-                "social_action": demonstrator_action,
-                "social_reward": demonstrator_reward,
-            },
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _SocialPostOutcomeTrialCsvConverter:
-    """Trial-row CSV converter for post-outcome demonstrator input."""
-
-    schema: TrialSchema = field(default=SOCIAL_POST_OUTCOME_SCHEMA, init=False, repr=False)
-    schema_id: str = field(default=SOCIAL_POST_OUTCOME_SCHEMA.schema_id, init=False)
-    fieldnames: tuple[str, ...] = field(default=_SOCIAL_FIELDNAMES, init=False)
-
-    def trial_to_row(
-        self,
-        *,
-        subject_id: str,
-        block_index: int,
-        condition: str,
-        trial: Trial,
-    ) -> dict[str, str]:
-        """Flatten one post-outcome social trial into one CSV row.
-
-        Parameters
-        ----------
-        subject_id
-            Subject identifier for the containing subject.
-        block_index
-            Block index for the containing block.
-        condition
-            Condition label for the containing block.
-        trial
-            Canonical trial to flatten.
-
-        Returns
-        -------
-        dict[str, str]
-            String-valued CSV row for the post-outcome social schema.
-        """
-
-        view = _extract_single_view(trial, self.schema)
-        return {
-            **_build_common_row(
-                subject_id=subject_id,
-                block_index=block_index,
-                condition=condition,
-                trial_index=trial.trial_index,
-                available_actions=view.available_actions,
-                choice=view.choice,
-                reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
-            ),
-            "demonstrator_action": str(
-                _require_social_action(view.social_action, self.schema_id, trial.trial_index)
-            ),
-            "demonstrator_reward": str(
-                _require_social_reward(view.social_reward, self.schema_id, trial.trial_index)
-            ),
-        }
-
-    def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
-        """Rebuild one post-outcome social trial from one CSV row.
-
-        Parameters
-        ----------
-        row
-            Parsed CSV row keyed by header name.
-        trial_index
-            Trial index assigned by the caller.
-
-        Returns
-        -------
-        Trial
-            Canonical post-outcome social trial in schema order.
+            Canonical social trial rebuilt in schema order.
         """
 
         available_actions = _parse_available_actions(row["available_actions"])
@@ -620,7 +550,9 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
                     )
                 ),
             )
-            for subject_id, subject_blocks in subjects_by_id.items()
+            for subject_id, subject_blocks in sorted(
+                subjects_by_id.items(), key=lambda item: item[0]
+            )
         )
     )
     validate_dataset(dataset, schema)
@@ -934,6 +866,8 @@ def _parse_available_actions(value: str) -> tuple[int, ...]:
         raise ValueError("Field 'available_actions' must contain only integers") from error
     if len(available_actions) == 0:
         raise ValueError("Field 'available_actions' must contain at least one action")
+    if len(set(available_actions)) != len(available_actions):
+        raise ValueError("Field 'available_actions' must not contain duplicate values")
     return available_actions
 
 
@@ -1163,15 +1097,23 @@ def _require_social_reward(reward: float | None, schema_id: str, trial_index: in
 def _register_builtin_converters() -> None:
     """Populate the module registry with built-in schema converters.
 
+    This function is idempotent: it skips any schema already present in the
+    registry so that module reloads in test environments do not raise.
+
     Returns
     -------
     None
         This function mutates the module-level registry during import.
     """
 
-    register_trial_csv_converter(_AsocialBanditTrialCsvConverter())
-    register_trial_csv_converter(_SocialPreChoiceTrialCsvConverter())
-    register_trial_csv_converter(_SocialPostOutcomeTrialCsvConverter())
+    builtin_converters: tuple[TrialCsvConverter, ...] = (
+        _AsocialBanditTrialCsvConverter(),
+        _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_SCHEMA),
+    )
+    for converter in builtin_converters:
+        if converter.schema_id not in _TRIAL_CSV_CONVERTERS:
+            register_trial_csv_converter(converter)
 
 
 _register_builtin_converters()

@@ -15,7 +15,12 @@ from comp_model.data import (
     Trial,
     extract_decision_views,
 )
-from comp_model.io import get_trial_csv_converter, load_dataset_from_csv, save_dataset_to_csv
+from comp_model.io import (
+    get_trial_csv_converter,
+    load_dataset_from_csv,
+    register_trial_csv_converter,
+    save_dataset_to_csv,
+)
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
@@ -288,6 +293,88 @@ def test_load_dataset_from_csv_rejects_wrong_schema_converter(
 
     with pytest.raises(ValueError, match="Unknown columns"):
         load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+
+def test_register_trial_csv_converter_raises_on_duplicate_schema_id() -> None:
+    """Ensure registering a converter for an already-registered schema_id raises.
+
+    Returns
+    -------
+    None
+        This test raises on duplicate registration.
+    """
+
+    existing_converter = get_trial_csv_converter(ASOCIAL_BANDIT_SCHEMA)
+
+    with pytest.raises(ValueError, match="already registered"):
+        register_trial_csv_converter(existing_converter)
+
+
+def test_load_dataset_from_csv_rejects_duplicate_available_actions(
+    tmp_path: Path,
+) -> None:
+    """Ensure duplicate values in available_actions are rejected.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test raises on duplicate action values.
+    """
+
+    csv_path = tmp_path / "dup_actions.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
+                "s1,0,A,0,1|0|1,1,1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duplicate"):
+        load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+
+def test_load_dataset_from_csv_subjects_ordered_by_subject_id(
+    tmp_path: Path,
+) -> None:
+    """Ensure subjects in the loaded dataset are sorted by subject_id.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test checks subject ordering in the reconstructed dataset.
+    """
+
+    csv_path = tmp_path / "multi_subject.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
+                "s3,0,A,0,0|1,1,1.0",
+                "s1,0,A,0,0|1,0,0.0",
+                "s2,0,A,0,0|1,1,1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    assert [s.subject_id for s in dataset.subjects] == ["s1", "s2", "s3"]
 
 
 def _make_asocial_dataset() -> Dataset:
