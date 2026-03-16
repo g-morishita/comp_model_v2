@@ -200,6 +200,45 @@ def add_condition_data(
     stan_data["cond"] = condition_index
 
 
+def add_condition_data_dataset(
+    stan_data: dict[str, Any],
+    dataset: Dataset,
+    layout: SharedDeltaLayout,
+) -> None:
+    """Add within-subject condition indices for a multi-subject dataset.
+
+    Parameters
+    ----------
+    stan_data
+        Stan data dictionary to mutate.
+    dataset
+        Dataset whose subjects provide per-block condition labels.
+    layout
+        Shared-plus-delta layout defining condition order.
+
+    Returns
+    -------
+    None
+        This function mutates ``stan_data`` in-place.
+    """
+
+    condition_to_id = {
+        condition: index for index, condition in enumerate(layout.conditions, start=1)
+    }
+    condition_index: list[int] = []
+    for subject in dataset.subjects:
+        for block in subject.blocks:
+            if block.condition not in condition_to_id:
+                raise ValueError(f"Unknown condition {block.condition!r}")
+            condition_id = condition_to_id[block.condition]
+            for _ in block.trials:
+                condition_index.append(condition_id)
+
+    stan_data["C"] = len(layout.conditions)
+    stan_data["baseline_cond"] = condition_to_id[layout.baseline_condition]
+    stan_data["cond"] = condition_index
+
+
 def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
     """Add prior hyperparameters from kernel metadata to a Stan data dictionary.
 

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from comp_model.data.schema import Dataset, SubjectData
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
+    add_condition_data_dataset,
     add_prior_data,
     add_state_reset_data,
     dataset_to_stan_data,
@@ -117,7 +118,7 @@ class AsocialQLearningStanAdapter:
             if isinstance(data, SubjectData):
                 add_condition_data(stan_data, data, layout)
             else:
-                raise ValueError("Condition-aware Stan export is currently single-subject only")
+                add_condition_data_dataset(stan_data, data, layout)
 
         return stan_data
 
@@ -150,4 +151,28 @@ class AsocialQLearningStanAdapter:
 
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
             return ()
+        if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
+            return (
+                "alpha_shared_z",
+                "beta_shared_z",
+                "alpha_delta_z",
+                "beta_delta_z",
+            )
+        if hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
+            return (
+                "mu_alpha_shared_z",
+                "sd_alpha_shared_z",
+                "mu_beta_shared_z",
+                "sd_beta_shared_z",
+                "mu_alpha_delta_z",
+                "sd_alpha_delta_z",
+                "mu_beta_delta_z",
+                "sd_beta_delta_z",
+                "alpha_shared_z",
+                "beta_shared_z",
+                "alpha_delta_z",
+                "beta_delta_z",
+                "alpha_shared_pop",
+                "beta_shared_pop",
+            )
         return ("mu_alpha_z", "sd_alpha_z", "mu_beta_z", "sd_beta_z", "alpha_pop", "beta_pop")
