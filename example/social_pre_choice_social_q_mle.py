@@ -17,7 +17,6 @@ from comp_model.models.kernels import SocialObservedOutcomeQKernel, SocialQParam
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_PRE_CHOICE_SCHEMA, BlockSpec, TaskSpec
 
-
 # ── 1. Define task ──────────────────────────────────────────────────────────
 N_ACTIONS = 2
 N_TRIALS = 100
@@ -75,9 +74,9 @@ mle_config = InferenceConfig(
 )
 
 print(
-    f"\n{'Subject':<12} {'True αs':>8} {'Fit αs':>8} "
-    f"{'True αo':>8} {'Fit αo':>8} "
-    f"{'True β':>8} {'Fit β':>8} {'LL':>10}"
+    f"\n{'Subject':<12} {'True as':>8} {'Fit as':>8} "
+    f"{'True ao':>8} {'Fit ao':>8} "
+    f"{'True b':>8} {'Fit b':>8} {'LL':>10}"
 )
 print("-" * 80)
 

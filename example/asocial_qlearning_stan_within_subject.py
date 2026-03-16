@@ -106,7 +106,7 @@ dataset = Dataset(subjects=tuple(subjects))
 # ── 5. Save to CSV ─────────────────────────────────────────────────────────
 csv_path = Path(__file__).parent / "asocial_qlearning_within_subject_data.csv"
 save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
-print(f"Saved {len(dataset.subjects)} subjects × {len(task.blocks)} blocks to {csv_path}")
+print(f"Saved {len(dataset.subjects)} subjects x {len(task.blocks)} blocks to {csv_path}")
 
 # ── 6. Fit single subject with condition-aware Stan ─────────────────────────
 stan_config = InferenceConfig(
@@ -119,8 +119,8 @@ adapter = AsocialQLearningStanAdapter()
 sigmoid = get_transform("sigmoid")
 softplus = get_transform("softplus")
 
-print(f"\n{'Subject':<10} {'Cond':<8} {'True α':>8} {'Post. α':>10} "
-      f"{'True β':>8} {'Post. β':>10}")
+print(f"\n{'Subject':<10} {'Cond':<8} {'True a':>8} {'Post. a':>10} "
+      f"{'True b':>8} {'Post. b':>10}")
 print("-" * 60)
 
 for subject in dataset.subjects:

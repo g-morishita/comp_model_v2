@@ -13,8 +13,6 @@ Ground-truth:
 
 from pathlib import Path
 
-import numpy as np
-
 from comp_model.data import Block, Dataset, SubjectData
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
@@ -116,7 +114,7 @@ dataset = Dataset(subjects=tuple(subjects))
 # ── 5. Save to CSV ─────────────────────────────────────────────────────────
 csv_path = Path(__file__).parent / "asocial_qlearning_within_subject_data.csv"
 save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
-print(f"\nSaved {len(dataset.subjects)} subjects × {len(task.blocks)} blocks to {csv_path}")
+print(f"\nSaved {len(dataset.subjects)} subjects x {len(task.blocks)} blocks to {csv_path}")
 
 # ── 6. Fit each subject with condition-aware MLE ───────────────────────────
 mle_config = InferenceConfig(
@@ -130,8 +128,8 @@ softplus = get_transform("softplus")
 
 print(
     f"\n{'Subject':<10} {'Cond':<8} "
-    f"{'True α':>8} {'Fit α':>8} "
-    f"{'True β':>8} {'Fit β':>8}"
+    f"{'True a':>8} {'Fit a':>8} "
+    f"{'True b':>8} {'Fit b':>8}"
 )
 print("-" * 56)
 

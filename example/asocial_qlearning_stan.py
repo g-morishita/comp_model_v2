@@ -14,7 +14,6 @@ import numpy as np
 from scipy.special import expit as sigmoid_vec
 from scipy.special import logit as inv_sigmoid_vec
 
-from comp_model.data import Dataset
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
 from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter, StanFitConfig
@@ -115,7 +114,7 @@ true_mu_beta = float(softplus_vec(np.array(TRUE_MU_BETA_Z)))
 if "alpha_pop" in result.posterior_samples:
     alpha_pop = result.posterior_samples["alpha_pop"]
     beta_pop = result.posterior_samples["beta_pop"]
-    print(f"\nPopulation posterior means (constrained):")
+    print("\nPopulation posterior means (constrained):")
     print(f"  alpha: {np.mean(alpha_pop):.3f}  (true: {true_mu_alpha:.3f})")
     print(f"  beta:  {np.mean(beta_pop):.3f}  (true: {true_mu_beta:.3f})")
 
@@ -123,7 +122,7 @@ if "alpha_pop" in result.posterior_samples:
 if "alpha" in result.posterior_samples:
     alpha_all = result.posterior_samples["alpha"]  # shape: (n_draws, N_SUBJECTS)
     beta_all = result.posterior_samples["beta"]
-    print(f"\n{'Subject':<12} {'True α':>8} {'Post. α':>10} {'True β':>8} {'Post. β':>10}")
+    print(f"\n{'Subject':<12} {'True a':>8} {'Post. a':>10} {'True b':>8} {'Post. b':>10}")
     print("-" * 52)
     for i in range(N_SUBJECTS):
         sid = f"sub_{i:02d}"

@@ -20,7 +20,6 @@ from comp_model.models.kernels import SocialObservedOutcomeQKernel, SocialQParam
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
 
-
 # ── 1. Define task ──────────────────────────────────────────────────────────
 N_ACTIONS = 2
 N_TRIALS = 100
@@ -95,9 +94,9 @@ if "alpha_self" in result.posterior_samples:
     alpha_self_all = result.posterior_samples["alpha_self"]
     alpha_other_all = result.posterior_samples["alpha_other"]
     beta_all = result.posterior_samples["beta"]
-    print(f"\n{'Subject':<12} {'True α_s':>8} {'Post α_s':>10} "
-          f"{'True α_o':>8} {'Post α_o':>10} "
-          f"{'True β':>8} {'Post β':>10}")
+    print(f"\n{'Subject':<12} {'True a_s':>8} {'Post a_s':>10} "
+          f"{'True a_o':>8} {'Post a_o':>10} "
+          f"{'True b':>8} {'Post b':>10}")
     print("-" * 72)
     for i in range(N_SUBJECTS):
         sid = f"sub_{i:02d}"

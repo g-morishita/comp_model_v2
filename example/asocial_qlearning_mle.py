@@ -6,7 +6,6 @@ Ground-truth: alpha=0.3, beta=2.0
 
 from pathlib import Path
 
-from comp_model.data import Dataset
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
@@ -71,7 +70,7 @@ mle_config = InferenceConfig(
     mle_config=MleOptimizerConfig(n_restarts=10, seed=0),
 )
 
-print(f"\n{'Subject':<12} {'True α':>8} {'Fit α':>8} {'True β':>8} {'Fit β':>8} {'LL':>10}")
+print(f"\n{'Subject':<12} {'True a':>8} {'Fit a':>8} {'True b':>8} {'Fit b':>8} {'LL':>10}")
 print("-" * 60)
 
 for subject in loaded.subjects:

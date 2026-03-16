@@ -61,8 +61,8 @@ for n_blocks in [1, 2, 4, 8]:
     alphas, betas = np.array(alphas), np.array(betas)
     print(
         f"Blocks={n_blocks:>2}  Trials={total_trials:>4}  |  "
-        f"α: mean={np.mean(alphas):.3f} std={np.std(alphas):.3f}  |  "
-        f"β: mean={np.mean(betas):.3f} std={np.std(betas):.3f}"
+        f"a: mean={np.mean(alphas):.3f} std={np.std(alphas):.3f}  |  "
+        f"b: mean={np.mean(betas):.3f} std={np.std(betas):.3f}"
     )
 
 print(f"\nTrue values: alpha={TRUE_ALPHA}, beta={TRUE_BETA}")
