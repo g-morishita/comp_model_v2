@@ -1,19 +1,26 @@
-"""Concrete stationary bandit environment.
+"""Concrete bandit environments.
 
-This environment executes the current trial schema one step at a time while
-sampling Bernoulli rewards from fixed arm probabilities.
+This module provides:
+
+- :class:`StationaryBanditEnvironment` — a simple k-armed bandit with fixed
+  reward probabilities (schema-agnostic).
+- :class:`SocialBanditEnvironment` — a wrapper that injects demonstrator
+  observations into social schemas using a configurable demonstrator policy.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
+from comp_model.data.extractors import DecisionTrialView
 from comp_model.data.schema import Event, EventPhase
 
 if TYPE_CHECKING:
-    import numpy as np
-
+    from comp_model.models.kernels.base import ModelKernel
     from comp_model.tasks.schemas import TrialSchema
     from comp_model.tasks.spec import BlockSpec
 
@@ -189,3 +196,192 @@ class StationaryBanditEnvironment:
             self._step_index = 0
             self._trial_index += 1
             self._last_action = None
+
+
+class _KernelPolicy:
+    """Resolved kernel-based demonstrator policy (internal)."""
+
+    __slots__ = ("kernel", "params")
+
+    def __init__(self, kernel: ModelKernel[Any, Any], params: Any) -> None:
+        self.kernel = kernel
+        self.params = params
+
+
+class _ProbabilityPolicy:
+    """Resolved fixed-probability demonstrator policy (internal)."""
+
+    __slots__ = ("probs",)
+
+    def __init__(self, probs: tuple[float, ...]) -> None:
+        self.probs = probs
+
+
+class _SequencePolicy:
+    """Resolved fixed-sequence demonstrator policy (internal)."""
+
+    __slots__ = ("actions",)
+
+    def __init__(self, actions: Sequence[int]) -> None:
+        self.actions = actions
+
+
+_ResolvedPolicy = _KernelPolicy | _ProbabilityPolicy | _SequencePolicy
+
+
+def _resolve_policy(
+    policy: ModelKernel[Any, Any] | tuple[float, ...] | Sequence[int],
+    demo_params: Any,
+) -> _ResolvedPolicy:
+    """Classify and wrap the user-supplied demonstrator policy."""
+    # Kernel: duck-type check for action_probabilities method
+    if hasattr(policy, "action_probabilities"):
+        if demo_params is None:
+            raise ValueError("demo_params is required when demonstrator_policy is a ModelKernel")
+        return _KernelPolicy(policy, demo_params)  # type: ignore[arg-type]
+
+    # tuple — disambiguate probabilities vs int sequence
+    if isinstance(policy, tuple):
+        if len(policy) > 0 and all(isinstance(x, int) for x in policy):
+            return _SequencePolicy(policy)  # type: ignore[arg-type]
+        return _ProbabilityPolicy(policy)  # type: ignore[arg-type]
+
+    # list or other Sequence[int]
+    if isinstance(policy, (list, Sequence)) and not isinstance(policy, (str, bytes)):
+        return _SequencePolicy(policy)
+
+    raise TypeError(f"Unsupported demonstrator_policy type: {type(policy)}")
+
+
+@dataclass(slots=True)
+class SocialBanditEnvironment:
+    """Bandit environment with a configurable demonstrator for social schemas.
+
+    Wraps a :class:`StationaryBanditEnvironment` and intercepts non-subject
+    INPUT steps (demonstrator observation events) to inject ``social_action``
+    and ``social_reward`` into the observation payload.
+
+    The demonstrator's behaviour is controlled by ``demonstrator_policy``:
+
+    * **Fixed probabilities** (``tuple[float, ...]``): the demonstrator samples
+      an action from this distribution on every trial.
+    * **Fixed action sequence** (``Sequence[int]``): the demonstrator plays
+      ``actions[t]`` on trial *t*.  Raises ``IndexError`` if the sequence is
+      shorter than the number of trials.
+    * **Learning agent** (``ModelKernel``): the demonstrator maintains its own
+      latent state and uses the kernel's ``action_probabilities`` /
+      ``next_state`` methods.  Requires ``demo_params`` to be set.
+    """
+
+    inner: StationaryBanditEnvironment
+    demonstrator_policy: ModelKernel[Any, Any] | tuple[float, ...] | Sequence[int]
+    demo_params: Any = None
+
+    _resolved: _ResolvedPolicy = field(init=False, repr=False)
+    _rng: np.random.Generator | None = field(default=None, init=False, repr=False)
+    _demo_state: Any = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._resolved = _resolve_policy(self.demonstrator_policy, self.demo_params)
+
+    @property
+    def environment_id(self) -> str:
+        return "social_bandit"
+
+    def reset(self, block_spec: BlockSpec, *, rng: np.random.Generator) -> None:
+        self._rng = rng
+        self.inner.reset(block_spec, rng=rng)
+
+        if isinstance(self._resolved, _KernelPolicy):
+            self._demo_state = self._resolved.kernel.initial_state(
+                self.inner.n_actions, self._resolved.params
+            )
+
+    def step(self, action: int | None = None) -> tuple[Event, ...]:
+        assert self.inner._block_spec is not None  # pyright: ignore[reportPrivateUsage]
+        schema = self.inner._block_spec.schema  # pyright: ignore[reportPrivateUsage]
+        schema_step = schema.steps[self.inner._step_index]  # pyright: ignore[reportPrivateUsage]
+
+        if schema_step.phase == EventPhase.INPUT and schema_step.actor_id != "subject":
+            return self._demonstrator_step()
+
+        return self.inner.step(action=action)
+
+    def _demonstrator_step(self) -> tuple[Event, ...]:
+        assert self._rng is not None
+        n_actions = self.inner.n_actions
+        trial_index = self.inner._trial_index  # pyright: ignore[reportPrivateUsage]
+        available_actions = tuple(range(n_actions))
+        resolved = self._resolved
+
+        # Generate demonstrator action
+        if isinstance(resolved, _KernelPolicy):
+            demo_action = self._kernel_demo_action(resolved, available_actions, trial_index)
+        elif isinstance(resolved, _ProbabilityPolicy):
+            probs = resolved.probs if resolved.probs else self.inner.reward_probs
+            demo_action = int(self._rng.choice(n_actions, p=np.array(probs)))
+        else:
+            demo_action = int(resolved.actions[trial_index])
+
+        # Sample reward
+        demo_reward = float(self._rng.random() < self.inner.reward_probs[demo_action])
+
+        # Update kernel demonstrator state
+        if isinstance(resolved, _KernelPolicy):
+            self._kernel_demo_update(
+                resolved, available_actions, trial_index, demo_action, demo_reward
+            )
+
+        # Advance inner env step counter and build patched event
+        events = self.inner.step(action=None)
+        original = events[0]
+        patched = Event(
+            phase=original.phase,
+            event_index=original.event_index,
+            node_id=original.node_id,
+            actor_id=original.actor_id,
+            payload={
+                "available_actions": original.payload["available_actions"],
+                "observation": {
+                    "social_action": demo_action,
+                    "social_reward": demo_reward,
+                },
+            },
+        )
+        return (patched,)
+
+    def _kernel_demo_action(
+        self,
+        resolved: _KernelPolicy,
+        available_actions: tuple[int, ...],
+        trial_index: int,
+    ) -> int:
+        assert self._rng is not None
+        partial_view = DecisionTrialView(
+            trial_index=trial_index,
+            available_actions=available_actions,
+            choice=-1,
+        )
+        probs = resolved.kernel.action_probabilities(
+            self._demo_state, partial_view, resolved.params
+        )
+        action_index = int(self._rng.choice(len(available_actions), p=np.array(probs)))
+        return available_actions[action_index]
+
+    def _kernel_demo_update(
+        self,
+        resolved: _KernelPolicy,
+        available_actions: tuple[int, ...],
+        trial_index: int,
+        demo_action: int,
+        demo_reward: float,
+    ) -> None:
+        complete_view = DecisionTrialView(
+            trial_index=trial_index,
+            available_actions=available_actions,
+            choice=demo_action,
+            reward=demo_reward,
+        )
+        self._demo_state = resolved.kernel.next_state(
+            self._demo_state, complete_view, resolved.params
+        )
