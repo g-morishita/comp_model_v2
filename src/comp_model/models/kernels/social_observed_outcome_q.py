@@ -130,7 +130,7 @@ class SocialObservedOutcomeQKernel:
         """
 
         del params
-        return SocialQState(q_values=[0.5] * n_actions)
+        return SocialQState(q_values=[self.spec().initial_value] * n_actions)
 
     def action_probabilities(
         self,

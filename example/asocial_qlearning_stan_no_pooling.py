@@ -13,7 +13,6 @@ from pathlib import Path
 
 import numpy as np
 
-from comp_model.data import Dataset
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
 from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter, StanFitConfig
@@ -76,7 +75,7 @@ stan_config = InferenceConfig(
 
 adapter = AsocialQLearningStanAdapter()
 
-print(f"\n{'Subject':<12} {'True α':>8} {'Post. α':>10} {'True β':>8} {'Post. β':>10}")
+print(f"\n{'Subject':<12} {'True a':>8} {'Post. a':>10} {'True b':>8} {'Post. b':>10}")
 print("-" * 52)
 
 for subject in dataset.subjects:

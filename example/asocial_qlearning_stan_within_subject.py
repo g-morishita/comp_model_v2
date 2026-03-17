@@ -1,6 +1,6 @@
 """Simulate asocial Q-learning agents on a stationary bandit with two
 conditions (different reward probabilities), then recover condition-specific
-parameters with per-subject MLE using SharedDeltaLayout.
+parameters with Stan (NUTS) inference using SharedDeltaLayout.
 
 Within-subject design: each subject experiences both conditions. The model
 estimates a shared baseline parameter set plus additive deltas for the
@@ -9,15 +9,19 @@ non-baseline condition on the unconstrained scale.
 Ground-truth:
   Condition "easy":   alpha=0.3, beta=2.0  (baseline)
   Condition "hard":   alpha=0.5, beta=1.0
+
+Requires: cmdstanpy and a working CmdStan installation.
 """
 
 from pathlib import Path
 
+import numpy as np
+
 from comp_model.data import Block, Dataset, SubjectData
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
+from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter, StanFitConfig
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
-from comp_model.inference.mle.optimize import MleOptimizerConfig
 from comp_model.io import save_dataset_to_csv
 from comp_model.models import SharedDeltaLayout
 from comp_model.models.kernels import AsocialQLearningKernel, QParams
@@ -27,7 +31,7 @@ from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
 # ── 1. Define task with two conditions ──────────────────────────────────────
 N_ACTIONS = 2
-N_TRIALS = 100
+N_TRIALS = 200
 N_SUBJECTS = 5
 
 task = TaskSpec(
@@ -64,11 +68,8 @@ layout = SharedDeltaLayout(
 )
 
 print(f"Layout parameter keys: {layout.parameter_keys()}")
-print(f"Number of params: {layout.n_params()}")
 
 # ── 4. Simulate dataset ────────────────────────────────────────────────────
-# We simulate each subject manually so we can swap the environment per block
-# (different reward probabilities per condition).
 REWARD_PROBS = {
     "easy": (0.8, 0.2),
     "hard": (0.6, 0.4),
@@ -77,36 +78,27 @@ REWARD_PROBS = {
 subjects = []
 for i in range(N_SUBJECTS):
     sid = f"sub_{i:02d}"
-    # Simulate each block separately with condition-specific params and env,
-    # then combine into one subject.
     blocks = []
     for block_idx, block_spec in enumerate(task.blocks):
         condition = block_spec.condition
         env = StationaryBanditEnvironment(
             n_actions=N_ACTIONS, reward_probs=REWARD_PROBS[condition]
         )
-        params = TRUE_PARAMS[condition]
         sub = simulate_subject(
-            task=TaskSpec(
-                task_id="tmp",
-                blocks=(block_spec,),
-            ),
+            task=TaskSpec(task_id="tmp", blocks=(block_spec,)),
             env=env,
             kernel=kernel,
-            params=params,
+            params=TRUE_PARAMS[condition],
             config=SimulationConfig(seed=42 + i + block_idx * 100),
             subject_id=sid,
         )
-        # Re-index block
-        original_block = sub.blocks[0]
         blocks.append(
             Block(
                 block_index=block_idx,
-                condition=original_block.condition,
-                trials=original_block.trials,
+                condition=sub.blocks[0].condition,
+                trials=sub.blocks[0].trials,
             )
         )
-
     subjects.append(SubjectData(subject_id=sid, blocks=tuple(blocks)))
 
 dataset = Dataset(subjects=tuple(subjects))
@@ -114,40 +106,41 @@ dataset = Dataset(subjects=tuple(subjects))
 # ── 5. Save to CSV ─────────────────────────────────────────────────────────
 csv_path = Path(__file__).parent / "asocial_qlearning_within_subject_data.csv"
 save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
-print(f"\nSaved {len(dataset.subjects)} subjects x {len(task.blocks)} blocks to {csv_path}")
+print(f"Saved {len(dataset.subjects)} subjects x {len(task.blocks)} blocks to {csv_path}")
 
-# ── 6. Fit each subject with condition-aware MLE ───────────────────────────
-mle_config = InferenceConfig(
+# ── 6. Fit single subject with condition-aware Stan ─────────────────────────
+stan_config = InferenceConfig(
     hierarchy=HierarchyStructure.SUBJECT_BLOCK_CONDITION,
-    backend="mle",
-    mle_config=MleOptimizerConfig(n_restarts=20, seed=0),
+    backend="stan",
+    stan_config=StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42),
 )
 
+adapter = AsocialQLearningStanAdapter()
 sigmoid = get_transform("sigmoid")
 softplus = get_transform("softplus")
 
-print(
-    f"\n{'Subject':<10} {'Cond':<8} "
-    f"{'True a':>8} {'Fit a':>8} "
-    f"{'True b':>8} {'Fit b':>8}"
-)
-print("-" * 56)
+print(f"\n{'Subject':<10} {'Cond':<8} {'True a':>8} {'Post. a':>10} "
+      f"{'True b':>8} {'Post. b':>10}")
+print("-" * 60)
 
 for subject in dataset.subjects:
-    result = fit(mle_config, kernel, subject, ASOCIAL_BANDIT_SCHEMA, layout=layout)
-    for condition in ("easy", "hard"):
+    result = fit(
+        stan_config, kernel, subject, ASOCIAL_BANDIT_SCHEMA,
+        layout=layout, adapter=adapter,
+    )
+
+    # alpha, beta are vectors of size C in posterior samples
+    alpha_samples = result.posterior_samples["alpha"]  # (n_draws, C)
+    beta_samples = result.posterior_samples["beta"]
+
+    for c_idx, condition in enumerate(layout.conditions):
         true_p = TRUE_PARAMS[condition]
-        fit_p = result.params_by_condition[condition]
-        fit_alpha = sigmoid.forward(fit_p["alpha"])
-        fit_beta = softplus.forward(fit_p["beta"])
+        post_alpha = float(np.mean(alpha_samples[:, c_idx]))
+        post_beta = float(np.mean(beta_samples[:, c_idx]))
         print(
             f"{subject.subject_id:<10} {condition:<8} "
-            f"{true_p.alpha:>8.3f} {fit_alpha:>8.3f} "
-            f"{true_p.beta:>8.3f} {fit_beta:>8.3f}"
+            f"{true_p.alpha:>8.3f} {post_alpha:>10.3f} "
+            f"{true_p.beta:>8.3f} {post_beta:>10.3f}"
         )
-    print(
-        f"  -> LL={result.log_likelihood:.2f}, "
-        f"AIC={result.aic:.2f}, BIC={result.bic:.2f}"
-    )
 
 print("\nDone.")

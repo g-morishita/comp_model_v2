@@ -12,7 +12,7 @@ import pytest
 from comp_model.data.extractors import extract_decision_views
 from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
-from comp_model.inference.bayes.stan.data_builder import subject_to_stan_data
+from comp_model.inference.bayes.stan.data_builder import subject_to_step_data
 from comp_model.inference.mle.objective import log_likelihood_simple
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
@@ -263,6 +263,24 @@ def _fixed_param_model(filename: str) -> Any:
     return cmdstanpy.CmdStanModel(stan_file=str(stan_file))
 
 
+def _subject_step_data(subject: SubjectData) -> dict[str, Any]:
+    """Build step-based Stan data for parity tests.
+
+    Parameters
+    ----------
+    subject
+        Subject data to export.
+
+    Returns
+    -------
+    dict[str, Any]
+        Step-stream Stan data dict.
+    """
+
+    kernel_spec = AsocialQLearningKernel.spec()
+    return subject_to_step_data(subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel_spec)
+
+
 @pytest.mark.stan
 def test_log_likelihood_parity() -> None:
     """Ensure Python and Stan agree on total log-likelihood.
@@ -274,12 +292,12 @@ def test_log_likelihood_parity() -> None:
     """
 
     subject = _subject()
-    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    stan_data = _subject_step_data(subject)
     alpha = 0.5
     beta = 1.25
     model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
     fit = model.sample(
-        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 0},
+        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 0, "q_init": 0.5},
         fixed_param=True,
         iter_sampling=1,
         iter_warmup=1,
@@ -309,12 +327,12 @@ def test_trialwise_parity() -> None:
     """
 
     subject = _subject()
-    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    stan_data = _subject_step_data(subject)
     alpha = 0.5
     beta = 1.25
     model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
     fit = model.sample(
-        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 0},
+        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 0, "q_init": 0.5},
         fixed_param=True,
         iter_sampling=1,
         iter_warmup=1,
@@ -338,12 +356,12 @@ def test_block_reset_parity() -> None:
     """
 
     subject = _two_block_manual_subject()
-    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    stan_data = _subject_step_data(subject)
     alpha = 0.5
     beta = 2.0
     model = _fixed_param_model("q_learning_loglik_fixed_params.stan")
     fit = model.sample(
-        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 1},
+        data={**stan_data, "alpha": alpha, "beta": beta, "reset_on_block": 1, "q_init": 0.5},
         fixed_param=True,
         iter_sampling=1,
         iter_warmup=1,
@@ -419,7 +437,7 @@ def test_simulation_fit_structural_parity() -> None:
     Returns
     -------
     None
-        This test asserts choices, rewards, and trial counts survive export.
+        This test asserts choices, rewards, and step counts survive export.
     """
 
     kernel = AsocialQLearningKernel()
@@ -431,7 +449,7 @@ def test_simulation_fit_structural_parity() -> None:
         config=SimulationConfig(seed=41),
         subject_id="s1",
     )
-    stan_data = subject_to_stan_data(subject, ASOCIAL_BANDIT_SCHEMA)
+    stan_data = _subject_step_data(subject)
     views = [
         view
         for block in subject.blocks
@@ -439,8 +457,7 @@ def test_simulation_fit_structural_parity() -> None:
         for view in extract_decision_views(trial, ASOCIAL_BANDIT_SCHEMA)
     ]
 
-    assert stan_data["T"] == len(views)
-    assert stan_data["choice"] == [view.choice + 1 for view in views]
-    assert stan_data["reward"] == [
-        float(view.reward) if view.reward is not None else 0.0 for view in views
-    ]
+    assert stan_data["E"] == len(views)
+    assert stan_data["step_choice"] == [view.choice + 1 for view in views]
+    expected_rewards = [float(view.reward) if view.reward is not None else 0.0 for view in views]
+    assert stan_data["step_reward"] == expected_rewards

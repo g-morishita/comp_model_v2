@@ -9,7 +9,12 @@ data {
   array[E] int step_block;
   int<lower=0,upper=1> reset_on_block;
   real q_init;
-  real<lower=0,upper=1> alpha;
+
+  array[E] int<lower=0,upper=A> step_social_action;
+  vector[E] step_social_reward;
+
+  real<lower=0,upper=1> alpha_self;
+  real<lower=0,upper=1> alpha_other;
   real<lower=0> beta;
 }
 generated quantities {
@@ -29,7 +34,11 @@ generated quantities {
       }
       if (step_update_action[e] > 0) {
         int a = step_update_action[e];
-        Q[a] = Q[a] + alpha * (step_reward[e] - Q[a]);
+        Q[a] = Q[a] + alpha_self * (step_reward[e] - Q[a]);
+      }
+      if (step_social_action[e] > 0) {
+        int sa = step_social_action[e];
+        Q[sa] = Q[sa] + alpha_other * (step_social_reward[e] - Q[sa]);
       }
     }
   }

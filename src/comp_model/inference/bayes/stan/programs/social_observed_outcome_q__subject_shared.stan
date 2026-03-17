@@ -13,27 +13,37 @@ data {
   int<lower=0,upper=1> reset_on_block;
   real q_init;
 
-  int alpha_prior_family;
-  real alpha_prior_p1;
-  real alpha_prior_p2;
-  real alpha_prior_p3;
+  array[E] int<lower=0,upper=A> step_social_action;
+  vector[E] step_social_reward;
+
+  int alpha_self_prior_family;
+  real alpha_self_prior_p1;
+  real alpha_self_prior_p2;
+  real alpha_self_prior_p3;
+  int alpha_other_prior_family;
+  real alpha_other_prior_p1;
+  real alpha_other_prior_p2;
+  real alpha_other_prior_p3;
   int beta_prior_family;
   real beta_prior_p1;
   real beta_prior_p2;
   real beta_prior_p3;
 }
 parameters {
-  real alpha_z;
+  real alpha_self_z;
+  real alpha_other_z;
   real beta_z;
 }
 transformed parameters {
-  real<lower=0,upper=1> alpha = inv_logit(alpha_z);
+  real<lower=0,upper=1> alpha_self = inv_logit(alpha_self_z);
+  real<lower=0,upper=1> alpha_other = inv_logit(alpha_other_z);
   real<lower=0> beta = log1p_exp(beta_z);
 }
 model {
   vector[A] Q = rep_vector(q_init, A);
 
-  target += prior_lpdf(alpha_z | alpha_prior_family, alpha_prior_p1, alpha_prior_p2, alpha_prior_p3);
+  target += prior_lpdf(alpha_self_z | alpha_self_prior_family, alpha_self_prior_p1, alpha_self_prior_p2, alpha_self_prior_p3);
+  target += prior_lpdf(alpha_other_z | alpha_other_prior_family, alpha_other_prior_p1, alpha_other_prior_p2, alpha_other_prior_p3);
   target += prior_lpdf(beta_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
 
   for (e in 1:E) {
@@ -47,7 +57,11 @@ model {
     }
     if (step_update_action[e] > 0) {
       int a = step_update_action[e];
-      Q[a] = Q[a] + alpha * (step_reward[e] - Q[a]);
+      Q[a] = Q[a] + alpha_self * (step_reward[e] - Q[a]);
+    }
+    if (step_social_action[e] > 0) {
+      int sa = step_social_action[e];
+      Q[sa] = Q[sa] + alpha_other * (step_social_reward[e] - Q[sa]);
     }
   }
 }
@@ -69,7 +83,11 @@ generated quantities {
       }
       if (step_update_action[e] > 0) {
         int a = step_update_action[e];
-        Q[a] = Q[a] + alpha * (step_reward[e] - Q[a]);
+        Q[a] = Q[a] + alpha_self * (step_reward[e] - Q[a]);
+      }
+      if (step_social_action[e] > 0) {
+        int sa = step_social_action[e];
+        Q[sa] = Q[sa] + alpha_other * (step_social_reward[e] - Q[sa]);
       }
     }
   }

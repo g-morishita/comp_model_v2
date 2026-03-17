@@ -128,6 +128,7 @@ class ModelKernelSpec:
     requires_social: bool = False
     n_actions: int | None = None
     state_reset_policy: str = "per_subject"
+    initial_value: float = 0.5
     description: str = ""
 
 

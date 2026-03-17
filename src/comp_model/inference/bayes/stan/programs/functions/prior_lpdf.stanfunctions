@@ -1,0 +1,17 @@
+/**
+ * Generic prior log-density dispatcher.
+ *
+ * Family IDs:
+ *   1 = normal(p1=mu, p2=sigma)
+ *   2 = cauchy(p1=location, p2=scale)
+ *   3 = student_t(p1=mu, p2=sigma, p3=df)
+ *   4 = uniform(p1=lower, p2=upper)
+ */
+real prior_lpdf(real x, int family, real p1, real p2, real p3) {
+  if (family == 1) return normal_lpdf(x | p1, p2);
+  if (family == 2) return cauchy_lpdf(x | p1, p2);
+  if (family == 3) return student_t_lpdf(x | p3, p1, p2);
+  if (family == 4) return uniform_lpdf(x | p1, p2);
+  reject("Unknown prior family: ", family);
+  return 0;
+}

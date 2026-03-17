@@ -13,6 +13,10 @@ data {
   int<lower=0,upper=1> reset_on_block;
   real q_init;
 
+  int<lower=2> C;
+  int<lower=1,upper=C> baseline_cond;
+  array[E] int<lower=1,upper=C> step_condition;
+
   int alpha_prior_family;
   real alpha_prior_p1;
   real alpha_prior_p2;
@@ -23,31 +27,51 @@ data {
   real beta_prior_p3;
 }
 parameters {
-  real alpha_z;
-  real beta_z;
+  real alpha_shared_z;
+  real beta_shared_z;
+  vector[C - 1] alpha_delta_z;
+  vector[C - 1] beta_delta_z;
 }
 transformed parameters {
-  real<lower=0,upper=1> alpha = inv_logit(alpha_z);
-  real<lower=0> beta = log1p_exp(beta_z);
+  vector<lower=0,upper=1>[C] alpha;
+  vector<lower=0>[C] beta;
+  {
+    int d = 0;
+    for (c in 1:C) {
+      real az = alpha_shared_z;
+      real bz = beta_shared_z;
+      if (c != baseline_cond) {
+        d += 1;
+        az += alpha_delta_z[d];
+        bz += beta_delta_z[d];
+      }
+      alpha[c] = inv_logit(az);
+      beta[c] = log1p_exp(bz);
+    }
+  }
 }
 model {
   vector[A] Q = rep_vector(q_init, A);
 
-  target += prior_lpdf(alpha_z | alpha_prior_family, alpha_prior_p1, alpha_prior_p2, alpha_prior_p3);
-  target += prior_lpdf(beta_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
+  target += prior_lpdf(alpha_shared_z | alpha_prior_family, alpha_prior_p1, alpha_prior_p2, alpha_prior_p3);
+  target += prior_lpdf(beta_shared_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
+  alpha_delta_z ~ normal(0, 1);
+  beta_delta_z ~ normal(0, 1);
 
   for (e in 1:E) {
     if (reset_on_block == 1 && e > 1 && step_block[e] != step_block[e - 1]) {
       Q = rep_vector(q_init, A);
     }
     if (step_choice[e] > 0) {
-      vector[A] u = beta * Q;
+      int cc = step_condition[e];
+      vector[A] u = beta[cc] * Q;
       for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
       target += categorical_logit_lpmf(step_choice[e] | u);
     }
     if (step_update_action[e] > 0) {
       int a = step_update_action[e];
-      Q[a] = Q[a] + alpha * (step_reward[e] - Q[a]);
+      int cc = step_condition[e];
+      Q[a] = Q[a] + alpha[cc] * (step_reward[e] - Q[a]);
     }
   }
 }
@@ -63,13 +87,15 @@ generated quantities {
       }
       if (step_choice[e] > 0) {
         d += 1;
-        vector[A] u = beta * Q;
+        int cc = step_condition[e];
+        vector[A] u = beta[cc] * Q;
         for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
         log_lik[d] = categorical_logit_lpmf(step_choice[e] | u);
       }
       if (step_update_action[e] > 0) {
         int a = step_update_action[e];
-        Q[a] = Q[a] + alpha * (step_reward[e] - Q[a]);
+        int cc = step_condition[e];
+        Q[a] = Q[a] + alpha[cc] * (step_reward[e] - Q[a]);
       }
     }
   }

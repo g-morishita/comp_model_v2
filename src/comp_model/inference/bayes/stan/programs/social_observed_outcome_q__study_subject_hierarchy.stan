@@ -15,36 +15,53 @@ data {
   int<lower=0,upper=1> reset_on_block;
   real q_init;
 
-  int alpha_prior_family;
-  real alpha_prior_p1;
-  real alpha_prior_p2;
-  real alpha_prior_p3;
+  array[E] int<lower=0,upper=A> step_social_action;
+  vector[E] step_social_reward;
+
+  int alpha_self_prior_family;
+  real alpha_self_prior_p1;
+  real alpha_self_prior_p2;
+  real alpha_self_prior_p3;
+  int alpha_other_prior_family;
+  real alpha_other_prior_p1;
+  real alpha_other_prior_p2;
+  real alpha_other_prior_p3;
   int beta_prior_family;
   real beta_prior_p1;
   real beta_prior_p2;
   real beta_prior_p3;
 }
 parameters {
-  real mu_alpha_z;
-  real<lower=0> sd_alpha_z;
-  vector[N] raw_alpha_z;
+  real mu_alpha_self_z;
+  real<lower=0> sd_alpha_self_z;
+  vector[N] raw_alpha_self_z;
+
+  real mu_alpha_other_z;
+  real<lower=0> sd_alpha_other_z;
+  vector[N] raw_alpha_other_z;
 
   real mu_beta_z;
   real<lower=0> sd_beta_z;
   vector[N] raw_beta_z;
 }
 transformed parameters {
-  vector[N] alpha_z = mu_alpha_z + sd_alpha_z * raw_alpha_z;
+  vector[N] alpha_self_z = mu_alpha_self_z + sd_alpha_self_z * raw_alpha_self_z;
+  vector[N] alpha_other_z = mu_alpha_other_z + sd_alpha_other_z * raw_alpha_other_z;
   vector[N] beta_z = mu_beta_z + sd_beta_z * raw_beta_z;
-  vector<lower=0,upper=1>[N] alpha = inv_logit(alpha_z);
+  vector<lower=0,upper=1>[N] alpha_self = inv_logit(alpha_self_z);
+  vector<lower=0,upper=1>[N] alpha_other = inv_logit(alpha_other_z);
   vector<lower=0>[N] beta = log1p_exp(beta_z);
 }
 model {
   array[N] vector[A] Q;
 
-  target += prior_lpdf(mu_alpha_z | alpha_prior_family, alpha_prior_p1, alpha_prior_p2, alpha_prior_p3);
-  sd_alpha_z ~ normal(0, 1);
-  raw_alpha_z ~ normal(0, 1);
+  target += prior_lpdf(mu_alpha_self_z | alpha_self_prior_family, alpha_self_prior_p1, alpha_self_prior_p2, alpha_self_prior_p3);
+  sd_alpha_self_z ~ normal(0, 1);
+  raw_alpha_self_z ~ normal(0, 1);
+
+  target += prior_lpdf(mu_alpha_other_z | alpha_other_prior_family, alpha_other_prior_p1, alpha_other_prior_p2, alpha_other_prior_p3);
+  sd_alpha_other_z ~ normal(0, 1);
+  raw_alpha_other_z ~ normal(0, 1);
 
   target += prior_lpdf(mu_beta_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
   sd_beta_z ~ normal(0, 1);
@@ -65,7 +82,11 @@ model {
     }
     if (step_update_action[e] > 0) {
       int a = step_update_action[e];
-      Q[n][a] = Q[n][a] + alpha[n] * (step_reward[e] - Q[n][a]);
+      Q[n][a] = Q[n][a] + alpha_self[n] * (step_reward[e] - Q[n][a]);
+    }
+    if (step_social_action[e] > 0) {
+      int sa = step_social_action[e];
+      Q[n][sa] = Q[n][sa] + alpha_other[n] * (step_social_reward[e] - Q[n][sa]);
     }
   }
 }
@@ -90,10 +111,15 @@ generated quantities {
       }
       if (step_update_action[e] > 0) {
         int a = step_update_action[e];
-        Q[n][a] = Q[n][a] + alpha[n] * (step_reward[e] - Q[n][a]);
+        Q[n][a] = Q[n][a] + alpha_self[n] * (step_reward[e] - Q[n][a]);
+      }
+      if (step_social_action[e] > 0) {
+        int sa = step_social_action[e];
+        Q[n][sa] = Q[n][sa] + alpha_other[n] * (step_social_reward[e] - Q[n][sa]);
       }
     }
   }
-  real alpha_pop = inv_logit(mu_alpha_z);
+  real alpha_self_pop = inv_logit(mu_alpha_self_z);
+  real alpha_other_pop = inv_logit(mu_alpha_other_z);
   real beta_pop = log1p_exp(mu_beta_z);
 }
