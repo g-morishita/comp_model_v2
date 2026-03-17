@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from comp_model.data.schema import Block, Dataset, SubjectData
+from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
 from comp_model.recovery.config import sample_true_params
 from comp_model.recovery.extraction import (
@@ -60,6 +61,19 @@ def run_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
 
 def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
+    """Run recovery with per-subject maximum-likelihood fits.
+
+    Parameters
+    ----------
+    config
+        Recovery study configuration for an MLE backend.
+
+    Returns
+    -------
+    RecoveryResult
+        Recovery outputs for every replication.
+    """
+
     replications: list[ReplicationEstimates] = []
 
     for r in range(config.n_replications):
@@ -106,6 +120,19 @@ def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
 
 def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
+    """Run recovery with hierarchical Stan fits.
+
+    Parameters
+    ----------
+    config
+        Recovery study configuration for a Stan backend.
+
+    Returns
+    -------
+    RecoveryResult
+        Recovery outputs for every replication.
+    """
+
     simulated: list[tuple[int, dict[str, dict[str, float]], Dataset]] = []
     for r in range(config.n_replications):
         rng = np.random.default_rng(config.simulation_base_seed + r)
@@ -130,6 +157,25 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
     def _fit_one(
         item: tuple[int, dict[str, dict[str, float]], Dataset],
     ) -> ReplicationEstimates:
+        """Fit one simulated replication with the Stan backend.
+
+        Parameters
+        ----------
+        item
+            Tuple containing the replication index, true parameter table, and
+            simulated dataset.
+
+        Returns
+        -------
+        ReplicationEstimates
+            Extracted posterior summaries for the replication.
+
+        Raises
+        ------
+        TypeError
+            If dispatch returns a non-Bayesian fit result for a Stan backend.
+        """
+
         r, true_table, dataset = item
         result = fit(
             config.inference_config,
@@ -139,6 +185,8 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
             config.layout,
             config.adapter,
         )
+        if not isinstance(result, BayesFitResult):
+            raise TypeError("Stan recovery requires BayesFitResult from inference dispatch")
         estimates = extract_bayes_estimates(
             result,
             subject_ids,
@@ -164,7 +212,20 @@ def _simulate_dataset(
     config: RecoveryStudyConfig,
     params_per_subject: dict[str, Any],
 ) -> Dataset:
-    """Simulate a dataset, handling condition-aware params."""
+    """Simulate a dataset for one recovery replication.
+
+    Parameters
+    ----------
+    config
+        Recovery study configuration.
+    params_per_subject
+        Parsed parameters keyed by subject, optionally nested by condition.
+
+    Returns
+    -------
+    Dataset
+        Simulated dataset compatible with the configured task layout.
+    """
 
     if config.layout is not None:
         return _simulate_condition_aware(config, params_per_subject)
@@ -176,6 +237,21 @@ def _simulate_simple(
     config: RecoveryStudyConfig,
     params_per_subject: dict[str, Any],
 ) -> Dataset:
+    """Simulate a dataset without condition-specific parameter structure.
+
+    Parameters
+    ----------
+    config
+        Recovery study configuration.
+    params_per_subject
+        Parsed parameters keyed by subject identifier.
+
+    Returns
+    -------
+    Dataset
+        Simulated dataset for the requested task.
+    """
+
     from comp_model.runtime.engine import simulate_dataset as sim_dataset
 
     return sim_dataset(
@@ -191,7 +267,20 @@ def _simulate_condition_aware(
     config: RecoveryStudyConfig,
     params_per_subject: dict[str, Any],
 ) -> Dataset:
-    """Simulate with per-condition parameters."""
+    """Simulate a dataset with per-condition parameter dictionaries.
+
+    Parameters
+    ----------
+    config
+        Recovery study configuration.
+    params_per_subject
+        Parsed parameters keyed by subject, then by condition.
+
+    Returns
+    -------
+    Dataset
+        Simulated dataset preserving the configured block conditions.
+    """
 
     from comp_model.tasks.spec import TaskSpec
 
@@ -228,6 +317,25 @@ def _fit_subject_worker(
     schema: Any,
     layout: Any,
 ) -> MleFitResult:
-    """Fit a single subject. Module-level for ProcessPoolExecutor pickling."""
+    """Fit one subject in a worker process for MLE recovery.
+
+    Parameters
+    ----------
+    subject_data
+        Subject-level dataset to fit.
+    inference_config
+        Inference configuration passed through to dispatch.
+    kernel
+        Model kernel being fit.
+    schema
+        Trial schema used for replay extraction.
+    layout
+        Optional condition-aware layout.
+
+    Returns
+    -------
+    MleFitResult
+        Fitted single-subject MLE result.
+    """
 
     return fit(inference_config, kernel, subject_data, schema, layout)  # type: ignore[return-value]
