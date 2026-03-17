@@ -25,7 +25,7 @@ from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 def main() -> None:
     # -- 1. Task setup ---------------------------------------------------------
     N_ACTIONS = 2
-    N_TRIALS = 100
+    N_TRIALS = 200
 
     task = TaskSpec(
         task_id="recovery_bandit",
@@ -43,7 +43,7 @@ def main() -> None:
     kernel = AsocialQLearningKernel()
 
     config = RecoveryStudyConfig(
-        n_replications=5,
+        n_replications=100,
         n_subjects=20,
         param_dists=(
             ParamDist("alpha", mu_unconstrained=-0.847, sd_unconstrained=0.5),
