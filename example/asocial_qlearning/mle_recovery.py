@@ -8,6 +8,8 @@ Usage:
     uv run python example/parameter_recovery.py
 """
 
+from scipy import stats
+
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.inference.mle.optimize import MleOptimizerConfig
@@ -25,7 +27,7 @@ from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 def main() -> None:
     # -- 1. Task setup ---------------------------------------------------------
     N_ACTIONS = 2
-    N_TRIALS = 1000
+    N_TRIALS = 300
 
     task = TaskSpec(
         task_id="recovery_bandit",
@@ -43,11 +45,11 @@ def main() -> None:
     kernel = AsocialQLearningKernel()
 
     config = RecoveryStudyConfig(
-        n_replications=100,
-        n_subjects=1,
+        n_replications=1,
+        n_subjects=100,
         param_dists=(
-            ParamDist("alpha", mu_unconstrained=-0.847, sd_unconstrained=0.5),
-            ParamDist("beta", mu_unconstrained=1.687, sd_unconstrained=0.5),
+            ParamDist("alpha", stats.uniform(0.0, 1.0)),
+            ParamDist("beta", stats.uniform(0.1, 9.9)),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(

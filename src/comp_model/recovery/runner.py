@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from tqdm import tqdm
 
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
@@ -75,46 +76,57 @@ def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
     """
 
     replications: list[ReplicationEstimates] = []
+    total_fits = config.n_replications * config.n_subjects
 
-    for r in range(config.n_replications):
-        rng = np.random.default_rng(config.simulation_base_seed + r)
-        true_table, params_per_subject = sample_true_params(
-            config.param_dists, config.kernel, config.n_subjects, rng, config.layout
-        )
-        dataset = _simulate_dataset(config, params_per_subject)
+    max_workers = config.max_workers
+    if max_workers is None:
+        max_workers = min(os.cpu_count() or 1, config.n_subjects)
 
-        max_workers = config.max_workers
-        if max_workers is None:
-            max_workers = min(os.cpu_count() or 1, config.n_subjects)
-
-        if max_workers > 1:
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(
-                        _fit_subject_worker,
-                        subject_data,
-                        config.inference_config,
-                        config.kernel,
-                        config.schema,
-                        config.layout,
-                    )
-                    for subject_data in dataset.subjects
-                ]
-                results: list[MleFitResult] = [f.result() for f in futures]
-        else:
-            results = [
-                fit(config.inference_config, config.kernel, s, config.schema, config.layout)  # type: ignore[list-item]
-                for s in dataset.subjects
-            ]
-
-        estimates = extract_mle_estimates(results, config.layout)
-        replications.append(
-            ReplicationEstimates(
-                replication_index=r,
-                true_params=true_table,
-                subject_estimates=estimates,
+    with tqdm(total=total_fits, desc="Recovery (MLE)", unit="subj") as pbar:
+        for r in range(config.n_replications):
+            rng = np.random.default_rng(config.simulation_base_seed + r)
+            true_table, params_per_subject = sample_true_params(
+                config.param_dists, config.kernel, config.n_subjects, rng, config.layout
             )
-        )
+            dataset = _simulate_dataset(config, params_per_subject)
+
+            if max_workers > 1:
+                with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_idx = {
+                        executor.submit(
+                            _fit_subject_worker,
+                            subject_data,
+                            config.inference_config,
+                            config.kernel,
+                            config.schema,
+                            config.layout,
+                        ): i
+                        for i, subject_data in enumerate(dataset.subjects)
+                    }
+                    results_by_idx: dict[int, MleFitResult] = {}
+                    for future in as_completed(future_to_idx):
+                        idx = future_to_idx[future]
+                        results_by_idx[idx] = future.result()
+                        pbar.update(1)
+                    results: list[MleFitResult] = [
+                        results_by_idx[i] for i in range(len(dataset.subjects))
+                    ]
+            else:
+                results = []
+                for s in dataset.subjects:
+                    results.append(
+                        fit(config.inference_config, config.kernel, s, config.schema, config.layout)  # type: ignore[arg-type]
+                    )
+                    pbar.update(1)
+
+            estimates = extract_mle_estimates(results, config.layout)
+            replications.append(
+                ReplicationEstimates(
+                    replication_index=r,
+                    true_params=true_table,
+                    subject_estimates=estimates,
+                )
+            )
 
     return RecoveryResult(config=config, replications=tuple(replications))
 
@@ -199,11 +211,23 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
             subject_estimates=estimates,
         )
 
-    if max_workers > 1 and config.n_replications > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            replications = list(executor.map(_fit_one, simulated))
-    else:
-        replications = [_fit_one(item) for item in simulated]
+    with tqdm(total=config.n_replications, desc="Recovery (Stan)", unit="rep") as pbar:
+        if max_workers > 1 and config.n_replications > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_idx = {
+                    executor.submit(_fit_one, item): i for i, item in enumerate(simulated)
+                }
+                results_by_idx: dict[int, ReplicationEstimates] = {}
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    results_by_idx[idx] = future.result()
+                    pbar.update(1)
+                replications = [results_by_idx[i] for i in range(len(simulated))]
+        else:
+            replications = []
+            for item in simulated:
+                replications.append(_fit_one(item))
+                pbar.update(1)
 
     return RecoveryResult(config=config, replications=tuple(replications))
 

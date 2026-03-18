@@ -41,6 +41,7 @@ source = { editable = "." }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },
+    { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
@@ -61,6 +62,7 @@ requires-dist = [
     { name = "cmdstanpy", marker = "extra == 'stan'", specifier = ">=1.2" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "scipy", specifier = ">=1.11" },
+    { name = "tqdm", specifier = ">=4.60" },
 ]
 provides-extras = ["stan"]
 

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np  # noqa: TC002 - used at runtime in sample functions
+from scipy.stats._distn_infrastructure import (  # noqa: TC002 - used at runtime in dataclass
+    rv_continuous_frozen,
+    rv_discrete_frozen,
+)
 
 from comp_model.models.kernels.transforms import get_transform
 
@@ -22,21 +26,54 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class ParamDist:
-    """Distribution for one parameter on the unconstrained scale.
+    """Distribution specification for one parameter in recovery analysis.
+
+    Wraps a scipy frozen distribution with metadata about which scale
+    the distribution is defined on.  At sampling time, the value is
+    converted to the unconstrained scale using the parameter's transform.
 
     Attributes
     ----------
     name
         Parameter name matching ``ParameterSpec.name``.
-    mu_unconstrained
-        Population mean on unconstrained scale.
-    sd_unconstrained
-        Population standard deviation on unconstrained scale.
+    dist
+        A scipy frozen distribution, e.g. ``stats.uniform(0, 1)`` or
+        ``stats.norm(-0.847, 0.5)``.
+    scale
+        Scale on which ``dist`` is defined.  ``"constrained"`` means the
+        sampled value will be mapped back to the unconstrained scale via
+        the parameter's inverse transform.  ``"unconstrained"`` means the
+        sampled value is already on the unconstrained scale.
+
+    Examples
+    --------
+    >>> from scipy import stats
+    >>> ParamDist("alpha", stats.uniform(0, 1))            # U(0,1) on constrained
+    >>> ParamDist("beta", stats.uniform(0.1, 9.9))         # U(0.1,10) on constrained
+    >>> ParamDist("alpha", stats.norm(0, 0.5), scale="unconstrained")
     """
 
     name: str
-    mu_unconstrained: float
-    sd_unconstrained: float
+    dist: rv_continuous_frozen | rv_discrete_frozen
+    scale: Literal["constrained", "unconstrained"] = "constrained"
+
+    def sample_unconstrained(
+        self, rng: np.random.Generator, transform_id: str
+    ) -> float:
+        """Draw one sample and return it on the unconstrained scale.
+
+        Parameters
+        ----------
+        rng
+            Random number generator.
+        transform_id
+            Transform identifier from the kernel's ``ParameterSpec``.
+            Used to convert constrained samples back to the unconstrained scale.
+        """
+        value = float(self.dist.rvs(random_state=rng))
+        if self.scale == "constrained":
+            return get_transform(transform_id).inverse(value)
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +182,7 @@ def _sample_simple(
         constrained: dict[str, float] = {}
         for param_spec in spec.parameter_specs:
             dist = dist_by_name[param_spec.name]
-            z = float(rng.normal(dist.mu_unconstrained, dist.sd_unconstrained))
+            z = dist.sample_unconstrained(rng, param_spec.transform_id)
             raw[param_spec.name] = z
             constrained[param_spec.name] = get_transform(param_spec.transform_id).forward(z)
         true_table[sid] = constrained
@@ -170,8 +207,8 @@ def _sample_condition_aware(
         shared_z: dict[str, float] = {}
         for param_spec in spec.parameter_specs:
             dist = dist_by_name[param_spec.name]
-            shared_z[param_spec.name] = float(
-                rng.normal(dist.mu_unconstrained, dist.sd_unconstrained)
+            shared_z[param_spec.name] = dist.sample_unconstrained(
+                rng, param_spec.transform_id
             )
 
         delta_z: dict[str, dict[str, float]] = {}
@@ -182,8 +219,8 @@ def _sample_condition_aware(
             for param_spec in spec.parameter_specs:
                 delta_name = f"{param_spec.name}__delta"
                 dist = dist_by_name[delta_name]
-                delta_z[condition][param_spec.name] = float(
-                    rng.normal(dist.mu_unconstrained, dist.sd_unconstrained)
+                delta_z[condition][param_spec.name] = dist.sample_unconstrained(
+                    rng, param_spec.transform_id
                 )
 
         subject_constrained: dict[str, float] = {}

@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.11",
+    "tqdm>=4.60",
 ]
 
 [project.optional-dependencies]

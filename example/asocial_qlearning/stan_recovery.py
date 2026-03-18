@@ -7,6 +7,8 @@ Usage:
     uv run python example/asocial_qlearning_stan_recovery.py
 """
 
+from scipy import stats
+
 from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter, StanFitConfig
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
@@ -44,8 +46,8 @@ def main() -> None:
         n_replications=10,
         n_subjects=20,
         param_dists=(
-            ParamDist("alpha", mu_unconstrained=-0.847, sd_unconstrained=0.5),
-            ParamDist("beta", mu_unconstrained=1.687, sd_unconstrained=0.5),
+            ParamDist("alpha", stats.norm(-0.847, 0.5), scale="unconstrained"),
+            ParamDist("beta", stats.norm(1.687, 0.5), scale="unconstrained"),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(
