@@ -57,9 +57,7 @@ class ParamDist:
     dist: rv_continuous_frozen | rv_discrete_frozen
     scale: Literal["constrained", "unconstrained"] = "constrained"
 
-    def sample_unconstrained(
-        self, rng: np.random.Generator, transform_id: str
-    ) -> float:
+    def sample_unconstrained(self, rng: np.random.Generator, transform_id: str) -> float:
         """Draw one sample and return it on the unconstrained scale.
 
         Parameters
@@ -207,9 +205,7 @@ def _sample_condition_aware(
         shared_z: dict[str, float] = {}
         for param_spec in spec.parameter_specs:
             dist = dist_by_name[param_spec.name]
-            shared_z[param_spec.name] = dist.sample_unconstrained(
-                rng, param_spec.transform_id
-            )
+            shared_z[param_spec.name] = dist.sample_unconstrained(rng, param_spec.transform_id)
 
         delta_z: dict[str, dict[str, float]] = {}
         for condition in layout.conditions:

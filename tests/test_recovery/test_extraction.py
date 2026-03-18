@@ -171,9 +171,7 @@ class TestExtractBayesEstimates:
             baseline_condition="easy",
         )
 
-        estimates = extract_bayes_estimates(
-            result, ["s0", "s1"], ("alpha",), layout=layout
-        )
+        estimates = extract_bayes_estimates(result, ["s0", "s1"], ("alpha",), layout=layout)
 
         assert len(estimates) == 2
         est0 = estimates[0]
