@@ -25,7 +25,7 @@ from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 def main() -> None:
     # -- 1. Task setup ---------------------------------------------------------
     N_ACTIONS = 2
-    N_TRIALS = 200
+    N_TRIALS = 1000
 
     task = TaskSpec(
         task_id="recovery_bandit",

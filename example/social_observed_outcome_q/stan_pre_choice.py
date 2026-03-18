@@ -63,7 +63,7 @@ dataset = simulate_dataset(
 )
 
 # ── 4. Save to CSV ─────────────────────────────────────────────────────────
-csv_path = Path(__file__).parent / "social_pre_choice_data.csv"
+csv_path = Path(__file__).parent / "pre_choice_data.csv"
 save_dataset_to_csv(dataset, schema=SOCIAL_PRE_CHOICE_SCHEMA, path=csv_path)
 print(f"Saved {len(dataset.subjects)} subjects to {csv_path}")
 

@@ -104,7 +104,7 @@ for i in range(N_SUBJECTS):
 dataset = Dataset(subjects=tuple(subjects))
 
 # ── 5. Save to CSV ─────────────────────────────────────────────────────────
-csv_path = Path(__file__).parent / "asocial_qlearning_within_subject_data.csv"
+csv_path = Path(__file__).parent / "within_subject_data.csv"
 save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
 print(f"Saved {len(dataset.subjects)} subjects x {len(task.blocks)} blocks to {csv_path}")
 

@@ -89,7 +89,7 @@ dataset = simulate_dataset(
 )
 
 # ── 5. Save to CSV ─────────────────────────────────────────────────────────
-csv_path = Path(__file__).parent / "asocial_qlearning_data.csv"
+csv_path = Path(__file__).parent / "data.csv"
 save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
 print(f"Saved {len(dataset.subjects)} subjects to {csv_path}")
 
