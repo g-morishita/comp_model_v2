@@ -1,10 +1,9 @@
-"""Parameter recovery for asocial Q-learning using hierarchical Stan.
+"""Parameter recovery for asocial Q-learning using per-subject Stan.
 
-Recovers per-subject parameters under a hierarchical (STUDY_SUBJECT) model
-that places population-level priors on alpha and beta.
+Fits each subject independently with no pooling (SUBJECT_SHARED).
 
 Usage:
-    uv run python example/asocial_qlearning_stan_recovery.py
+    uv run python example/asocial_qlearning_stan_per_subject_recovery.py
 """
 
 from comp_model.environments import StationaryBanditEnvironment
@@ -54,7 +53,7 @@ def main() -> None:
         kernel=kernel,
         schema=ASOCIAL_BANDIT_SCHEMA,
         inference_config=InferenceConfig(
-            hierarchy=HierarchyStructure.STUDY_SUBJECT,
+            hierarchy=HierarchyStructure.SUBJECT_SHARED,
             backend="stan",
             stan_config=StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42),
         ),
@@ -65,7 +64,7 @@ def main() -> None:
     print(f"Running {config.n_replications} reps x {config.n_subjects} subjects...")
     result = run_recovery(config)
     metrics = compute_recovery_metrics(result)
-    print("\nRecovery Metrics (hierarchical Stan):")
+    print("\nRecovery Metrics (per-subject Stan):")
     print(recovery_table(metrics))
     print("\nDone.")
 
