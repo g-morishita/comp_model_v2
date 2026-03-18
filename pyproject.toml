@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.11",
+    "tqdm>=4.60",
 ]
 
 [project.optional-dependencies]
@@ -14,6 +15,7 @@ stan = ["cmdstanpy>=1.2"]
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.5.1",
     "pyright>=1.1",
     "pytest>=8.0",
     "pytest-xdist>=3.5",

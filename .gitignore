@@ -13,4 +13,4 @@ src/comp_model/inference/bayes/stan/programs/asocial_q_learning__*
 !src/comp_model/inference/bayes/stan/programs/*.stan
 
 # generated example data
-example/*.csv
+example/**/*.csv

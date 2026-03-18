@@ -38,21 +38,27 @@ class MleOptimizerConfig:
     tol
         Optional optimizer tolerance.
     z_bounds
-        Shared lower and upper bounds on unconstrained parameters.
+        Optional lower and upper bounds on unconstrained parameters.
+        ``None`` runs unconstrained optimization with normal restart draws.
+    restart_scale
+        Standard deviation for normal restart draws when ``z_bounds`` is
+        ``None``.
     max_iter
         Maximum number of optimizer iterations.
 
     Notes
     -----
     Restarts use one deterministic default start plus ``n_restarts - 1`` random
-    draws sampled uniformly inside ``z_bounds``.
+    draws. When ``z_bounds`` is set, draws are sampled uniformly inside the
+    bounds; when ``None``, draws are sampled from ``Normal(0, restart_scale)``.
     """
 
     method: str = "L-BFGS-B"
     n_restarts: int = 10
     seed: int | None = 0
     tol: float | None = None
-    z_bounds: tuple[float, float] = (-6.0, 6.0)
+    z_bounds: tuple[float, float] | None = None
+    restart_scale: float = 3.0
     max_iter: int = 500
 
 
@@ -164,9 +170,14 @@ def fit_mle_simple(
     rng = np.random.default_rng(config.seed)
     starts = [default_start.copy()]
     for _ in range(config.n_restarts - 1):
-        starts.append(rng.uniform(config.z_bounds[0], config.z_bounds[1], size=n_params))
+        if config.z_bounds is not None:
+            starts.append(rng.uniform(config.z_bounds[0], config.z_bounds[1], size=n_params))
+        else:
+            starts.append(rng.normal(0.0, config.restart_scale, size=n_params))
 
-    bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
+    bounds: list[tuple[float, float]] | None = None
+    if config.z_bounds is not None:
+        bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
 
     def objective(z_vector: np.ndarray) -> float:
         """Evaluate the negative replay log-likelihood for one parameter vector.
@@ -299,9 +310,14 @@ def fit_mle_conditioned(
     rng = np.random.default_rng(config.seed)
     starts = [default_start.copy()]
     for _ in range(config.n_restarts - 1):
-        starts.append(rng.uniform(config.z_bounds[0], config.z_bounds[1], size=n_params))
+        if config.z_bounds is not None:
+            starts.append(rng.uniform(config.z_bounds[0], config.z_bounds[1], size=n_params))
+        else:
+            starts.append(rng.normal(0.0, config.restart_scale, size=n_params))
 
-    bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
+    bounds: list[tuple[float, float]] | None = None
+    if config.z_bounds is not None:
+        bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
 
     def objective(z_vector: np.ndarray) -> float:
         """Evaluate the conditioned negative replay log-likelihood.
