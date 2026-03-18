@@ -46,8 +46,8 @@ def main() -> None:
         n_replications=10,
         n_subjects=20,
         param_dists=(
-            ParamDist("alpha", stats.norm(-0.847, 0.5), scale="unconstrained"),
-            ParamDist("beta", stats.norm(1.687, 0.5), scale="unconstrained"),
+            ParamDist("alpha", stats.uniform(0.0, 0.1), scale="constrained"),
+            ParamDist("beta", stats.uniform(0.0, 30.0), scale="constrained"),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(

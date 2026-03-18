@@ -8,6 +8,7 @@ Usage:
     uv run python example/parameter_recovery.py
 """
 
+import numpy as np
 from scipy import stats
 
 from comp_model.environments import StationaryBanditEnvironment
@@ -27,7 +28,7 @@ from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 def main() -> None:
     # -- 1. Task setup ---------------------------------------------------------
     N_ACTIONS = 2
-    N_TRIALS = 300
+    N_TRIALS = 1000
 
     task = TaskSpec(
         task_id="recovery_bandit",
@@ -49,7 +50,7 @@ def main() -> None:
         n_subjects=100,
         param_dists=(
             ParamDist("alpha", stats.uniform(0.0, 1.0)),
-            ParamDist("beta", stats.uniform(0.1, 9.9)),
+            ParamDist("beta", stats.uniform(0.1, 20.0)),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(
@@ -70,7 +71,7 @@ def main() -> None:
     result = run_recovery(config)
 
     # -- 4. Compute and display metrics ----------------------------------------
-    metrics = compute_recovery_metrics(result)
+    metrics = compute_recovery_metrics(result, transforms={"beta": np.log})
     print("\nRecovery Metrics:")
     print(recovery_table(metrics))
 
