@@ -1,7 +1,8 @@
-"""Parameter recovery analysis for asocial Q-learning using hierarchical Stan.
+"""Parameter recovery analysis for asocial Q-learning using Stan.
 
-Recovers per-subject parameters under a hierarchical (STUDY_SUBJECT) model
-that places population-level priors on alpha and beta.
+Runs two recovery studies sequentially:
+  1. Per-subject (SUBJECT_SHARED) — no pooling, fits each subject independently.
+  2. Hierarchical (STUDY_SUBJECT) — population-level priors on alpha and beta.
 
 Usage:
     uv run python example/asocial_qlearning_stan_recovery.py
@@ -51,8 +52,35 @@ def main() -> None:
             n_actions=N_ACTIONS, reward_probs=(0.8, 0.2)
         )
 
-    # -- 2. Hierarchical recovery (STUDY_SUBJECT) -----------------------------
-    config = RecoveryStudyConfig(
+    stan_config = StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42)
+
+    # -- 2. Per-subject recovery (SUBJECT_SHARED) ------------------------------
+    config_shared = RecoveryStudyConfig(
+        n_replications=10,
+        n_subjects=20,
+        param_dists=param_dists,
+        task=task,
+        env_factory=env_factory,
+        kernel=kernel,
+        schema=ASOCIAL_BANDIT_SCHEMA,
+        inference_config=InferenceConfig(
+            hierarchy=HierarchyStructure.SUBJECT_SHARED,
+            backend="stan",
+            stan_config=stan_config,
+        ),
+        adapter=adapter,
+        simulation_base_seed=42,
+    )
+
+    print("=== Per-subject Stan (SUBJECT_SHARED) ===")
+    print(f"Running {config_shared.n_replications} reps x {config_shared.n_subjects} subjects...")
+    result_shared = run_recovery(config_shared)
+    metrics_shared = compute_recovery_metrics(result_shared)
+    print("\nRecovery Metrics (per-subject Stan):")
+    print(recovery_table(metrics_shared))
+
+    # -- 3. Hierarchical recovery (STUDY_SUBJECT) ------------------------------
+    config_hier = RecoveryStudyConfig(
         n_replications=10,
         n_subjects=20,
         param_dists=param_dists,
@@ -63,19 +91,18 @@ def main() -> None:
         inference_config=InferenceConfig(
             hierarchy=HierarchyStructure.STUDY_SUBJECT,
             backend="stan",
-            stan_config=StanFitConfig(
-                n_warmup=500, n_samples=500, n_chains=4, seed=42
-            ),
+            stan_config=stan_config,
         ),
         adapter=adapter,
         simulation_base_seed=42,
     )
 
-    print(f"Running {config.n_replications} reps x {config.n_subjects} subjects...")
-    result = run_recovery(config)
-    metrics = compute_recovery_metrics(result)
+    print("\n=== Hierarchical Stan (STUDY_SUBJECT) ===")
+    print(f"Running {config_hier.n_replications} reps x {config_hier.n_subjects} subjects...")
+    result_hier = run_recovery(config_hier)
+    metrics_hier = compute_recovery_metrics(result_hier)
     print("\nRecovery Metrics (hierarchical Stan):")
-    print(recovery_table(metrics))
+    print(recovery_table(metrics_hier))
 
     print("\nDone.")
 
