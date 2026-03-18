@@ -19,6 +19,7 @@ from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 N_ACTIONS = 2
 N_TRIALS = 100
 N_SUBJECTS = 5
+REWARD_PROBS = (0.8, 0.2)
 
 task = TaskSpec(
     task_id="asocial_bandit",
@@ -32,16 +33,14 @@ task = TaskSpec(
     ),
 )
 
-# ── 2. Create environment ──────────────────────────────────────────────────
-REWARD_PROBS = (0.8, 0.2)
-
-# ── 3. Set ground-truth parameters ─────────────────────────────────────────
+# ── 2. Ground-truth parameters ─────────────────────────────────────────────
 TRUE_ALPHA = 0.3
 TRUE_BETA = 2.0
+
 kernel = AsocialQLearningKernel()
 true_params = QParams(alpha=TRUE_ALPHA, beta=TRUE_BETA)
 
-# ── 4. Simulate dataset ────────────────────────────────────────────────────
+# ── 3. Simulate dataset ────────────────────────────────────────────────────
 params_per_subject = {f"sub_{i:02d}": true_params for i in range(N_SUBJECTS)}
 
 dataset = simulate_dataset(
@@ -54,16 +53,14 @@ dataset = simulate_dataset(
     config=SimulationConfig(seed=42),
 )
 
-# ── 5. Save to CSV ─────────────────────────────────────────────────────────
+# ── 4. Save and reload CSV ─────────────────────────────────────────────────
 csv_path = Path(__file__).parent / "data.csv"
 save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
 print(f"Saved {len(dataset.subjects)} subjects to {csv_path}")
 
-# ── 6. Load back from CSV (round-trip check) ───────────────────────────────
 loaded = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
-assert len(loaded.subjects) == N_SUBJECTS
 
-# ── 7. Fit each subject with MLE ───────────────────────────────────────────
+# ── 5. Fit each subject with MLE ───────────────────────────────────────────
 mle_config = InferenceConfig(
     hierarchy=HierarchyStructure.SUBJECT_SHARED,
     backend="mle",

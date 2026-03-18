@@ -4,8 +4,6 @@ then recover parameters with per-subject MLE.
 Ground-truth: alpha_self=0.3, alpha_other=0.2, beta=2.0
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
@@ -21,6 +19,7 @@ from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
 N_ACTIONS = 2
 N_TRIALS = 100
 N_SUBJECTS = 5
+REWARD_PROBS = (0.8, 0.2)
 
 task = TaskSpec(
     task_id="social_post_outcome",
@@ -38,7 +37,6 @@ task = TaskSpec(
 TRUE_ALPHA_SELF = 0.3
 TRUE_ALPHA_OTHER = 0.2
 TRUE_BETA = 2.0
-REWARD_PROBS = (0.8, 0.2)
 
 kernel = SocialObservedOutcomeQKernel()
 true_params = SocialQParams(

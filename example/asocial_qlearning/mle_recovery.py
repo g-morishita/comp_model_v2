@@ -44,7 +44,7 @@ def main() -> None:
 
     config = RecoveryStudyConfig(
         n_replications=100,
-        n_subjects=20,
+        n_subjects=1,
         param_dists=(
             ParamDist("alpha", mu_unconstrained=-0.847, sd_unconstrained=0.5),
             ParamDist("beta", mu_unconstrained=1.687, sd_unconstrained=0.5),
