@@ -127,7 +127,11 @@ def extract_bayes_estimates(
 
         for name in param_names:
             samples = result.posterior_samples[name]
-            if samples.ndim == 2:
+            if samples.ndim == 1:
+                # Shape: (n_draws,) — shared across subjects (e.g. SUBJECT_SHARED)
+                point[name] = float(np.mean(samples))
+                draws[name] = samples
+            elif samples.ndim == 2:
                 # Shape: (n_draws, n_subjects)
                 subject_draws = samples[:, i]
                 point[name] = float(np.mean(subject_draws))
