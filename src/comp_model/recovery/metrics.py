@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from comp_model.recovery.runner import RecoveryResult
 
 
@@ -59,13 +61,20 @@ class RecoveryMetrics:
     per_parameter: dict[str, ParameterRecoveryMetrics]
 
 
-def compute_recovery_metrics(result: RecoveryResult) -> RecoveryMetrics:
+def compute_recovery_metrics(
+    result: RecoveryResult,
+    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
+) -> RecoveryMetrics:
     """Compute recovery metrics from a completed study.
 
     Parameters
     ----------
     result
         Completed recovery study result.
+    transforms
+        Optional mapping from parameter name to a transform applied to both
+        true and estimated values before computing metrics.  For example,
+        ``{"beta": np.log}`` computes all metrics on the log scale.
 
     Returns
     -------
@@ -99,6 +108,11 @@ def compute_recovery_metrics(result: RecoveryResult) -> RecoveryMetrics:
         est_arr = np.array([p[1] for p in param_pairs])
         n = len(param_pairs)
 
+        fn = transforms.get(param_name) if transforms else None
+        if fn is not None:
+            true_arr = fn(true_arr)
+            est_arr = fn(est_arr)
+
         errors = est_arr - true_arr
         bias = float(np.mean(errors))
         rmse = float(np.sqrt(np.mean(errors**2)))
@@ -112,8 +126,8 @@ def compute_recovery_metrics(result: RecoveryResult) -> RecoveryMetrics:
         cov_90: float | None = None
         cov_95: float | None = None
         if param_name in coverage_data:
-            cov_90 = _compute_coverage(coverage_data[param_name], 0.90)
-            cov_95 = _compute_coverage(coverage_data[param_name], 0.95)
+            cov_90 = _compute_coverage(coverage_data[param_name], 0.90, fn)
+            cov_95 = _compute_coverage(coverage_data[param_name], 0.95, fn)
 
         metrics[param_name] = ParameterRecoveryMetrics(
             param_name=param_name,
@@ -129,11 +143,18 @@ def compute_recovery_metrics(result: RecoveryResult) -> RecoveryMetrics:
     return RecoveryMetrics(per_parameter=metrics)
 
 
-def _compute_coverage(data: list[tuple[float, np.ndarray]], prob: float) -> float:
+def _compute_coverage(
+    data: list[tuple[float, np.ndarray]],
+    prob: float,
+    fn: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> float:
     """Compute coverage as fraction of true values inside HDI."""
 
     n_covered = 0
     for true_val, draws in data:
+        if fn is not None:
+            true_val = float(fn(np.asarray(true_val)))
+            draws = fn(draws)
         lo, hi = _hdi(draws, prob)
         if lo <= true_val <= hi:
             n_covered += 1
