@@ -224,8 +224,53 @@ def _social_step_data(subject: SubjectData) -> dict[str, Any]:
     )
 
 
+_SOCIAL_PARITY_ALPHA_SELF = 0.4
+_SOCIAL_PARITY_ALPHA_OTHER = 0.3
+_SOCIAL_PARITY_BETA = 1.5
+
+
+@pytest.fixture(scope="module")
+def social_stan_log_lik() -> np.ndarray:
+    """Compile and run the social Stan model once for all parity tests.
+
+    The Stan model has no ``parameters`` block, so ``fixed_param=True``
+    evaluates only the ``generated_quantities`` block.  Running the
+    external process once per module (rather than once per test) avoids
+    intermittent CI failures caused by repeated subprocess invocations
+    under resource pressure.  ``show_console=False`` suppresses CmdStan
+    stderr noise that some CmdStanPy versions mis-interpret as a sampling
+    error when the model has no free parameters.
+
+    Returns
+    -------
+    np.ndarray
+        Per-trial log-likelihood array of shape ``(D,)``.
+    """
+
+    subject = _social_subject()
+    stan_data = _social_step_data(subject)
+    model = _fixed_param_model("social_q_learning_loglik_fixed_params.stan")
+    fit = model.sample(
+        data={
+            **stan_data,
+            "alpha_self": _SOCIAL_PARITY_ALPHA_SELF,
+            "alpha_other": _SOCIAL_PARITY_ALPHA_OTHER,
+            "beta": _SOCIAL_PARITY_BETA,
+            "reset_on_block": 0,
+            "q_init": 0.5,
+        },
+        fixed_param=True,
+        iter_sampling=1,
+        iter_warmup=1,
+        chains=1,
+        seed=1,
+        show_console=False,
+    )
+    return np.asarray(fit.stan_variable("log_lik"))[0]
+
+
 @pytest.mark.stan
-def test_social_log_likelihood_parity() -> None:
+def test_social_log_likelihood_parity(social_stan_log_lik: np.ndarray) -> None:
     """Ensure Python and Stan agree on total social log-likelihood.
 
     Returns
@@ -235,35 +280,18 @@ def test_social_log_likelihood_parity() -> None:
     """
 
     subject = _social_subject()
-    stan_data = _social_step_data(subject)
-    alpha_self = 0.4
-    alpha_other = 0.3
-    beta = 1.5
-    model = _fixed_param_model("social_q_learning_loglik_fixed_params.stan")
-    fit = model.sample(
-        data={
-            **stan_data,
-            "alpha_self": alpha_self,
-            "alpha_other": alpha_other,
-            "beta": beta,
-            "reset_on_block": 0,
-            "q_init": 0.5,
-        },
-        fixed_param=True,
-        iter_sampling=1,
-        iter_warmup=1,
-        chains=1,
-        seed=1,
+    python_log_lik = _python_social_log_likelihoods(
+        subject,
+        _SOCIAL_PARITY_ALPHA_SELF,
+        _SOCIAL_PARITY_ALPHA_OTHER,
+        _SOCIAL_PARITY_BETA,
     )
-    stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
 
-    python_log_lik = _python_social_log_likelihoods(subject, alpha_self, alpha_other, beta)
-
-    assert abs(sum(python_log_lik) - float(stan_log_lik.sum())) < _STAN_PARITY_ATOL
+    assert abs(sum(python_log_lik) - float(social_stan_log_lik.sum())) < _STAN_PARITY_ATOL
 
 
 @pytest.mark.stan
-def test_social_trialwise_parity() -> None:
+def test_social_trialwise_parity(social_stan_log_lik: np.ndarray) -> None:
     """Ensure Python and Stan agree trial by trial on social log-likelihood.
 
     Returns
@@ -273,27 +301,11 @@ def test_social_trialwise_parity() -> None:
     """
 
     subject = _social_subject()
-    stan_data = _social_step_data(subject)
-    alpha_self = 0.4
-    alpha_other = 0.3
-    beta = 1.5
-    model = _fixed_param_model("social_q_learning_loglik_fixed_params.stan")
-    fit = model.sample(
-        data={
-            **stan_data,
-            "alpha_self": alpha_self,
-            "alpha_other": alpha_other,
-            "beta": beta,
-            "reset_on_block": 0,
-            "q_init": 0.5,
-        },
-        fixed_param=True,
-        iter_sampling=1,
-        iter_warmup=1,
-        chains=1,
-        seed=2,
+    python_log_lik = _python_social_log_likelihoods(
+        subject,
+        _SOCIAL_PARITY_ALPHA_SELF,
+        _SOCIAL_PARITY_ALPHA_OTHER,
+        _SOCIAL_PARITY_BETA,
     )
-    stan_log_lik = np.asarray(fit.stan_variable("log_lik"))[0]
-    python_log_lik = _python_social_log_likelihoods(subject, alpha_self, alpha_other, beta)
 
-    assert np.max(np.abs(np.asarray(python_log_lik) - stan_log_lik)) < _STAN_PARITY_ATOL
+    assert np.max(np.abs(np.asarray(python_log_lik) - social_stan_log_lik)) < _STAN_PARITY_ATOL
