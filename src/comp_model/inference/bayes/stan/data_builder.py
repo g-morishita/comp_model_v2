@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
     from comp_model.data.extractors import DecisionTrialView
     from comp_model.data.schema import Dataset, SubjectData
+    from comp_model.inference.config import PriorSpec
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernelSpec
     from comp_model.tasks.schemas import TrialSchema
@@ -259,15 +260,23 @@ def add_initial_value_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSp
     stan_data["q_init"] = float(kernel_spec.initial_value)
 
 
-def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
-    """Add prior hyperparameters from kernel metadata to a Stan data dictionary.
+def add_prior_data(
+    stan_data: dict[str, Any],
+    kernel_spec: ModelKernelSpec,
+    prior_specs: dict[str, PriorSpec] | None = None,
+) -> None:
+    """Add prior hyperparameters to a Stan data dictionary.
 
     Parameters
     ----------
     stan_data
         Stan data dictionary to mutate.
     kernel_spec
-        Kernel specification whose parameter priors should be exported.
+        Kernel specification whose parameter names drive the export.
+    prior_specs
+        Optional mapping from parameter name to prior specification.
+        Parameters without an entry fall back to ``Normal(0, 2)`` on the
+        unconstrained scale.
 
     Returns
     -------
@@ -281,11 +290,11 @@ def add_prior_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> N
     fall back to ``Normal(0, 2)``.
     """
 
+    priors = prior_specs or {}
     for parameter in kernel_spec.parameter_specs:
-        if parameter.prior is not None:
-            family_id, p1, p2, p3 = prior_spec_to_stan_data(
-                parameter.prior.family, parameter.prior.kwargs
-            )
+        prior = priors.get(parameter.name)
+        if prior is not None:
+            family_id, p1, p2, p3 = prior_spec_to_stan_data(prior.family, prior.kwargs)
         else:
             family_id, p1, p2, p3 = 1, 0.0, 2.0, 0.0  # Normal(0, 2) default
         stan_data[f"{parameter.name}_prior_family"] = family_id

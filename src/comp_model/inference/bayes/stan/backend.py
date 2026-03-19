@@ -19,7 +19,7 @@ from comp_model.inference.bayes.result import BayesFitResult
 if TYPE_CHECKING:
     from comp_model.data.schema import Dataset, SubjectData
     from comp_model.inference.bayes.stan.adapters.base import StanAdapter
-    from comp_model.inference.config import HierarchyStructure
+    from comp_model.inference.config import HierarchyStructure, PriorSpec
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.tasks.schemas import TrialSchema
 
@@ -67,6 +67,7 @@ def fit_stan(
     hierarchy: HierarchyStructure,
     layout: SharedDeltaLayout | None = None,
     config: StanFitConfig | None = None,
+    prior_specs: dict[str, PriorSpec] | None = None,
 ) -> BayesFitResult:
     """Fit a model with Stan using the supplied adapter and data.
 
@@ -106,7 +107,7 @@ def fit_stan(
         stanc_options={"include-paths": [functions_dir]},
     )
     fit = model.sample(
-        data=adapter.build_stan_data(data, schema, hierarchy, layout),
+        data=adapter.build_stan_data(data, schema, hierarchy, layout, prior_specs),
         iter_warmup=resolved_config.n_warmup,
         iter_sampling=resolved_config.n_samples,
         chains=resolved_config.n_chains,

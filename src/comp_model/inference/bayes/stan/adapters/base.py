@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from comp_model.data.schema import Dataset, SubjectData
-    from comp_model.inference.config import HierarchyStructure
+    from comp_model.inference.config import HierarchyStructure, PriorSpec
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernelSpec
     from comp_model.tasks.schemas import TrialSchema
@@ -48,6 +48,7 @@ class StanAdapter(Protocol):
         schema: TrialSchema,
         hierarchy: HierarchyStructure,
         layout: SharedDeltaLayout | None = None,
+        prior_specs: dict[str, PriorSpec] | None = None,
     ) -> dict[str, Any]:
         """Build Stan data for a subject or dataset.
 
@@ -61,6 +62,8 @@ class StanAdapter(Protocol):
             Hierarchy structure targeted by the Stan program.
         layout
             Optional condition-aware parameter layout.
+        prior_specs
+            Optional mapping from parameter name to prior specification.
 
         Returns
         -------

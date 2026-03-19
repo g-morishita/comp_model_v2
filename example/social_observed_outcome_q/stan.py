@@ -32,6 +32,7 @@ def softplus_vec(x: np.ndarray) -> np.ndarray:
 def inv_softplus_vec(x: np.ndarray) -> np.ndarray:
     return np.log(np.expm1(x))
 
+
 # ── 1. Define task ──────────────────────────────────────────────────────────
 N_ACTIONS = 2
 N_TRIALS = 200
@@ -80,13 +81,17 @@ params_per_subject = {
 
 print("Ground-truth per-subject parameters:")
 for sid, p in params_per_subject.items():
-    print(f"  {sid}: alpha_self={p.alpha_self:.3f}, "
-          f"alpha_other={p.alpha_other:.3f}, beta={p.beta:.3f}")
+    print(
+        f"  {sid}: alpha_self={p.alpha_self:.3f}, "
+        f"alpha_other={p.alpha_other:.3f}, beta={p.beta:.3f}"
+    )
 true_mu_as = float(sigmoid_vec(TRUE_MU_ALPHA_SELF_Z))
 true_mu_ao = float(sigmoid_vec(TRUE_MU_ALPHA_OTHER_Z))
 true_mu_b = float(softplus_vec(np.array(TRUE_MU_BETA_Z)))
-print(f"Population: mu_alpha_self={true_mu_as:.3f}, "
-      f"mu_alpha_other={true_mu_ao:.3f}, mu_beta={true_mu_b:.3f}")
+print(
+    f"Population: mu_alpha_self={true_mu_as:.3f}, "
+    f"mu_alpha_other={true_mu_ao:.3f}, mu_beta={true_mu_b:.3f}"
+)
 
 dataset = simulate_dataset(
     task=task,

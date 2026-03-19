@@ -9,7 +9,28 @@ from typing import TYPE_CHECKING
 from comp_model.inference.mle.optimize import MleOptimizerConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from comp_model.inference.bayes.stan import StanFitConfig
+
+
+@dataclass(frozen=True, slots=True)
+class PriorSpec:
+    """Prior metadata for a model parameter.
+
+    Attributes
+    ----------
+    family
+        Prior family identifier, such as ``"normal"``.
+    kwargs
+        Hyperparameters for the prior family.
+    parameterization
+        Scale on which the prior is defined.
+    """
+
+    family: str
+    kwargs: Mapping[str, float]
+    parameterization: str = "unconstrained"
 
 
 class HierarchyStructure(StrEnum):
@@ -43,6 +64,10 @@ class InferenceConfig:
         Configuration for MLE optimization.
     stan_config
         Optional backend-specific Stan configuration.
+    prior_specs
+        Optional mapping from parameter name to prior specification.
+        Only used by the Bayesian backend. Parameters without an entry
+        fall back to ``Normal(0, 2)`` on the unconstrained scale.
 
     Notes
     -----
@@ -56,3 +81,4 @@ class InferenceConfig:
     sampler: str = "nuts"
     mle_config: MleOptimizerConfig = field(default_factory=MleOptimizerConfig)
     stan_config: StanFitConfig | None = None
+    prior_specs: dict[str, PriorSpec] | None = None

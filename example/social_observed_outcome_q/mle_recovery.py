@@ -55,9 +55,7 @@ def main() -> None:
         ),
         task=task,
         env_factory=lambda: SocialBanditEnvironment(
-            inner=StationaryBanditEnvironment(
-                n_actions=N_ACTIONS, reward_probs=(0.8, 0.2)
-            ),
+            inner=StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=(0.8, 0.2)),
             demonstrator_policy=(0.5, 0.5),
         ),
         kernel=kernel,

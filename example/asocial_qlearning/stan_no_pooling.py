@@ -53,9 +53,7 @@ params_per_subject = {f"sub_{i:02d}": true_params for i in range(N_SUBJECTS)}
 
 dataset = simulate_dataset(
     task=task,
-    env_factory=lambda: StationaryBanditEnvironment(
-        n_actions=N_ACTIONS, reward_probs=REWARD_PROBS
-    ),
+    env_factory=lambda: StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS),
     kernel=kernel,
     params_per_subject=params_per_subject,
     config=SimulationConfig(seed=42),
