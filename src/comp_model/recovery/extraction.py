@@ -49,11 +49,61 @@ class ReplicationEstimates:
         Ground-truth constrained parameters per subject.
     subject_estimates
         Recovered estimates per subject.
+    population_true_params
+        True population-level parameters (mu/sd on unconstrained scale).
+        Populated only for hierarchical Bayes fits with unconstrained-scale
+        ``ParamDist`` entries. Keys follow the pattern ``mu_{param}_z`` and
+        ``sd_{param}_z``.
+    population_estimates
+        Posterior means of population-level parameters. Same key convention
+        as ``population_true_params``.
+    population_posterior_samples
+        Full posterior draws for population-level parameters, used to compute
+        credible-interval coverage.
     """
 
     replication_index: int
     true_params: dict[str, dict[str, float]]
     subject_estimates: tuple[SubjectEstimates, ...]
+    population_true_params: dict[str, float] | None = None
+    population_estimates: dict[str, float] | None = None
+    population_posterior_samples: dict[str, np.ndarray] | None = None
+
+
+def extract_population_estimates(
+    result: BayesFitResult,
+    param_names: Sequence[str],
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+    """Extract population-level mu/sd estimates from a hierarchical Bayes fit.
+
+    Looks for keys of the form ``mu_{param}_z`` and ``sd_{param}_z`` in the
+    posterior samples (1-D arrays, one draw per MCMC sample).
+
+    Parameters
+    ----------
+    result
+        Bayesian fit result with posterior samples.
+    param_names
+        Subject-level parameter names (e.g. ``["alpha", "beta"]``).
+
+    Returns
+    -------
+    point_estimates
+        Posterior means keyed by ``mu_{param}_z`` / ``sd_{param}_z``.
+    posterior_samples
+        Full draw arrays for the same keys.
+    """
+
+    point: dict[str, float] = {}
+    samples: dict[str, np.ndarray] = {}
+    for name in param_names:
+        for prefix in ("mu", "sd"):
+            key = f"{prefix}_{name}_z"
+            if key in result.posterior_samples:
+                draws = result.posterior_samples[key]
+                point[key] = float(np.mean(draws))
+                samples[key] = draws
+    return point, samples
 
 
 def extract_mle_estimates(

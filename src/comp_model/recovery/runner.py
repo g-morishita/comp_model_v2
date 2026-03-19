@@ -13,11 +13,12 @@ from tqdm import tqdm
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
-from comp_model.recovery.config import sample_true_params
+from comp_model.recovery.config import get_true_population_params, sample_true_params
 from comp_model.recovery.extraction import (
     ReplicationEstimates,
     extract_bayes_estimates,
     extract_mle_estimates,
+    extract_population_estimates,
 )
 from comp_model.runtime import SimulationConfig, simulate_subject
 
@@ -209,10 +210,15 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
             param_names,
             config.layout,  # type: ignore[arg-type]
         )
+        pop_point, pop_samples = extract_population_estimates(result, param_names)
+        true_pop = get_true_population_params(config.param_dists, config.kernel)
         return ReplicationEstimates(
             replication_index=r,
             true_params=true_table,
             subject_estimates=estimates,
+            population_true_params=true_pop or None,
+            population_estimates=pop_point or None,
+            population_posterior_samples=pop_samples or None,
         )
 
     with tqdm(total=config.n_replications, desc="Recovery (Stan)", unit="rep") as pbar:
