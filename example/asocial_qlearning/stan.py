@@ -31,6 +31,7 @@ def softplus_vec(x: np.ndarray) -> np.ndarray:
 def inv_softplus_vec(x: np.ndarray) -> np.ndarray:
     return np.log(np.expm1(x))
 
+
 # ── 1. Define task ──────────────────────────────────────────────────────────
 N_ACTIONS = 2
 N_TRIALS = 200
@@ -55,9 +56,9 @@ REWARD_PROBS = (0.8, 0.2)
 kernel = AsocialQLearningKernel()
 
 # Population-level ground truth (unconstrained scale)
-TRUE_MU_ALPHA_Z = float(inv_sigmoid_vec(0.3))   # ≈ -0.847
+TRUE_MU_ALPHA_Z = float(inv_sigmoid_vec(0.3))  # ≈ -0.847
 TRUE_SD_ALPHA_Z = 0.5
-TRUE_MU_BETA_Z = float(inv_softplus_vec(np.array(2.0)))   # ≈ 1.687
+TRUE_MU_BETA_Z = float(inv_softplus_vec(np.array(2.0)))  # ≈ 1.687
 TRUE_SD_BETA_Z = 0.5
 
 rng = np.random.default_rng(123)
@@ -75,14 +76,14 @@ params_per_subject = {
 print("Ground-truth per-subject parameters:")
 for sid, p in params_per_subject.items():
     print(f"  {sid}: alpha={p.alpha:.3f}, beta={p.beta:.3f}")
-print(f"Population: mu_alpha={float(sigmoid_vec(TRUE_MU_ALPHA_Z)):.3f}, "
-      f"mu_beta={float(softplus_vec(np.array(TRUE_MU_BETA_Z))):.3f}")
+print(
+    f"Population: mu_alpha={float(sigmoid_vec(TRUE_MU_ALPHA_Z)):.3f}, "
+    f"mu_beta={float(softplus_vec(np.array(TRUE_MU_BETA_Z))):.3f}"
+)
 
 dataset = simulate_dataset(
     task=task,
-    env_factory=lambda: StationaryBanditEnvironment(
-        n_actions=N_ACTIONS, reward_probs=REWARD_PROBS
-    ),
+    env_factory=lambda: StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS),
     kernel=kernel,
     params_per_subject=params_per_subject,
     config=SimulationConfig(seed=42),

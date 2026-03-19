@@ -77,6 +77,8 @@ def fit(
         )
         fit_stan = stan_backend.fit_stan
 
-        return fit_stan(adapter, data, schema, config.hierarchy, layout, config.stan_config)
+        return fit_stan(
+            adapter, data, schema, config.hierarchy, layout, config.stan_config, config.prior_specs
+        )
 
     raise ValueError(f"Unknown backend: {config.backend!r}")

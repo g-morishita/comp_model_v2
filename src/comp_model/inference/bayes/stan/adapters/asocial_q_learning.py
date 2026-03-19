@@ -17,7 +17,7 @@ from comp_model.inference.bayes.stan.data_builder import (
     dataset_to_step_data,
     subject_to_step_data,
 )
-from comp_model.inference.config import HierarchyStructure
+from comp_model.inference.config import HierarchyStructure, PriorSpec
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
 
 if TYPE_CHECKING:
@@ -76,6 +76,7 @@ class AsocialQLearningStanAdapter:
         schema: TrialSchema,
         hierarchy: HierarchyStructure,
         layout: SharedDeltaLayout | None = None,
+        prior_specs: dict[str, PriorSpec] | None = None,
     ) -> dict[str, Any]:
         """Build Stan data for the asocial Q-learning programs.
 
@@ -89,6 +90,8 @@ class AsocialQLearningStanAdapter:
             Hierarchy structure targeted by the Stan program.
         layout
             Optional condition-aware parameter layout.
+        prior_specs
+            Optional mapping from parameter name to prior specification.
 
         Returns
         -------
@@ -123,7 +126,7 @@ class AsocialQLearningStanAdapter:
             )
 
         # Add prior, reset, and initial value data
-        add_prior_data(stan_data, kspec)
+        add_prior_data(stan_data, kspec, prior_specs)
         add_state_reset_data(stan_data, kspec)
         add_initial_value_data(stan_data, kspec)
 

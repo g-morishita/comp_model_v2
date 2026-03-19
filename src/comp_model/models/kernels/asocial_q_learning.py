@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec, PriorSpec
+from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
 
@@ -76,7 +76,6 @@ class AsocialQLearningKernel:
                     name="alpha",
                     transform_id="sigmoid",
                     description="learning rate",
-                    prior=PriorSpec(family="normal", kwargs={"mu": 0.0, "sigma": 1.5}),
                     mle_init=InitSpec(
                         strategy="fixed",
                         kwargs={},
@@ -87,7 +86,6 @@ class AsocialQLearningKernel:
                     name="beta",
                     transform_id="softplus",
                     description="inverse temperature",
-                    prior=PriorSpec(family="normal", kwargs={"mu": 0.0, "sigma": 2.0}),
                     mle_init=InitSpec(
                         strategy="fixed",
                         kwargs={},

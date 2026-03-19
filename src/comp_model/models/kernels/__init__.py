@@ -6,7 +6,6 @@ from comp_model.models.kernels.base import (
     ModelKernel,
     ModelKernelSpec,
     ParameterSpec,
-    PriorSpec,
 )
 from comp_model.models.kernels.social_observed_outcome_q import (
     SocialObservedOutcomeQKernel,
@@ -22,7 +21,6 @@ __all__ = [
     "ModelKernel",
     "ModelKernelSpec",
     "ParameterSpec",
-    "PriorSpec",
     "QParams",
     "QState",
     "SocialObservedOutcomeQKernel",

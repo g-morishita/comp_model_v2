@@ -81,9 +81,7 @@ for i in range(N_SUBJECTS):
     blocks = []
     for block_idx, block_spec in enumerate(task.blocks):
         condition = block_spec.condition
-        env = StationaryBanditEnvironment(
-            n_actions=N_ACTIONS, reward_probs=REWARD_PROBS[condition]
-        )
+        env = StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS[condition])
         sub = simulate_subject(
             task=TaskSpec(task_id="tmp", blocks=(block_spec,)),
             env=env,
@@ -119,14 +117,17 @@ adapter = AsocialQLearningStanAdapter()
 sigmoid = get_transform("sigmoid")
 softplus = get_transform("softplus")
 
-print(f"\n{'Subject':<10} {'Cond':<8} {'True a':>8} {'Post. a':>10} "
-      f"{'True b':>8} {'Post. b':>10}")
+print(f"\n{'Subject':<10} {'Cond':<8} {'True a':>8} {'Post. a':>10} {'True b':>8} {'Post. b':>10}")
 print("-" * 60)
 
 for subject in dataset.subjects:
     result = fit(
-        stan_config, kernel, subject, ASOCIAL_BANDIT_SCHEMA,
-        layout=layout, adapter=adapter,
+        stan_config,
+        kernel,
+        subject,
+        ASOCIAL_BANDIT_SCHEMA,
+        layout=layout,
+        adapter=adapter,
     )
 
     # alpha, beta are vectors of size C in posterior samples

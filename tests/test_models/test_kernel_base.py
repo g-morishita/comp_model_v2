@@ -1,10 +1,10 @@
 """Tests for kernel metadata structures."""
 
-from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec, PriorSpec
+from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec
 
 
-def test_parameter_spec_captures_prior_and_init_metadata() -> None:
-    """Ensure parameter metadata stores prior and init specifications.
+def test_parameter_spec_captures_init_metadata() -> None:
+    """Ensure parameter metadata stores init specification.
 
     Returns
     -------
@@ -12,17 +12,14 @@ def test_parameter_spec_captures_prior_and_init_metadata() -> None:
         This test asserts stored dataclass values.
     """
 
-    prior = PriorSpec(family="normal", kwargs={"mu": 0.0, "sigma": 1.0})
     init = InitSpec(strategy="fixed", kwargs={}, default_unconstrained=0.5)
     parameter = ParameterSpec(
         name="alpha",
         transform_id="sigmoid",
         description="learning rate",
-        prior=prior,
         mle_init=init,
     )
 
-    assert parameter.prior == prior
     assert parameter.mle_init == init
 
 

@@ -17,31 +17,6 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class PriorSpec:
-    """Prior metadata for a model parameter.
-
-    Attributes
-    ----------
-    family
-        Prior family identifier, such as ``"normal"``.
-    kwargs
-        Hyperparameters for the prior family.
-    parameterization
-        Scale on which the prior is defined.
-
-    Notes
-    -----
-    Priors are declared on the model side so that MLE and Bayesian backends can
-    share one kernel specification even though only the Bayesian backend uses
-    the prior values directly.
-    """
-
-    family: str
-    kwargs: Mapping[str, float]
-    parameterization: str = "unconstrained"
-
-
-@dataclass(frozen=True, slots=True)
 class InitSpec:
     """Initialization metadata for MLE optimization.
 
@@ -77,8 +52,6 @@ class ParameterSpec:
         Identifier in the transform registry.
     description
         Human-readable description of the parameter.
-    prior
-        Optional prior metadata for Bayesian inference.
     mle_init
         Optional initialization metadata for MLE.
 
@@ -92,7 +65,6 @@ class ParameterSpec:
     name: str
     transform_id: str
     description: str = ""
-    prior: PriorSpec | None = None
     mle_init: InitSpec | None = None
 
 

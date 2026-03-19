@@ -82,9 +82,7 @@ for i in range(N_SUBJECTS):
     blocks = []
     for block_idx, block_spec in enumerate(task.blocks):
         condition = block_spec.condition
-        env = StationaryBanditEnvironment(
-            n_actions=N_ACTIONS, reward_probs=REWARD_PROBS[condition]
-        )
+        env = StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS[condition])
         params = TRUE_PARAMS[condition]
         sub = simulate_subject(
             task=TaskSpec(
@@ -126,11 +124,7 @@ mle_config = InferenceConfig(
 sigmoid = get_transform("sigmoid")
 softplus = get_transform("softplus")
 
-print(
-    f"\n{'Subject':<10} {'Cond':<8} "
-    f"{'True a':>8} {'Fit a':>8} "
-    f"{'True b':>8} {'Fit b':>8}"
-)
+print(f"\n{'Subject':<10} {'Cond':<8} {'True a':>8} {'Fit a':>8} {'True b':>8} {'Fit b':>8}")
 print("-" * 56)
 
 for subject in dataset.subjects:
@@ -145,9 +139,6 @@ for subject in dataset.subjects:
             f"{true_p.alpha:>8.3f} {fit_alpha:>8.3f} "
             f"{true_p.beta:>8.3f} {fit_beta:>8.3f}"
         )
-    print(
-        f"  -> LL={result.log_likelihood:.2f}, "
-        f"AIC={result.aic:.2f}, BIC={result.bic:.2f}"
-    )
+    print(f"  -> LL={result.log_likelihood:.2f}, AIC={result.aic:.2f}, BIC={result.bic:.2f}")
 
 print("\nDone.")
