@@ -11,8 +11,8 @@ import pytest
 from comp_model.data.extractors import extract_decision_views
 from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.inference.bayes.stan.data_builder import subject_to_step_data
-from comp_model.models.kernels.social_observed_outcome_q import (
-    SocialObservedOutcomeQKernel,
+from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
+    SocialRlSelfRewardDemoRewardKernel,
 )
 from comp_model.models.kernels.transforms import get_transform
 from comp_model.tasks.schemas import SOCIAL_PRE_CHOICE_SCHEMA
@@ -71,20 +71,25 @@ def _social_trial(
                 },
             ),
             Event(
-                phase=EventPhase.DECISION,
+                phase=EventPhase.UPDATE,
                 event_index=2,
+                node_id="main",
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=3,
                 node_id="main",
                 payload={"action": action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=3,
+                event_index=4,
                 node_id="main",
                 payload={"reward": reward},
             ),
             Event(
                 phase=EventPhase.UPDATE,
-                event_index=4,
+                event_index=5,
                 node_id="main",
             ),
         ),
@@ -142,7 +147,7 @@ def _python_social_log_likelihoods(
         Per-trial log-likelihood values.
     """
 
-    kernel = SocialObservedOutcomeQKernel()
+    kernel = SocialRlSelfRewardDemoRewardKernel()
     raw_params = {
         "alpha_self": get_transform("sigmoid").inverse(alpha_self),
         "alpha_other": get_transform("sigmoid").inverse(alpha_other),
@@ -215,7 +220,7 @@ def _social_step_data(subject: SubjectData) -> dict[str, Any]:
         Step-stream Stan data dict with social fields.
     """
 
-    kernel_spec = SocialObservedOutcomeQKernel.spec()
+    kernel_spec = SocialRlSelfRewardDemoRewardKernel.spec()
     return subject_to_step_data(
         subject,
         SOCIAL_PRE_CHOICE_SCHEMA,

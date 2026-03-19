@@ -2,7 +2,7 @@
 
 from comp_model.inference.bayes.stan.adapters import (
     AsocialQLearningStanAdapter,
-    SocialObservedOutcomeQStanAdapter,
+    SocialRlSelfRewardDemoRewardStanAdapter,
     StanAdapter,
 )
 from comp_model.inference.bayes.stan.backend import (
@@ -21,7 +21,7 @@ from comp_model.inference.bayes.stan.data_builder import (
 __all__ = (
     "DEFAULT_STAN_FIT_CONFIG",
     "AsocialQLearningStanAdapter",
-    "SocialObservedOutcomeQStanAdapter",
+    "SocialRlSelfRewardDemoRewardStanAdapter",
     "StanAdapter",
     "StanFitConfig",
     "add_condition_data",

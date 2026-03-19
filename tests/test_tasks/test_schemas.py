@@ -51,9 +51,10 @@ def test_social_pre_choice_schema_accepts_matching_trial() -> None:
                     "observation": {"social_action": 1, "social_reward": 0.0},
                 },
             ),
-            Event(phase=EventPhase.DECISION, event_index=2, node_id="main", payload={"action": 1}),
-            Event(phase=EventPhase.OUTCOME, event_index=3, node_id="main", payload={"reward": 1.0}),
-            Event(phase=EventPhase.UPDATE, event_index=4, node_id="main", payload={}),
+            Event(phase=EventPhase.UPDATE, event_index=2, node_id="main", payload={}),
+            Event(phase=EventPhase.DECISION, event_index=3, node_id="main", payload={"action": 1}),
+            Event(phase=EventPhase.OUTCOME, event_index=4, node_id="main", payload={"reward": 1.0}),
+            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
         ),
     )
 

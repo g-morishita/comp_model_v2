@@ -1,8 +1,4 @@
-"""Stan adapter for the social observed-outcome Q-learning kernel.
-
-Adapters isolate Stan-specific choices such as program filenames, data export,
-and which posterior variables should be read back from a completed fit.
-"""
+"""Stan adapter for the social self-reward + demo-reward RL kernel."""
 
 from __future__ import annotations
 
@@ -18,8 +14,8 @@ from comp_model.inference.bayes.stan.data_builder import (
     subject_to_step_data,
 )
 from comp_model.inference.config import HierarchyStructure, PriorSpec
-from comp_model.models.kernels.social_observed_outcome_q import (
-    SocialObservedOutcomeQKernel,
+from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
+    SocialRlSelfRewardDemoRewardKernel,
 )
 
 if TYPE_CHECKING:
@@ -28,42 +24,13 @@ if TYPE_CHECKING:
     from comp_model.tasks.schemas import TrialSchema
 
 
-class SocialObservedOutcomeQStanAdapter:
-    """Stan adapter for the social observed-outcome Q-learning kernel.
-
-    Notes
-    -----
-    The adapter supports the social Q-learning family and uses a filename
-    convention based on ``model_id`` and hierarchy name. Social step fields
-    (``step_social_action``, ``step_social_reward``) are always included in
-    the exported data.
-    """
+class SocialRlSelfRewardDemoRewardStanAdapter:
+    """Stan adapter for the social self-reward + demo-reward RL kernel."""
 
     def kernel_spec(self) -> ModelKernelSpec:
-        """Return the kernel specification served by this adapter.
-
-        Returns
-        -------
-        ModelKernelSpec
-            Static kernel metadata.
-        """
-
-        return SocialObservedOutcomeQKernel.spec()
+        return SocialRlSelfRewardDemoRewardKernel.spec()
 
     def stan_program_path(self, hierarchy: HierarchyStructure) -> str:
-        """Return the Stan program path for the requested hierarchy.
-
-        Parameters
-        ----------
-        hierarchy
-            Hierarchy structure whose Stan program is requested.
-
-        Returns
-        -------
-        str
-            Absolute path to the Stan program file.
-        """
-
         programs_dir = Path(__file__).resolve().parent.parent / "programs"
         filename = f"{self.kernel_spec().model_id}__{hierarchy.value}.stan"
         return str(programs_dir / filename)
@@ -76,30 +43,8 @@ class SocialObservedOutcomeQStanAdapter:
         layout: SharedDeltaLayout | None = None,
         prior_specs: dict[str, PriorSpec] | None = None,
     ) -> dict[str, Any]:
-        """Build Stan data for the social Q-learning programs.
-
-        Parameters
-        ----------
-        data
-            Subject or dataset to export.
-        schema
-            Trial schema used for replay extraction.
-        hierarchy
-            Hierarchy structure targeted by the Stan program.
-        layout
-            Optional condition-aware parameter layout.
-        prior_specs
-            Optional mapping from parameter name to prior specification.
-
-        Returns
-        -------
-        dict[str, Any]
-            Stan-ready data dictionary including social step fields.
-        """
-
         kspec = self.kernel_spec()
 
-        # Build condition map if needed
         condition_map: dict[str, int] | None = None
         if layout is not None and hierarchy in (
             HierarchyStructure.SUBJECT_BLOCK_CONDITION,
@@ -107,7 +52,6 @@ class SocialObservedOutcomeQStanAdapter:
         ):
             condition_map = {cond: idx for idx, cond in enumerate(layout.conditions, start=1)}
 
-        # Build step-stream data with social fields
         if isinstance(data, SubjectData):
             stan_data = subject_to_step_data(
                 data,
@@ -125,12 +69,10 @@ class SocialObservedOutcomeQStanAdapter:
                 include_social=True,
             )
 
-        # Add prior, reset, and initial value data
         add_prior_data(stan_data, kspec, prior_specs)
         add_state_reset_data(stan_data, kspec)
         add_initial_value_data(stan_data, kspec)
 
-        # Add condition metadata for condition-aware hierarchies
         if layout is not None and condition_map is not None:
             stan_data["C"] = len(layout.conditions)
             stan_data["baseline_cond"] = condition_map[layout.baseline_condition]
@@ -138,32 +80,9 @@ class SocialObservedOutcomeQStanAdapter:
         return stan_data
 
     def subject_param_names(self) -> tuple[str, ...]:
-        """Return subject-level parameter names extracted from Stan fits.
-
-        Returns
-        -------
-        tuple[str, ...]
-            Subject-level parameter names expected in the Stan generated
-            quantities or transformed parameters blocks.
-        """
-
         return ("alpha_self", "alpha_other", "beta")
 
     def population_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
-        """Return population-level parameter names for the hierarchy.
-
-        Parameters
-        ----------
-        hierarchy
-            Hierarchy structure targeted by the Stan program.
-
-        Returns
-        -------
-        tuple[str, ...]
-            Population-level parameter names. Subject-shared fits have no
-            separate population-level outputs.
-        """
-
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
             return ()
         if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:

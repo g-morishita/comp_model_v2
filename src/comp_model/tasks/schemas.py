@@ -155,6 +155,7 @@ SOCIAL_PRE_CHOICE_SCHEMA = TrialSchema(
     steps=(
         TrialSchemaStep(EventPhase.INPUT, "main"),
         TrialSchemaStep(EventPhase.INPUT, "main", actor_id="demonstrator"),
+        TrialSchemaStep(EventPhase.UPDATE, "main"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
         TrialSchemaStep(EventPhase.UPDATE, "main"),

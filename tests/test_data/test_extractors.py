@@ -80,19 +80,20 @@ def test_extract_social_pre_choice_view_reads_social_fields() -> None:
                     "observation": {"social_action": 0, "social_reward": 1.0},
                 },
             ),
+            Event(phase=EventPhase.UPDATE, event_index=2, node_id="main", payload={}),
             Event(
                 phase=EventPhase.DECISION,
-                event_index=2,
+                event_index=3,
                 node_id="main",
                 payload={"action": 1},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=3,
+                event_index=4,
                 node_id="main",
                 payload={"reward": 0.0},
             ),
-            Event(phase=EventPhase.UPDATE, event_index=4, node_id="main", payload={}),
+            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
         ),
     )
 

@@ -1,7 +1,8 @@
-"""Social Q-learning kernel with observed demonstrator outcomes.
+"""Social RL kernel updating from self reward and demonstrator reward.
 
-This kernel extends the asocial Q-learning rule with a second learning rate for
-observed demonstrator outcomes.
+This kernel extends the asocial RL update with a second learning rate for
+observed demonstrator outcomes. The demonstrator's action is used only as an
+index to identify which Q-value to update.
 """
 
 from __future__ import annotations
@@ -18,8 +19,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class SocialQParams:
-    """Parsed parameters for the social observed-outcome kernel.
+class SocialRlSelfRewardDemoRewardParams:
+    """Parsed parameters for the social self-reward + demo-reward kernel.
 
     Attributes
     ----------
@@ -37,8 +38,8 @@ class SocialQParams:
 
 
 @dataclass(slots=True)
-class SocialQState:
-    """Latent Q-values for a socially informed learning agent.
+class SocialRlSelfRewardDemoRewardState:
+    """Latent state for a social self-reward + demo-reward agent.
 
     Attributes
     ----------
@@ -49,19 +50,23 @@ class SocialQState:
     q_values: list[float]
 
 
-class SocialObservedOutcomeQKernel:
-    """Q-learning kernel that updates from self and demonstrator outcomes.
+class SocialRlSelfRewardDemoRewardKernel:
+    """Social RL kernel that updates from self reward and demonstrator reward.
 
     Notes
     -----
-    The kernel still consumes only flat decision views. Whether demonstrator
-    information appeared before the subject's choice or after the outcome is a
-    schema concern handled by extraction.
+    The demonstrator's action is used only as an index identifying which
+    Q-value to update with the demonstrator's reward. The active learning
+    signals are the self reward and the demonstrator reward; the demonstrator
+    action carries no independent learning signal.
+
+    Whether demonstrator information appeared before the subject's choice or
+    after the outcome is a schema concern handled by extraction.
     """
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
-        """Return static metadata for the social kernel.
+        """Return static metadata for this kernel.
 
         Returns
         -------
@@ -71,7 +76,7 @@ class SocialObservedOutcomeQKernel:
         """
 
         return ModelKernelSpec(
-            model_id="social_observed_outcome_q",
+            model_id="social_rl_self_reward_demo_reward",
             parameter_specs=(
                 ParameterSpec(
                     name="alpha_self",
@@ -93,8 +98,8 @@ class SocialObservedOutcomeQKernel:
             state_reset_policy="per_subject",
         )
 
-    def parse_params(self, raw: dict[str, float]) -> SocialQParams:
-        """Transform unconstrained parameters into typed social parameters.
+    def parse_params(self, raw: dict[str, float]) -> SocialRlSelfRewardDemoRewardParams:
+        """Transform unconstrained parameters into typed kernel parameters.
 
         Parameters
         ----------
@@ -103,18 +108,20 @@ class SocialObservedOutcomeQKernel:
 
         Returns
         -------
-        SocialQParams
+        SocialRlSelfRewardDemoRewardParams
             Typed parameter object after applying the shared transform registry.
         """
 
-        return SocialQParams(
+        return SocialRlSelfRewardDemoRewardParams(
             alpha_self=get_transform("sigmoid").forward(raw["alpha_self"]),
             alpha_other=get_transform("sigmoid").forward(raw["alpha_other"]),
             beta=get_transform("softplus").forward(raw["beta"]),
         )
 
-    def initial_state(self, n_actions: int, params: SocialQParams) -> SocialQState:
-        """Construct the initial latent Q-state.
+    def initial_state(
+        self, n_actions: int, params: SocialRlSelfRewardDemoRewardParams
+    ) -> SocialRlSelfRewardDemoRewardState:
+        """Construct the initial latent state.
 
         Parameters
         ----------
@@ -125,25 +132,25 @@ class SocialObservedOutcomeQKernel:
 
         Returns
         -------
-        SocialQState
+        SocialRlSelfRewardDemoRewardState
             Initial Q-values set to ``0.5``.
         """
 
         del params
-        return SocialQState(q_values=[self.spec().initial_value] * n_actions)
+        return SocialRlSelfRewardDemoRewardState(q_values=[self.spec().initial_value] * n_actions)
 
     def action_probabilities(
         self,
-        state: SocialQState,
+        state: SocialRlSelfRewardDemoRewardState,
         view: DecisionTrialView,
-        params: SocialQParams,
+        params: SocialRlSelfRewardDemoRewardParams,
     ) -> tuple[float, ...]:
         """Compute softmax action probabilities for the current state.
 
         Parameters
         ----------
         state
-            Current latent Q-values.
+            Current latent state.
         view
             Extracted decision record.
         params
@@ -153,12 +160,6 @@ class SocialObservedOutcomeQKernel:
         -------
         tuple[float, ...]
             Probabilities aligned with ``view.available_actions``.
-
-        Notes
-        -----
-        Choice probabilities depend only on the agent's current latent Q-values
-        and the legal actions in ``view``. Social information influences choice
-        indirectly through past updates.
         """
 
         logits = [params.beta * state.q_values[action] for action in view.available_actions]
@@ -166,16 +167,16 @@ class SocialObservedOutcomeQKernel:
 
     def next_state(
         self,
-        state: SocialQState,
+        state: SocialRlSelfRewardDemoRewardState,
         view: DecisionTrialView,
-        params: SocialQParams,
-    ) -> SocialQState:
-        """Update Q-values from self and social outcomes.
+        params: SocialRlSelfRewardDemoRewardParams,
+    ) -> SocialRlSelfRewardDemoRewardState:
+        """Update Q-values from self reward and demonstrator reward.
 
         Parameters
         ----------
         state
-            Current latent Q-values.
+            Current latent state.
         view
             Extracted decision record.
         params
@@ -183,14 +184,15 @@ class SocialObservedOutcomeQKernel:
 
         Returns
         -------
-        SocialQState
+        SocialRlSelfRewardDemoRewardState
             Updated latent state.
 
         Notes
         -----
-        The subject's chosen action is updated with ``alpha_self`` when a reward
-        is present. If demonstrator action and reward are both present, the
-        observed action is updated separately with ``alpha_other``.
+        The subject's chosen action is updated with ``alpha_self`` when a
+        reward is present. If demonstrator action and reward are both present,
+        the observed action is updated with ``alpha_other`` using the
+        demonstrator reward as the learning signal.
         """
 
         updated_q_values = list(state.q_values)
@@ -202,4 +204,4 @@ class SocialObservedOutcomeQKernel:
             updated_q_values[view.social_action] += params.alpha_other * (
                 view.social_reward - updated_q_values[view.social_action]
             )
-        return SocialQState(q_values=updated_q_values)
+        return SocialRlSelfRewardDemoRewardState(q_values=updated_q_values)

@@ -111,7 +111,8 @@ def test_load_social_pre_choice_reconstructs_demonstrator_before_decision(
     trial = loaded_dataset.subjects[0].blocks[0].trials[0]
     assert trial.events[1].phase == EventPhase.INPUT
     assert trial.events[1].actor_id == "demonstrator"
-    assert trial.events[2].phase == EventPhase.DECISION
+    assert trial.events[2].phase == EventPhase.UPDATE
+    assert trial.events[3].phase == EventPhase.DECISION
 
 
 def test_load_social_post_outcome_reconstructs_demonstrator_after_outcome(
@@ -502,20 +503,26 @@ def _make_social_pre_choice_dataset() -> Dataset:
                                         },
                                     ),
                                     Event(
-                                        phase=EventPhase.DECISION,
+                                        phase=EventPhase.UPDATE,
                                         event_index=2,
+                                        node_id="main",
+                                        payload={},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.DECISION,
+                                        event_index=3,
                                         node_id="main",
                                         payload={"action": 1},
                                     ),
                                     Event(
                                         phase=EventPhase.OUTCOME,
-                                        event_index=3,
+                                        event_index=4,
                                         node_id="main",
                                         payload={"reward": 0.0},
                                     ),
                                     Event(
                                         phase=EventPhase.UPDATE,
-                                        event_index=4,
+                                        event_index=5,
                                         node_id="main",
                                         payload={},
                                     ),
