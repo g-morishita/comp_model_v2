@@ -1,31 +1,39 @@
 """Kernel implementations and shared parameter transforms."""
 
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel, QParams, QState
+from comp_model.models.kernels.asocial_rl_asymmetric import (
+    AsocialRlAsymmetricKernel,
+    AsocialRlAsymmetricParams,
+    AsocialRlAsymmetricState,
+)
 from comp_model.models.kernels.base import (
     InitSpec,
     ModelKernel,
     ModelKernelSpec,
     ParameterSpec,
 )
-from comp_model.models.kernels.social_observed_outcome_q import (
-    SocialObservedOutcomeQKernel,
-    SocialQParams,
-    SocialQState,
+from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
+    SocialRlSelfRewardDemoRewardKernel,
+    SocialRlSelfRewardDemoRewardParams,
+    SocialRlSelfRewardDemoRewardState,
 )
 from comp_model.models.kernels.transforms import TRANSFORM_REGISTRY, Transform, get_transform
 
 __all__ = [
     "TRANSFORM_REGISTRY",
     "AsocialQLearningKernel",
+    "AsocialRlAsymmetricKernel",
+    "AsocialRlAsymmetricParams",
+    "AsocialRlAsymmetricState",
     "InitSpec",
     "ModelKernel",
     "ModelKernelSpec",
     "ParameterSpec",
     "QParams",
     "QState",
-    "SocialObservedOutcomeQKernel",
-    "SocialQParams",
-    "SocialQState",
+    "SocialRlSelfRewardDemoRewardKernel",
+    "SocialRlSelfRewardDemoRewardParams",
+    "SocialRlSelfRewardDemoRewardState",
     "Transform",
     "get_transform",
 ]

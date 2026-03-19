@@ -6,7 +6,7 @@ replications with parallel per-subject fitting and reports standard
 recovery metrics.
 
 Usage:
-    uv run python example/social_observed_outcome_q_mle_recovery.py
+    uv run python example/social_rl_self_reward_demo_reward_mle_recovery.py
 """
 
 from scipy import stats
@@ -14,7 +14,7 @@ from scipy import stats
 from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.inference.mle.optimize import MleOptimizerConfig
-from comp_model.models.kernels import SocialObservedOutcomeQKernel
+from comp_model.models.kernels import SocialRlSelfRewardDemoRewardKernel
 from comp_model.recovery import (
     ParamDist,
     RecoveryStudyConfig,
@@ -43,7 +43,7 @@ def main() -> None:
     )
 
     # -- 2. Configure recovery study -------------------------------------------
-    kernel = SocialObservedOutcomeQKernel()
+    kernel = SocialRlSelfRewardDemoRewardKernel()
 
     config = RecoveryStudyConfig(
         n_replications=100,

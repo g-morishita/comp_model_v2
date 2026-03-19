@@ -1,4 +1,4 @@
-"""Simulate social Q-learning agents with post-outcome demonstrator observation,
+"""Simulate social Q-learning agents with pre-choice demonstrator observation,
 then recover parameters with hierarchical Stan (NUTS) inference.
 
 Per-subject parameters are sampled from a population distribution:
@@ -17,12 +17,12 @@ from scipy.special import logit as inv_sigmoid_vec
 
 from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
 from comp_model.inference import fit
-from comp_model.inference.bayes.stan import SocialObservedOutcomeQStanAdapter, StanFitConfig
+from comp_model.inference.bayes.stan import SocialRlSelfRewardDemoRewardStanAdapter, StanFitConfig
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.io import save_dataset_to_csv
-from comp_model.models.kernels import SocialObservedOutcomeQKernel, SocialQParams
+from comp_model.models.kernels import SocialQParams, SocialRlSelfRewardDemoRewardKernel
 from comp_model.runtime import SimulationConfig, simulate_dataset
-from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
+from comp_model.tasks import SOCIAL_PRE_CHOICE_SCHEMA, BlockSpec, TaskSpec
 
 
 def softplus_vec(x: np.ndarray) -> np.ndarray:
@@ -40,19 +40,19 @@ N_SUBJECTS = 15
 REWARD_PROBS = (0.8, 0.2)
 
 task = TaskSpec(
-    task_id="social_post_outcome",
+    task_id="social_pre_choice",
     blocks=(
         BlockSpec(
             condition="social",
             n_trials=N_TRIALS,
-            schema=SOCIAL_POST_OUTCOME_SCHEMA,
+            schema=SOCIAL_PRE_CHOICE_SCHEMA,
             metadata={"n_actions": N_ACTIONS},
         ),
     ),
 )
 
 # ── 2. Sample ground-truth parameters from a population distribution ───────
-kernel = SocialObservedOutcomeQKernel()
+kernel = SocialRlSelfRewardDemoRewardKernel()
 
 TRUE_MU_ALPHA_SELF_Z = float(inv_sigmoid_vec(0.3))
 TRUE_SD_ALPHA_SELF_Z = 0.5
@@ -105,8 +105,8 @@ dataset = simulate_dataset(
 )
 
 # ── 4. Save to CSV ─────────────────────────────────────────────────────────
-csv_path = Path(__file__).parent / "post_outcome_data.csv"
-save_dataset_to_csv(dataset, schema=SOCIAL_POST_OUTCOME_SCHEMA, path=csv_path)
+csv_path = Path(__file__).parent / "data.csv"
+save_dataset_to_csv(dataset, schema=SOCIAL_PRE_CHOICE_SCHEMA, path=csv_path)
 print(f"Saved {len(dataset.subjects)} subjects to {csv_path}")
 
 # ── 5. Fit with Stan ───────────────────────────────────────────────────────
@@ -116,8 +116,8 @@ stan_config = InferenceConfig(
     stan_config=StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42),
 )
 
-adapter = SocialObservedOutcomeQStanAdapter()
-result = fit(stan_config, kernel, dataset, SOCIAL_POST_OUTCOME_SCHEMA, adapter=adapter)
+adapter = SocialRlSelfRewardDemoRewardStanAdapter()
+result = fit(stan_config, kernel, dataset, SOCIAL_PRE_CHOICE_SCHEMA, adapter=adapter)
 
 # ── 6. Report results ──────────────────────────────────────────────────────
 print(f"\nModel: {result.model_id}")

@@ -88,7 +88,9 @@ def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
             true_table, params_per_subject = sample_true_params(
                 config.param_dists, config.kernel, config.n_subjects, rng, config.layout
             )
-            dataset = _simulate_dataset(config, params_per_subject)
+            dataset = _simulate_dataset(
+                config, params_per_subject, seed=config.simulation_base_seed + r
+            )
 
             if max_workers > 1:
                 with ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -151,7 +153,9 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
         true_table, params_per_subject = sample_true_params(
             config.param_dists, config.kernel, config.n_subjects, rng, config.layout
         )
-        dataset = _simulate_dataset(config, params_per_subject)
+        dataset = _simulate_dataset(
+            config, params_per_subject, seed=config.simulation_base_seed + r
+        )
         simulated.append((r, true_table, dataset))
 
     max_workers = config.max_workers
@@ -235,6 +239,7 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 def _simulate_dataset(
     config: RecoveryStudyConfig,
     params_per_subject: dict[str, Any],
+    seed: int,
 ) -> Dataset:
     """Simulate a dataset for one recovery replication.
 
@@ -252,14 +257,15 @@ def _simulate_dataset(
     """
 
     if config.layout is not None:
-        return _simulate_condition_aware(config, params_per_subject)
+        return _simulate_condition_aware(config, params_per_subject, seed=seed)
 
-    return _simulate_simple(config, params_per_subject)
+    return _simulate_simple(config, params_per_subject, seed=seed)
 
 
 def _simulate_simple(
     config: RecoveryStudyConfig,
     params_per_subject: dict[str, Any],
+    seed: int,
 ) -> Dataset:
     """Simulate a dataset without condition-specific parameter structure.
 
@@ -283,13 +289,14 @@ def _simulate_simple(
         env_factory=config.env_factory,
         kernel=config.kernel,
         params_per_subject=params_per_subject,
-        config=SimulationConfig(seed=config.simulation_base_seed),
+        config=SimulationConfig(seed=seed),
     )
 
 
 def _simulate_condition_aware(
     config: RecoveryStudyConfig,
     params_per_subject: dict[str, Any],
+    seed: int,
 ) -> Dataset:
     """Simulate a dataset with per-condition parameter dictionaries.
 
@@ -319,7 +326,7 @@ def _simulate_condition_aware(
                 env=env,
                 kernel=config.kernel,
                 params=condition_params[condition],
-                config=SimulationConfig(seed=config.simulation_base_seed + i * 1000 + block_idx),
+                config=SimulationConfig(seed=seed + i * 1000 + block_idx),
                 subject_id=sid,
             )
             blocks.append(

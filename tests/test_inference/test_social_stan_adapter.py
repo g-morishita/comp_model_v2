@@ -3,13 +3,13 @@
 from pathlib import Path
 
 from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
-from comp_model.inference.bayes.stan.adapters.social_observed_outcome_q import (
-    SocialObservedOutcomeQStanAdapter,
+from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward import (
+    SocialRlSelfRewardDemoRewardStanAdapter,
 )
 from comp_model.inference.config import HierarchyStructure
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
-from comp_model.models.kernels.social_observed_outcome_q import (
-    SocialObservedOutcomeQKernel,
+from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
+    SocialRlSelfRewardDemoRewardKernel,
 )
 from comp_model.tasks.schemas import SOCIAL_PRE_CHOICE_SCHEMA
 
@@ -61,20 +61,25 @@ def _social_trial(
                 },
             ),
             Event(
-                phase=EventPhase.DECISION,
+                phase=EventPhase.UPDATE,
                 event_index=2,
+                node_id="main",
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=3,
                 node_id="main",
                 payload={"action": action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=3,
+                event_index=4,
                 node_id="main",
                 payload={"reward": reward},
             ),
             Event(
                 phase=EventPhase.UPDATE,
-                event_index=4,
+                event_index=5,
                 node_id="main",
             ),
         ),
@@ -114,7 +119,7 @@ def test_social_adapter_program_paths_exist() -> None:
         This test asserts program path existence for all hierarchies.
     """
 
-    adapter = SocialObservedOutcomeQStanAdapter()
+    adapter = SocialRlSelfRewardDemoRewardStanAdapter()
 
     for hierarchy in HierarchyStructure:
         path = Path(adapter.stan_program_path(hierarchy))
@@ -130,7 +135,7 @@ def test_social_adapter_builds_subject_stan_data() -> None:
         This test asserts required Stan data keys.
     """
 
-    adapter = SocialObservedOutcomeQStanAdapter()
+    adapter = SocialRlSelfRewardDemoRewardStanAdapter()
     subject = _social_subject()
 
     stan_data = adapter.build_stan_data(
@@ -181,8 +186,8 @@ def test_social_adapter_adds_condition_data() -> None:
             ),
         ),
     )
-    adapter = SocialObservedOutcomeQStanAdapter()
-    kernel = SocialObservedOutcomeQKernel()
+    adapter = SocialRlSelfRewardDemoRewardStanAdapter()
+    kernel = SocialRlSelfRewardDemoRewardKernel()
     layout = SharedDeltaLayout(
         kernel_spec=kernel.spec(),
         conditions=("baseline", "social"),
@@ -210,5 +215,5 @@ def test_social_adapter_subject_param_names() -> None:
         This test asserts subject-level parameter names.
     """
 
-    adapter = SocialObservedOutcomeQStanAdapter()
+    adapter = SocialRlSelfRewardDemoRewardStanAdapter()
     assert adapter.subject_param_names() == ("alpha_self", "alpha_other", "beta")

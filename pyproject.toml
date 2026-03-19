@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-stan = ["cmdstanpy>=1.2"]
+stan = ["cmdstanpy>=1.2", "arviz>=0.16"]
 
 [dependency-groups]
 dev = [

@@ -1,19 +1,18 @@
-"""Parameter recovery for social observed-outcome Q-learning using hierarchical Stan.
+"""Parameter recovery for social observed-outcome Q-learning using per-subject Stan.
 
-Recovers per-subject parameters (alpha_self, alpha_other, beta) under a
-hierarchical (STUDY_SUBJECT) model with population-level priors.  Uses a
+Fits each subject independently with no pooling (SUBJECT_SHARED).  Uses a
 pre-choice demonstrator observation schema with a uniform demonstrator policy.
 
 Usage:
-    uv run python example/social_observed_outcome_q_stan_recovery.py
+    uv run python example/social_rl_self_reward_demo_reward_stan_per_subject_recovery.py
 """
 
 from scipy import stats
 
 from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
-from comp_model.inference.bayes.stan import SocialObservedOutcomeQStanAdapter, StanFitConfig
+from comp_model.inference.bayes.stan import SocialRlSelfRewardDemoRewardStanAdapter, StanFitConfig
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
-from comp_model.models.kernels import SocialObservedOutcomeQKernel
+from comp_model.models.kernels import SocialRlSelfRewardDemoRewardKernel
 from comp_model.recovery import (
     ParamDist,
     RecoveryStudyConfig,
@@ -40,8 +39,8 @@ def main() -> None:
         ),
     )
 
-    kernel = SocialObservedOutcomeQKernel()
-    adapter = SocialObservedOutcomeQStanAdapter()
+    kernel = SocialRlSelfRewardDemoRewardKernel()
+    adapter = SocialRlSelfRewardDemoRewardStanAdapter()
 
     config = RecoveryStudyConfig(
         n_replications=10,
@@ -59,7 +58,7 @@ def main() -> None:
         kernel=kernel,
         schema=SOCIAL_PRE_CHOICE_SCHEMA,
         inference_config=InferenceConfig(
-            hierarchy=HierarchyStructure.STUDY_SUBJECT,
+            hierarchy=HierarchyStructure.SUBJECT_SHARED,
             backend="stan",
             stan_config=StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42),
         ),
@@ -70,7 +69,7 @@ def main() -> None:
     print(f"Running {config.n_replications} reps x {config.n_subjects} subjects...")
     result = run_recovery(config)
     metrics = compute_recovery_metrics(result)
-    print("\nRecovery Metrics (hierarchical Stan):")
+    print("\nRecovery Metrics (per-subject Stan):")
     print(recovery_table(metrics))
     print("\nDone.")
 

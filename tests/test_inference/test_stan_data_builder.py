@@ -437,20 +437,25 @@ def test_step_data_includes_social_fields_when_requested() -> None:
                                 },
                             ),
                             Event(
-                                phase=EventPhase.DECISION,
+                                phase=EventPhase.UPDATE,
                                 event_index=2,
+                                node_id="main",
+                            ),
+                            Event(
+                                phase=EventPhase.DECISION,
+                                event_index=3,
                                 node_id="main",
                                 payload={"action": 0},
                             ),
                             Event(
                                 phase=EventPhase.OUTCOME,
-                                event_index=3,
+                                event_index=4,
                                 node_id="main",
                                 payload={"reward": 1.0},
                             ),
                             Event(
                                 phase=EventPhase.UPDATE,
-                                event_index=4,
+                                event_index=5,
                                 node_id="main",
                             ),
                         ),
