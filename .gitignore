@@ -5,11 +5,14 @@ comp_model_v3_plan.md
 .ruff_cache/
 .venv/
 __pycache__/
+# compiled Stan binaries under test directory (no extension = compiled binary)
 tests/test_inference/stan/condition_reconstruction
 tests/test_inference/stan/q_learning_loglik_fixed_params
+tests/test_inference/stan/social_q_learning_loglik_fixed_params
 
-# compiled Stan binaries
+# compiled Stan binaries under source tree
 src/comp_model/inference/bayes/stan/programs/asocial_q_learning__*
+src/comp_model/inference/bayes/stan/programs/social_observed_outcome_q__*
 !src/comp_model/inference/bayes/stan/programs/*.stan
 
 # generated example data
