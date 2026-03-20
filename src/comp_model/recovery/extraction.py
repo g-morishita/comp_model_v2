@@ -49,11 +49,80 @@ class ReplicationEstimates:
         Ground-truth constrained parameters per subject.
     subject_estimates
         Recovered estimates per subject.
+    population_true_params
+        True population-level parameters (mu/sd on unconstrained scale).
+        Populated only for hierarchical Bayes fits with unconstrained-scale
+        ``ParamDist`` entries. Keys follow the pattern ``mu_{param}_z`` and
+        ``sd_{param}_z``.
+    population_estimates
+        Posterior means of population-level parameters. Same key convention
+        as ``population_true_params``.
+    population_posterior_samples
+        Full posterior draws for population-level parameters, used to compute
+        credible-interval coverage.
     """
 
     replication_index: int
     true_params: dict[str, dict[str, float]]
     subject_estimates: tuple[SubjectEstimates, ...]
+    population_true_params: dict[str, float] | None = None
+    population_estimates: dict[str, float] | None = None
+    population_posterior_samples: dict[str, np.ndarray] | None = None
+
+
+def extract_population_estimates(
+    result: BayesFitResult,
+    param_names: Sequence[str],
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+    """Extract population-level estimates from a hierarchical Bayes fit.
+
+    Looks for two kinds of population parameters in the posterior:
+
+    1. **Constrained-scale population mean** — ``{param}_pop`` scalars emitted
+       by Stan's ``generated quantities`` block (e.g. ``alpha_pos_pop =
+       inv_logit(mu_alpha_pos_z)``).  These are on the same scale as the
+       per-subject parameters and can be compared to the empirical mean of the
+       true constrained parameters across subjects.
+
+    2. **Unconstrained-scale mu / sd** — ``mu_{param}_z`` and ``sd_{param}_z``
+       parameters directly sampled by Stan.  These are only meaningful when the
+       ``ParamDist`` was specified with ``scale="unconstrained"`` so that the
+       true distribution mean and SD are known.
+
+    Parameters
+    ----------
+    result
+        Bayesian fit result with posterior samples.
+    param_names
+        Subject-level parameter names (e.g. ``["alpha_pos", "beta"]``).
+
+    Returns
+    -------
+    point_estimates
+        Posterior means keyed by ``{param}_pop``, ``mu_{param}_z``, or
+        ``sd_{param}_z`` depending on what the Stan program exposes.
+    posterior_samples
+        Full draw arrays for the same keys (used for coverage computation).
+    """
+
+    point: dict[str, float] = {}
+    samples: dict[str, np.ndarray] = {}
+    for name in param_names:
+        # Constrained-scale population mean from generated quantities
+        pop_key = f"{name}_pop"
+        if pop_key in result.posterior_samples:
+            draws = result.posterior_samples[pop_key]
+            point[pop_key] = float(np.mean(draws))
+            samples[pop_key] = draws
+
+        # Unconstrained-scale population mean and SD (used when scale="unconstrained")
+        for prefix in ("mu", "sd"):
+            key = f"{prefix}_{name}_z"
+            if key in result.posterior_samples:
+                draws = result.posterior_samples[key]
+                point[key] = float(np.mean(draws))
+                samples[key] = draws
+    return point, samples
 
 
 def extract_mle_estimates(

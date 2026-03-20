@@ -120,6 +120,39 @@ class RecoveryStudyConfig:
     max_workers: int | None = None
 
 
+def get_true_population_params(
+    param_dists: tuple[ParamDist, ...],
+    kernel: ModelKernel[Any, Any],
+) -> dict[str, float]:
+    """Return the true population mu/sd for unconstrained-scale param distributions.
+
+    Only ``ParamDist`` entries with ``scale="unconstrained"`` are included,
+    because for constrained-scale distributions the relationship between the
+    constrained mean/SD and the unconstrained mean/SD used in Stan is
+    non-trivial.  The returned keys follow the Stan convention
+    ``mu_{param}_z`` and ``sd_{param}_z``.
+
+    Parameters
+    ----------
+    param_dists
+        Population distributions from ``RecoveryStudyConfig``.
+    kernel
+        Model kernel (used to validate parameter names).
+
+    Returns
+    -------
+    dict[str, float]
+        True population parameters on the unconstrained scale.
+    """
+
+    result: dict[str, float] = {}
+    for dist in param_dists:
+        if dist.scale == "unconstrained":
+            result[f"mu_{dist.name}_z"] = float(dist.dist.mean())
+            result[f"sd_{dist.name}_z"] = float(dist.dist.std())
+    return result
+
+
 def sample_true_params(
     param_dists: tuple[ParamDist, ...],
     kernel: ModelKernel[Any, Any],

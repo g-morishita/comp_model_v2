@@ -10,10 +10,13 @@ tests/test_inference/stan/condition_reconstruction
 tests/test_inference/stan/q_learning_loglik_fixed_params
 tests/test_inference/stan/social_q_learning_loglik_fixed_params
 
-# compiled Stan binaries under source tree
+# compiled Stan binaries under source tree (no extension = compiled binary)
 src/comp_model/inference/bayes/stan/programs/asocial_q_learning__*
 src/comp_model/inference/bayes/stan/programs/social_observed_outcome_q__*
+src/comp_model/inference/bayes/stan/programs/asocial_rl_asymmetric__*
+src/comp_model/inference/bayes/stan/programs/social_rl_self_reward_demo_reward__*
 !src/comp_model/inference/bayes/stan/programs/*.stan
+!src/comp_model/inference/bayes/stan/programs/*.stanfunctions
 
 # generated example data
 example/**/*.csv

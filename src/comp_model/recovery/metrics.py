@@ -102,6 +102,20 @@ def compute_recovery_metrics(
                     draws = subject_est.posterior_samples[param_name]
                     coverage_data.setdefault(param_name, []).append((true_val, draws))
 
+        # Population-level: one observation per replication
+        if replication.population_true_params and replication.population_estimates:
+            for key, true_val in replication.population_true_params.items():
+                if key not in replication.population_estimates:
+                    continue
+                est_val = replication.population_estimates[key]
+                pairs.setdefault(key, []).append((true_val, est_val))
+                if (
+                    replication.population_posterior_samples is not None
+                    and key in replication.population_posterior_samples
+                ):
+                    draws = replication.population_posterior_samples[key]
+                    coverage_data.setdefault(key, []).append((true_val, draws))
+
     metrics: dict[str, ParameterRecoveryMetrics] = {}
     for param_name, param_pairs in pairs.items():
         true_arr = np.array([p[0] for p in param_pairs])
