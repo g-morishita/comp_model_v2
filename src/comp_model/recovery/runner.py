@@ -211,7 +211,20 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
             config.layout,  # type: ignore[arg-type]
         )
         pop_point, pop_samples = extract_population_estimates(result, param_names)
-        true_pop = get_true_population_params(config.param_dists, config.kernel)
+
+        # Empirical constrained-scale population mean from this replication's
+        # true parameters.  Computed from true_table so it is valid for any
+        # ParamDist.scale and varies across replications (enabling correlation).
+        true_pop: dict[str, float] = {}
+        for name in param_names:
+            vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
+            if vals:
+                true_pop[f"{name}_pop"] = float(np.mean(vals))
+
+        # Also include unconstrained-scale true mu/sd when ParamDist was
+        # specified with scale="unconstrained" (true values are then constants).
+        true_pop.update(get_true_population_params(config.param_dists, config.kernel))
+
         return ReplicationEstimates(
             replication_index=r,
             true_params=true_table,
