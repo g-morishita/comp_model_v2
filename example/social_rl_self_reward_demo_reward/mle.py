@@ -22,8 +22,8 @@ from comp_model.tasks import SOCIAL_PRE_CHOICE_SCHEMA, BlockSpec, TaskSpec
 
 # ── 1. Define task ──────────────────────────────────────────────────────────
 N_ACTIONS = 2
-N_TRIALS = 100
-N_SUBJECTS = 5
+N_TRIALS = 1000
+N_SUBJECTS = 1
 REWARD_PROBS = (0.8, 0.2)
 
 task = TaskSpec(

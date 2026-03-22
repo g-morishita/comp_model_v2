@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class SocialRlSelfRewardDemoRewardParams:
+class SocialQParams:
     """Parsed parameters for the social self-reward + demo-reward kernel.
 
     Attributes
@@ -35,6 +35,9 @@ class SocialRlSelfRewardDemoRewardParams:
     alpha_self: float
     alpha_other: float
     beta: float
+
+
+SocialRlSelfRewardDemoRewardParams = SocialQParams
 
 
 @dataclass(slots=True)

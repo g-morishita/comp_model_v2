@@ -13,6 +13,7 @@ from comp_model.models.kernels.base import (
     ParameterSpec,
 )
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
+    SocialQParams,
     SocialRlSelfRewardDemoRewardKernel,
     SocialRlSelfRewardDemoRewardParams,
     SocialRlSelfRewardDemoRewardState,
@@ -31,6 +32,7 @@ __all__ = [
     "ParameterSpec",
     "QParams",
     "QState",
+    "SocialQParams",
     "SocialRlSelfRewardDemoRewardKernel",
     "SocialRlSelfRewardDemoRewardParams",
     "SocialRlSelfRewardDemoRewardState",
