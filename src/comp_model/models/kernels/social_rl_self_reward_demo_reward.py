@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class SocialQParams:
+class SocialRlSelfRewardDemoRewardParams:
     """Parsed parameters for the social self-reward + demo-reward kernel.
 
     Attributes
@@ -38,7 +38,7 @@ class SocialQParams:
 
 
 @dataclass(slots=True)
-class SocialQState:
+class SocialRlSelfRewardDemoRewardState:
     """Latent state for a social self-reward + demo-reward agent.
 
     Attributes
@@ -50,7 +50,7 @@ class SocialQState:
     q_values: list[float]
 
 
-class SocialQLearningKernel:
+class SocialRlSelfRewardDemoRewardKernel:
     """Social RL kernel that updates from self reward and demonstrator reward.
 
     Notes
@@ -98,7 +98,7 @@ class SocialQLearningKernel:
             state_reset_policy="per_subject",
         )
 
-    def parse_params(self, raw: dict[str, float]) -> SocialQParams:
+    def parse_params(self, raw: dict[str, float]) -> SocialRlSelfRewardDemoRewardParams:
         """Transform unconstrained parameters into typed kernel parameters.
 
         Parameters
@@ -108,17 +108,19 @@ class SocialQLearningKernel:
 
         Returns
         -------
-        SocialQParams
+        SocialRlSelfRewardDemoRewardParams
             Typed parameter object after applying the shared transform registry.
         """
 
-        return SocialQParams(
+        return SocialRlSelfRewardDemoRewardParams(
             alpha_self=get_transform("sigmoid").forward(raw["alpha_self"]),
             alpha_other=get_transform("sigmoid").forward(raw["alpha_other"]),
             beta=get_transform("softplus").forward(raw["beta"]),
         )
 
-    def initial_state(self, n_actions: int, params: SocialQParams) -> SocialQState:
+    def initial_state(
+        self, n_actions: int, params: SocialRlSelfRewardDemoRewardParams
+    ) -> SocialRlSelfRewardDemoRewardState:
         """Construct the initial latent state.
 
         Parameters
@@ -130,18 +132,18 @@ class SocialQLearningKernel:
 
         Returns
         -------
-        SocialQState
+        SocialRlSelfRewardDemoRewardState
             Initial Q-values set to ``0.5``.
         """
 
         del params
-        return SocialQState(q_values=[self.spec().initial_value] * n_actions)
+        return SocialRlSelfRewardDemoRewardState(q_values=[self.spec().initial_value] * n_actions)
 
     def action_probabilities(
         self,
-        state: SocialQState,
+        state: SocialRlSelfRewardDemoRewardState,
         view: DecisionTrialView,
-        params: SocialQParams,
+        params: SocialRlSelfRewardDemoRewardParams,
     ) -> tuple[float, ...]:
         """Compute softmax action probabilities for the current state.
 
@@ -165,10 +167,10 @@ class SocialQLearningKernel:
 
     def next_state(
         self,
-        state: SocialQState,
+        state: SocialRlSelfRewardDemoRewardState,
         view: DecisionTrialView,
-        params: SocialQParams,
-    ) -> SocialQState:
+        params: SocialRlSelfRewardDemoRewardParams,
+    ) -> SocialRlSelfRewardDemoRewardState:
         """Update Q-values from self reward and demonstrator reward.
 
         Parameters
@@ -182,7 +184,7 @@ class SocialQLearningKernel:
 
         Returns
         -------
-        SocialQState
+        SocialRlSelfRewardDemoRewardState
             Updated latent state.
 
         Notes
@@ -203,4 +205,4 @@ class SocialQLearningKernel:
             updated_q_values[view.social_action] += params.alpha_other * (
                 view.social_reward - updated_q_values[view.social_action]
             )
-        return SocialQState(q_values=updated_q_values)
+        return SocialRlSelfRewardDemoRewardState(q_values=updated_q_values)

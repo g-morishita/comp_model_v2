@@ -13,9 +13,9 @@ from comp_model.models.kernels.base import (
     ParameterSpec,
 )
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
-    SocialQLearningKernel,
-    SocialQParams,
-    SocialQState,
+    SocialRlSelfRewardDemoRewardKernel,
+    SocialRlSelfRewardDemoRewardParams,
+    SocialRlSelfRewardDemoRewardState,
 )
 from comp_model.models.kernels.transforms import TRANSFORM_REGISTRY, Transform, get_transform
 
@@ -31,9 +31,9 @@ __all__ = [
     "ParameterSpec",
     "QParams",
     "QState",
-    "SocialQLearningKernel",
-    "SocialQParams",
-    "SocialQState",
+    "SocialRlSelfRewardDemoRewardKernel",
+    "SocialRlSelfRewardDemoRewardParams",
+    "SocialRlSelfRewardDemoRewardState",
     "Transform",
     "get_transform",
 ]

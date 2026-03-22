@@ -23,8 +23,8 @@ from comp_model.io import save_dataset_to_csv
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     QParams,
-    SocialQLearningKernel,
-    SocialQParams,
+    SocialRlSelfRewardDemoRewardKernel,
+    SocialRlSelfRewardDemoRewardParams,
 )
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
@@ -57,7 +57,7 @@ task = TaskSpec(
 )
 
 # ── 2. Sample ground-truth parameters from a population distribution ───────
-kernel = SocialQLearningKernel()
+kernel = SocialRlSelfRewardDemoRewardKernel()
 
 TRUE_MU_ALPHA_SELF_Z = float(inv_sigmoid_vec(0.3))
 TRUE_SD_ALPHA_SELF_Z = 0.5
@@ -76,7 +76,7 @@ true_betas = softplus_vec(true_beta_z)
 
 # ── 3. Simulate dataset ────────────────────────────────────────────────────
 params_per_subject = {
-    f"sub_{i:02d}": SocialQParams(
+    f"sub_{i:02d}": SocialRlSelfRewardDemoRewardParams(
         alpha_self=float(true_alpha_selfs[i]),
         alpha_other=float(true_alpha_others[i]),
         beta=float(true_betas[i]),

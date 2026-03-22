@@ -17,7 +17,7 @@ from comp_model.inference.mle.optimize import MleOptimizerConfig
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     QParams,
-    SocialQLearningKernel,
+    SocialRlSelfRewardDemoRewardKernel,
 )
 from comp_model.recovery import (
     ParamDist,
@@ -47,7 +47,7 @@ def main() -> None:
     )
 
     # -- 2. Configure recovery study -------------------------------------------
-    kernel = SocialQLearningKernel()
+    kernel = SocialRlSelfRewardDemoRewardKernel()
 
     config = RecoveryStudyConfig(
         n_replications=100,
