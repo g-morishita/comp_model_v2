@@ -1,9 +1,20 @@
-"""Canonical hierarchical data structures for the modeling package.
+"""How experimental data is organized in this package.
 
-The repository-wide source of truth is the event hierarchy
-``Event -> Trial -> Block -> SubjectData -> Dataset``. Simulation,
-validation, replay likelihoods, and Stan export all work from these objects
-rather than from a separate flattened table representation.
+Every piece of data — whether collected from a real participant or generated
+by a simulation — is stored as nested containers that mirror the natural
+structure of an experiment:
+
+    Event  →  one thing that happened (e.g. a choice was made, a reward was shown)
+    Trial  →  one complete round of the task (a sequence of events)
+    Block  →  a group of trials that share the same condition or context
+    SubjectData  →  everything one participant did across all blocks
+    Dataset  →  all participants in a study
+
+This hierarchy is the single source of truth for the whole package. Model
+fitting, simulation, and data export all work from these objects rather than
+from a separate flat spreadsheet-style representation. Keeping one
+authoritative structure means that every analysis tool sees data in the same
+format.
 """
 
 from __future__ import annotations
@@ -19,24 +30,34 @@ if TYPE_CHECKING:
 
 
 class EventPhase(StrEnum):
-    """Ordered phase labels for fit-relevant trial events.
+    """The four stages of a single decision cycle.
 
-    Attributes
-    ----------
+    Each trial is broken into ordered stages that reflect what is happening
+    cognitively at that moment. Together they form a decision cycle:
+
     INPUT
-        Information entering the modeled agent before a choice.
+        The participant sees the available options (e.g. which buttons they
+        can press, what stimuli are on screen). This is the information the
+        model uses to set up the choice.
     DECISION
-        A choice emitted by an actor.
+        A choice is made — either by the participant or by a demonstrator
+        being observed. The payload records which action was taken.
     OUTCOME
-        Scalar outcome associated with a decision point.
+        The result of the choice is revealed (e.g. a reward is shown). This
+        stage exists as a record of what happened but the reward value itself
+        is forwarded into the UPDATE payload so the model does not need to
+        piece it together from two separate events.
     UPDATE
-        Explicit learning/update marker for the modeled agent.
+        Learning happens here. The model uses this event to revise its
+        internal beliefs or action values. Crucially, *where* this event
+        appears in the trial sequence controls *when* learning fires relative
+        to the rest of the trial — placing it before or after other events
+        changes the order in which the model updates.
 
-    Notes
-    -----
-    The phase vocabulary is intentionally generic. Task-specific semantics such as
-    "social observation before choice" are encoded by event order, ``actor_id``,
-    and ``node_id``, not by introducing task-specific phase enums.
+    These labels are intentionally generic. Whether an INPUT event refers to
+    "social cues before a choice" or "stimulus onset" is encoded by the
+    sequence of events and the actor labels, not by adding task-specific
+    phase names.
     """
 
     INPUT = "input"
@@ -47,27 +68,40 @@ class EventPhase(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Event:
-    """Atomic ordered event within a trial.
+    """The smallest unit of recorded data: one thing that happened.
+
+    Every moment worth recording in a trial is stored as an Event. What the
+    event actually contains depends on its phase:
+
+    - An INPUT event might carry ``{"available_actions": [0, 1, 2]}``
+      (the options the participant was shown).
+    - A DECISION event carries ``{"action": 1}`` (the choice that was made).
+    - An OUTCOME event carries ``{"reward": 1.0}`` (what the participant received).
+    - An UPDATE event carries both ``{"choice": 1, "reward": 1.0}`` so the
+      model has everything it needs in one place.
 
     Attributes
     ----------
     phase
-        Structural phase of the event.
+        Which stage of the decision cycle this event belongs to
+        (INPUT, DECISION, OUTCOME, or UPDATE).
     event_index
-        Zero-based position within the containing trial.
+        The position of this event within the trial (0 = first event).
     node_id
-        Identifier linking events that belong to the same decision point.
+        A label that groups the INPUT, DECISION, OUTCOME, and UPDATE events
+        that all belong to the same choice point. For example, in a task
+        where the participant first watches a demonstrator and then makes
+        their own choice, the demonstrator's events and the participant's
+        events each get their own ``node_id`` so it is always clear which
+        events go together. Using a shared label avoids hard-coding
+        domain-specific names like ``"social"`` or ``"self"``.
     actor_id
-        Identifier for the actor associated with the event.
+        Who produced this event. Use ``"subject"`` for the participant's
+        own actions and ``"demonstrator"`` (or any other label) for another
+        agent being observed. Defaults to ``"subject"``.
     payload
-        Phase-specific data carried by the event.
-
-    Notes
-    -----
-    ``node_id`` is structural rather than semantic. It links the INPUT,
-    DECISION, OUTCOME, and UPDATE events that belong to the same decision point
-    without requiring hard-coded domain labels such as ``"social"`` or
-    ``"stimulus"``.
+        The data carried by this event. Its contents depend on the phase
+        (see examples above).
     """
 
     phase: EventPhase
@@ -79,21 +113,23 @@ class Event:
 
 @dataclass(frozen=True, slots=True)
 class Trial:
-    """Ordered event sequence for one trial.
+    """One complete round of the task.
+
+    A Trial contains the full sequence of events that occurred during a single
+    round: seeing the options, making a choice, receiving a reward, and
+    updating. The events are stored in the order they happened so that
+    replaying the trial faithfully reproduces the sequence the model would
+    have experienced.
 
     Attributes
     ----------
     trial_index
-        Zero-based index within the containing block.
+        Which round this was within the current block (0 = first trial).
     events
-        Ordered events emitted during the trial.
+        The ordered events that make up this trial.
     metadata
-        Optional trial-level metadata.
-
-    Notes
-    -----
-    Trials do not include synthetic ``BLOCK_START`` or ``BLOCK_END`` events.
-    Block boundaries are represented explicitly by :class:`Block`.
+        Any extra information about this trial (e.g. reaction times,
+        condition labels) that does not fit into the event structure.
     """
 
     trial_index: int
@@ -103,23 +139,28 @@ class Trial:
 
 @dataclass(frozen=True, slots=True)
 class Block:
-    """Group of trials sharing a condition or other shared metadata.
+    """A group of consecutive trials that share the same experimental condition.
+
+    In most learning experiments, participants complete multiple blocks where
+    the task context changes between blocks (e.g. different reward
+    probabilities, different partners, or a context switch). A Block groups
+    the trials that belong to one such period.
+
+    Blocks also serve as natural reset points: if a model is configured to
+    reset its learned values at the start of each new context, that reset
+    happens at the Block boundary.
 
     Attributes
     ----------
     block_index
-        Zero-based block index within a subject.
+        Which block this is for this participant (0 = first block).
     condition
-        Condition label for the block.
+        A label describing the experimental condition for this block
+        (e.g. ``"high_volatility"`` or ``"social"``).
     trials
-        Ordered trials belonging to the block.
+        The trials that make up this block, in order.
     metadata
-        Optional block-level metadata.
-
-    Notes
-    -----
-    A block is the structural unit that determines condition changes and, when a
-    kernel opts into ``state_reset_policy="per_block"``, latent-state resets.
+        Any extra information about this block.
     """
 
     block_index: int
@@ -130,21 +171,22 @@ class Block:
 
 @dataclass(frozen=True, slots=True)
 class SubjectData:
-    """Hierarchical data for one subject.
+    """Everything one participant did across the entire experiment.
+
+    This container holds all the blocks (and therefore all the trials and
+    events) for a single participant, in the order they were experienced.
+    The ordering matters: when the model is fit to a participant's data, it
+    replays the blocks in sequence, just as the participant lived through them.
 
     Attributes
     ----------
     subject_id
-        Subject identifier unique within a dataset.
+        A unique identifier for this participant within the dataset
+        (e.g. ``"sub-01"``).
     blocks
-        Ordered blocks completed by the subject.
+        The blocks the participant completed, in chronological order.
     metadata
-        Optional subject-level metadata.
-
-    Notes
-    -----
-    The order of ``blocks`` is semantically important. Replay and simulation
-    assume it reflects the real sequence experienced by the subject.
+        Any extra participant-level information (e.g. age, group assignment).
     """
 
     subject_id: str
@@ -152,13 +194,18 @@ class SubjectData:
     metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
     def iter_block_trials(self) -> Iterator[tuple[Block, Trial]]:
-        """Yield each trial together with its containing block.
+        """Step through every trial for this participant, one at a time.
+
+        Yields each trial paired with the block it belongs to, in the order
+        the participant experienced them. Having the block alongside the trial
+        is useful when the model needs to know the current condition or when
+        block boundaries trigger a state reset.
 
         Yields
         ------
         tuple[Block, Trial]
-            Each block-trial pair in hierarchical order, preserving the exact
-            replay order used by likelihood code.
+            A (block, trial) pair for every trial across all blocks, in
+            chronological order.
         """
 
         for block in self.blocks:
@@ -167,13 +214,16 @@ class SubjectData:
 
     @property
     def trials(self) -> tuple[Trial, ...]:
-        """Flatten trials across all blocks.
+        """All of this participant's trials as a simple flat list.
+
+        A convenience shortcut when you want to iterate over every trial
+        without needing to know which block each trial came from. The trials
+        are returned in the same chronological order as they were experienced.
 
         Returns
         -------
         tuple[Trial, ...]
-            Trial records in block order. This is a convenience view rather than
-            the primary ontology.
+            Every trial this participant completed, across all blocks, in order.
         """
 
         return tuple(trial for block in self.blocks for trial in block.trials)
@@ -181,19 +231,25 @@ class SubjectData:
 
 @dataclass(frozen=True, slots=True)
 class Dataset:
-    """Collection of subjects plus optional study-level metadata.
+    """The whole study: every participant and all their data.
+
+    A Dataset is the top-level container that holds data for all participants
+    in a study. It is typically what you load at the start of an analysis and
+    pass to fitting or simulation routines.
+
+    The helper properties ``blocks`` and ``trials`` let you quickly access all
+    blocks or all trials across every participant in a consistent, predictable
+    order (participant by participant, then block by block within each
+    participant). This consistent ordering ensures that indices stay aligned
+    when exporting to analysis tools.
 
     Attributes
     ----------
     subjects
-        Ordered subject records in the dataset.
+        All participants in the dataset, in a fixed order.
     metadata
-        Optional dataset-level metadata.
-
-    Notes
-    -----
-    Dataset-level helper properties preserve subject-major ordering so that
-    downstream exporters can reconstruct subject and block indices deterministically.
+        Any study-level information (e.g. study name, date collected,
+        task version).
     """
 
     subjects: tuple[SubjectData, ...]
@@ -201,24 +257,32 @@ class Dataset:
 
     @property
     def blocks(self) -> tuple[Block, ...]:
-        """Flatten blocks across all subjects.
+        """All blocks in the dataset as a simple flat list.
+
+        Returns every block from every participant, ordered participant by
+        participant. Useful for quickly iterating over experimental conditions
+        across the whole study.
 
         Returns
         -------
         tuple[Block, ...]
-            Blocks in subject-major order.
+            Every block from all participants, in participant order.
         """
 
         return tuple(block for subject in self.subjects for block in subject.blocks)
 
     @property
     def trials(self) -> tuple[Trial, ...]:
-        """Flatten trials across all subjects and blocks.
+        """All trials in the dataset as a simple flat list.
+
+        Returns every trial from every participant and every block in a single
+        sequence. The order goes participant by participant, and within each
+        participant block by block — matching the order trials were experienced.
 
         Returns
         -------
         tuple[Trial, ...]
-            Trials in subject-major, then block-major order.
+            Every trial from all participants, in participant-then-block order.
         """
 
         return tuple(

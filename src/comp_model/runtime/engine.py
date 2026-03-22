@@ -1,8 +1,21 @@
-"""Simulation engine for generating event-based subject data.
+"""Engine for running artificial participants through a task and producing synthetic data.
 
-The runtime executes task structure and environment dynamics while delegating
-choice and learning to a model kernel. The resulting event traces are the same
-objects later consumed by validation, replay, and Stan export.
+This module is the bridge between a computational model and a task design.
+Given a model (kernel + parameters) and a task design (TaskSpec), it runs the
+model through each trial and records everything that happens — choices, rewards,
+learning updates — in exactly the same data format that real participant data
+uses.
+
+Why is this useful?
+- Parameter recovery: simulate data with known parameters, then fit the model
+  to the synthetic data to check that you can recover what you put in.
+- Posterior predictive checks: simulate data from fitted parameters and compare
+  the synthetic behaviour to what real participants did.
+- Pilot work: explore what your model predicts before collecting real data.
+
+The output is indistinguishable in format from real data, so all downstream
+analysis code (validation, model fitting, visualisation) works on it without
+modification.
 """
 
 from __future__ import annotations
@@ -29,17 +42,24 @@ ParamsT = TypeVar("ParamsT")
 
 @dataclass(frozen=True, slots=True)
 class SimulationConfig:
-    """Configuration for stochastic simulation runs.
+    """Settings that control how random choices are made during simulation.
 
     Attributes
     ----------
     seed
-        Optional random seed for the subject-level RNG.
+        An integer that pins the random-number generator to a specific
+        sequence, making results exactly reproducible. Set to ``None``
+        to use a different random sequence every time.
 
     Notes
     -----
-    Dataset simulation offsets this base seed by subject index so each simulated
-    subject receives an independent but reproducible random stream.
+    When simulating a whole group of participants (see
+    :func:`simulate_dataset`), each simulated participant gets their own
+    independent random stream. This is achieved by adding the participant's
+    position in the list (0, 1, 2, …) to the base seed. So if you set
+    ``seed=42``, participant 0 uses seed 42, participant 1 uses seed 43,
+    and so on. This keeps participants independent while keeping everything
+    reproducible.
     """
 
     seed: int | None = None
@@ -56,59 +76,82 @@ def simulate_subject(
     config: SimulationConfig,
     subject_id: str = "sim_subject",
 ) -> SubjectData:
-    """Simulate a single subject through an entire task.
+    """Run one artificial participant through the entire task and record what happened.
+
+    This function is the core simulation loop. It walks through every block and
+    every trial, asking the model (``kernel``) what the participant would do,
+    asking the task environment what reward they would receive, and recording
+    everything as a structured event log.
+
+    The result looks identical to real participant data: a log of choices,
+    rewards, and learning updates, organised by block and trial.
 
     Parameters
     ----------
     task
-        Task specification to execute.
+        The experimental design — which blocks exist, how many trials each
+        contains, and in what order events unfold within each trial.
     env
-        Environment instance for the task.
+        The task environment that hands out rewards when the participant
+        makes a choice (analogous to the slot machines or stimuli in the
+        real experiment).
     kernel
-        Model kernel for the subject.
+        The computational model that decides how the participant chooses
+        and learns. Think of it as the "brain" of the artificial participant.
     params
-        Parsed subject kernel parameters.
+        The specific parameter values for this participant (e.g. their
+        learning rate, inverse temperature).
     demonstrator_kernel
-        Optional kernel for the demonstrator agent.
+        If the task includes a second agent (a demonstrator) whose choices
+        the participant can observe, supply that agent's model here.
     demonstrator_params
-        Parsed demonstrator kernel parameters. Required when
+        Parameter values for the demonstrator. Required when
         ``demonstrator_kernel`` is provided.
     config
-        Simulation configuration.
+        Controls the random seed so simulations are reproducible.
     subject_id
-        Identifier assigned to the simulated subject.
+        A name or identifier attached to the simulated participant's data.
 
     Returns
     -------
     SubjectData
-        Simulated hierarchical event trace for one subject.
+        The full event log for one simulated participant, structured
+        identically to real participant data.
 
     Notes
     -----
-    The simulation loop steps through the schema position by position, constructing
-    events and updating agent states in a single pass. At each DECISION step the
-    relevant agent's kernel supplies action probabilities. At each OUTCOME step
-    the environment is queried for a reward. At each UPDATE step the learner's
-    state is advanced immediately, so updates fire at their declared schema
-    positions (e.g. a social update before the subject's own decision in
-    pre-choice schemas).
+    The loop processes each trial in a single pass through the trial schema
+    (the sequence of events defined for that block). Events are constructed
+    and the model's internal state is updated in the same pass, one schema
+    step at a time. This matters for social-learning tasks: if the schema
+    says the demonstrator's learning update happens *before* the participant
+    decides, that ordering is respected exactly.
     """
 
     rng = np.random.default_rng(config.seed)
     blocks: list[Block] = []
 
     n_actions = _infer_n_actions_from_task(task)
+
+    # Give every agent a blank starting state (e.g. all Q-values set to their
+    # initial values, no experience accumulated yet).
     states: dict[str, object] = {"subject": kernel.initial_state(n_actions, params)}
     if demonstrator_kernel is not None and demonstrator_params is not None:
         states["demonstrator"] = demonstrator_kernel.initial_state(n_actions, demonstrator_params)
 
+    # Find out whether this model forgets everything between blocks or carries
+    # its learned values from one block into the next.
     reset_policy = kernel.spec().state_reset_policy
 
     for block_index, block_spec in enumerate(task.blocks):
+        # Prepare the reward environment for this block (e.g. set new reward
+        # probabilities if they change between blocks).
         env.reset(block_spec, rng=rng)
         schema = block_spec.schema
         available_actions = tuple(range(int(block_spec.metadata["n_actions"])))
 
+        # If the model is configured to reset between blocks, wipe its learned
+        # state at the start of every block after the first.
         if reset_policy == "per_block" and block_index > 0:
             states["subject"] = kernel.initial_state(n_actions, params)
             if demonstrator_kernel is not None and demonstrator_params is not None:
@@ -123,8 +166,15 @@ def simulate_subject(
             rewards: dict[str, float] = {}
             trial_events: list[Event] = []
 
+            # Walk through the schema step-by-step. The schema defines the
+            # order of events in each trial (e.g. INPUT → DECISION → OUTCOME →
+            # UPDATE). We construct each event and, where needed, update the
+            # model's internal state, all in this single pass.
             for event_index, step in enumerate(schema.steps):
                 if step.phase == EventPhase.INPUT:
+                    # Record which actions were available at the start of this
+                    # trial. No model update is needed here; this is purely
+                    # bookkeeping so the data log is complete.
                     trial_events.append(
                         Event(
                             phase=EventPhase.INPUT,
@@ -141,6 +191,9 @@ def simulate_subject(
                         trial_index=trial_index,
                         available_actions=available_actions,
                     )
+                    # Ask the relevant agent's model for a probability over
+                    # each available action, then randomly sample one action
+                    # according to those probabilities (softmax sampling).
                     if actor == "subject":
                         probabilities = kernel.action_probabilities(
                             cast("StateT", states["subject"]), view, params
@@ -170,6 +223,8 @@ def simulate_subject(
                     )
 
                 elif step.phase == EventPhase.OUTCOME:
+                    # Ask the environment what reward the actor receives for
+                    # the choice they just made, then record it.
                     actor = step.actor_id
                     reward = env.step(choices[actor])
                     rewards[actor] = reward
@@ -186,6 +241,9 @@ def simulate_subject(
                 elif step.phase == EventPhase.UPDATE:
                     actor = step.actor_id
                     learner = step.learner_id
+
+                    # First, record the update event (what choice was made and
+                    # what reward was received — the information being learned from).
                     trial_events.append(
                         Event(
                             phase=EventPhase.UPDATE,
@@ -196,7 +254,14 @@ def simulate_subject(
                         )
                     )
 
+                    # Then immediately call next_state to advance the learner's
+                    # internal state (e.g. update Q-values). Doing this here,
+                    # inside the schema loop, means the update fires at exactly
+                    # the position the schema declares — crucially, a social
+                    # update can happen *before* the subject's own decision in
+                    # pre-choice schemas.
                     if actor == learner:
+                        # The learner is updating from their *own* experience.
                         view = DecisionTrialView(
                             trial_index=trial_index,
                             available_actions=available_actions,
@@ -204,6 +269,9 @@ def simulate_subject(
                             reward=rewards[actor],
                         )
                     else:
+                        # The learner is updating from *someone else's* experience
+                        # (social learning). Only include the fields that the schema
+                        # says are visible to the observer.
                         obs = step.observable_fields
                         view = DecisionTrialView(
                             trial_index=trial_index,
@@ -247,36 +315,41 @@ def simulate_dataset(
     demonstrator_kernel: ModelKernel[object, object] | None = None,
     demonstrator_params: object | None = None,
 ) -> Dataset:
-    """Simulate a dataset for multiple subjects.
+    """Simulate a whole group of artificial participants and return the combined dataset.
+
+    Calls :func:`simulate_subject` once per participant, giving each one a
+    fresh, independent copy of the task environment and a unique random seed
+    derived from ``config.seed``. The result is a dataset that can be used
+    for parameter recovery or posterior predictive checks on a full sample.
 
     Parameters
     ----------
     task
-        Task specification to execute.
+        The experimental design shared by all participants.
     env_factory
-        Factory returning a fresh environment per subject.
+        A function that creates a fresh environment instance. Called once
+        per participant so that each participant starts with independent
+        environment state (e.g. independent reward draws).
     kernel
-        Model kernel used to choose and update.
+        The computational model (learning and choice rule) applied to every
+        participant.
     params_per_subject
-        Parsed kernel parameters keyed by subject identifier.
+        A mapping from participant identifier to that participant's
+        parameter values. The order of entries determines simulation order.
     config
-        Simulation configuration shared across subjects.
+        Shared simulation settings, including the base random seed.
     demonstrator_kernel
-        Optional kernel for the demonstrator agent.
+        If the task involves a demonstrator agent, supply their model here.
+        The same demonstrator model is used for every participant.
     demonstrator_params
-        Parsed demonstrator kernel parameters. Required when
+        Parameter values for the demonstrator. Required when
         ``demonstrator_kernel`` is provided.
 
     Returns
     -------
     Dataset
-        Simulated dataset across all requested subjects.
-
-    Notes
-    -----
-    Subjects are simulated independently with fresh environments returned by
-    ``env_factory``. Subject order follows the insertion order of
-    ``params_per_subject``.
+        Simulated data for all participants, in the same order as
+        ``params_per_subject``.
     """
 
     subjects: list[SubjectData] = []
@@ -301,28 +374,34 @@ def simulate_dataset(
 
 
 def _infer_n_actions_from_task(task: TaskSpec) -> int:
-    """Infer the number of actions from task metadata.
+    """Read the number of response options from the task design.
+
+    The model needs to know how many actions exist (e.g. two slot machines,
+    three stimuli) before the task begins, so that it can initialise the right
+    number of Q-values. This function reads that number from the block
+    metadata rather than hard-coding it, keeping the engine general.
 
     Parameters
     ----------
     task
-        Task specification whose block metadata are inspected.
+        The task design whose block metadata are inspected.
 
     Returns
     -------
     int
-        Unique action count specified across blocks.
+        The number of available actions, which must be the same in every block.
 
     Raises
     ------
     ValueError
-        Raised when action counts are missing or inconsistent.
+        Raised when the action count is missing from block metadata, or when
+        different blocks disagree on how many actions exist.
 
     Notes
     -----
-    The runtime currently relies on ``BlockSpec.metadata['n_actions']`` rather
-    than inferring action count from a model or environment. All blocks must
-    agree on the same action count.
+    Every ``BlockSpec`` in the task must have ``metadata['n_actions']`` set,
+    and all blocks must report the same value. Mismatches suggest a design
+    error in the task specification.
     """
 
     n_actions_values: set[int] = set()

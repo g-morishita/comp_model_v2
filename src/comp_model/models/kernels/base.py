@@ -1,8 +1,26 @@
-"""Backend-agnostic kernel metadata and protocols.
+"""Definitions of what a computational model ("kernel") must be able to do.
 
-The kernel layer defines learning and choice rules only. It is deliberately
-agnostic to task structure, trial schemas, pooling hierarchies, and Stan
-implementation details.
+A "kernel" is the core of a computational model: it encodes the learning
+rule and the choice rule for a single participant. Every kernel must answer
+exactly three questions:
+
+1. What is the participant's internal state at the very start of the task
+   (e.g. Q-values all equal to 0.5)?
+2. Given the participant's current internal state, what is the probability
+   of each available action on this trial?
+3. After the participant chooses and receives an outcome, what is their
+   updated internal state?
+
+This module defines the shared interface (``ModelKernel``) that every kernel
+must implement, plus supporting metadata classes that describe a kernel's
+parameters and how the fitting machinery should handle them.
+
+Kernels are deliberately kept separate from task structure and fitting
+details. A kernel only ever sees a compact summary of one decision trial
+(a ``DecisionTrialView``). It never inspects raw events, trial schemas, or
+any fitting-backend specifics (e.g. Stan code). This separation means you
+can swap fitting backends without changing the model, and define new models
+without touching the infrastructure.
 """
 
 from __future__ import annotations
@@ -18,21 +36,32 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class InitSpec:
-    """Initialization metadata for MLE optimization.
+    """Instructions for where to start searching for a parameter's best-fitting value.
+
+    When fitting a model by maximum likelihood (MLE), the optimiser needs a
+    starting point for each parameter. This class records that starting point
+    and the strategy used to generate it.
+
+    Starting values are specified on an *unconstrained* scale — a mathematical
+    trick that lets the optimiser search over all real numbers even when the
+    actual parameter has a restricted range (e.g. learning rate must be
+    between 0 and 1). The transform specified on the matching
+    :class:`ParameterSpec` converts the unconstrained value back to the
+    meaningful scale (e.g. unconstrained 0.0 → learning rate 0.5 via the
+    sigmoid function).
 
     Attributes
     ----------
     strategy
-        Initialization strategy identifier.
+        A label identifying how starting values should be generated
+        (e.g. fixed point, random perturbation).
     kwargs
-        Strategy-specific keyword arguments.
+        Extra settings consumed by the chosen strategy.
     default_unconstrained
-        Default unconstrained starting value.
-
-    Notes
-    -----
-    Initialization is expressed on the unconstrained scale so that restart
-    generation is aligned with the kernel's transform registry.
+        The default starting value on the unconstrained scale.
+        Defaults to 0.0, which maps to 0.5 under a sigmoid transform —
+        a neutral, uninformed starting point for parameters bounded between
+        0 and 1.
     """
 
     strategy: str
@@ -42,24 +71,38 @@ class InitSpec:
 
 @dataclass(frozen=True, slots=True)
 class ParameterSpec:
-    """Metadata for one free model parameter.
+    """Description of one free parameter in the model.
+
+    Each free parameter — for example a learning rate or an inverse
+    temperature — has a ``ParameterSpec`` that tells the fitting machinery
+    everything it needs to know: what the parameter is called, how to
+    transform raw (unconstrained) values into meaningful (constrained) values,
+    and where to start searching during optimisation.
 
     Attributes
     ----------
     name
-        Parameter name exposed to inference code.
+        The parameter's name as it appears in results tables and in code
+        (e.g. ``"alpha"`` for a learning rate).
     transform_id
-        Identifier in the transform registry.
-    description
-        Human-readable description of the parameter.
-    mle_init
-        Optional initialization metadata for MLE.
+        A short label that points to the mathematical function used to map
+        unconstrained numbers onto the parameter's valid range. Two common
+        examples:
 
-    Notes
-    -----
-    ``transform_id`` links the parameter to the shared transform registry. That
-    single identifier drives constrained parsing in Python and transformed
-    parameter expressions in Stan.
+        - ``"sigmoid"``: maps any real number to the interval (0, 1),
+          suitable for rates and probabilities.
+        - ``"softplus"``: maps any real number to positive values,
+          suitable for parameters that must be greater than zero.
+
+        The same label is used both when parsing parameters in Python and
+        when generating the corresponding Stan code, so changing it updates
+        both simultaneously.
+    description
+        A plain-English explanation of what the parameter represents, used
+        in documentation and model summaries.
+    mle_init
+        Optional instructions for the starting point used during maximum
+        likelihood fitting. If ``None``, a default starting point is used.
     """
 
     name: str
@@ -70,29 +113,48 @@ class ParameterSpec:
 
 @dataclass(frozen=True, slots=True)
 class ModelKernelSpec:
-    """Static metadata describing a model kernel.
+    """The identity card for a computational model.
+
+    This class holds all the static, descriptive information about a kernel
+    that the fitting and simulation infrastructure needs to discover: what the
+    model is called, what parameters it has, whether it needs social
+    information, and how it manages memory across task blocks.
+
+    Think of it as the "spec sheet" read by inference code before any data
+    are ever touched. The kernel itself (the actual learning and choice
+    equations) is defined separately; this class just describes it.
 
     Attributes
     ----------
     model_id
-        Stable identifier for the kernel.
+        A stable, unique name for the model (e.g. ``"rescorla_wagner"``).
+        Used as a key in result files and Stan code.
     parameter_specs
-        Ordered parameter metadata for the kernel.
+        An ordered list of :class:`ParameterSpec` objects, one per free
+        parameter. The order matters — it determines the order of columns
+        in parameter tables and of entries in Stan parameter blocks.
     requires_social
-        Whether the kernel reads social fields from decision views.
+        Set to ``True`` if this model uses information about another
+        agent's choices or outcomes (i.e. it is a social-learning model).
+        This tells the simulation engine and inference code to expect and
+        provide social fields.
     n_actions
-        Optional fixed action count. ``None`` means infer from data.
+        The number of response options the model expects. If ``None``,
+        this is inferred from the data. Override with a fixed integer if
+        the model has a hard-coded action count.
     state_reset_policy
-        Policy for resetting kernel state, either ``"per_subject"`` or ``"per_block"``.
-    description
-        Human-readable model description.
+        Controls how the model's internal state (e.g. Q-values) is
+        managed across task blocks:
 
-    Notes
-    -----
-    ``ModelKernelSpec`` does not reference event-order details such as
-    ``TrialSchema`` or ``node_id``. It describes the kernel's parameters and
-    replay requirements after extraction has already produced flat decision
-    views.
+        - ``"per_subject"``: state accumulates across all blocks;
+          learning carries over from one block to the next.
+        - ``"per_block"``: state is reset to initial values at the start
+          of each new block; each block begins with a blank slate.
+    initial_value
+        The starting value assigned to each Q-value (or equivalent
+        quantity) before any learning occurs. Defaults to 0.5.
+    description
+        A plain-English summary of the model, used in reports and logs.
     """
 
     model_id: str
@@ -109,60 +171,96 @@ ParamsT = TypeVar("ParamsT")
 
 
 class ModelKernel(Protocol, Generic[StateT, ParamsT]):
-    """Protocol shared by all backend-agnostic model kernels.
+    """The interface that every computational model must implement.
 
-    Notes
-    -----
-    Kernels only consume :class:`~comp_model.data.extractors.DecisionTrialView`
-    objects. They never inspect raw :class:`~comp_model.data.schema.Event`,
-    :class:`~comp_model.data.schema.Trial`, or
-    :class:`~comp_model.tasks.schemas.TrialSchema` objects.
+    A ``ModelKernel`` is the heart of a computational model. It encodes two
+    psychological mechanisms:
+
+    - **Learning rule**: how the participant updates their internal
+      representation of the world (e.g. Q-values) after each outcome.
+    - **Choice rule**: how the participant translates their current
+      representation into a probability distribution over available actions.
+
+    Every kernel must answer three questions (the three core methods):
+
+    1. :meth:`initial_state` — what is the participant's starting state?
+    2. :meth:`action_probabilities` — given the current state, how likely is
+       each action?
+    3. :meth:`next_state` — given the outcome, what is the updated state?
+
+    Two additional methods are needed by the fitting and simulation machinery:
+
+    - :meth:`spec` — returns the model's identity card
+      (:class:`ModelKernelSpec`).
+    - :meth:`parse_params` — converts raw numerical values from the optimiser
+      into the structured parameter object the model expects.
+
+    Kernels are deliberately kept narrow: they only ever see a compact summary
+    of one decision trial (:class:`~comp_model.data.extractors.DecisionTrialView`).
+    They never inspect raw event logs, trial schemas, or fitting-backend
+    details. This keeps the model definitions clean and portable.
     """
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
-        """Return static kernel metadata.
+        """Return the identity card (static metadata) for this model.
 
         Returns
         -------
         ModelKernelSpec
-            Kernel specification used by inference code.
+            Describes the model's name, free parameters, social requirements,
+            and state reset policy. Read by simulation and inference code
+            before any data are processed.
         """
 
         ...
 
     def parse_params(self, raw: dict[str, float]) -> ParamsT:
-        """Convert unconstrained parameter values into typed parameters.
+        """Convert raw numbers from the optimiser into this model's parameter object.
+
+        The optimiser works with plain floating-point numbers, often on an
+        unconstrained scale. This method applies the appropriate transforms
+        (e.g. sigmoid for learning rate, softplus for inverse temperature)
+        and packages the result into the typed parameter structure the model
+        uses internally.
 
         Parameters
         ----------
         raw
-            Raw unconstrained parameter values keyed by parameter name.
+            A dictionary mapping parameter names to their current
+            unconstrained values (as supplied by the optimiser or sampler).
 
         Returns
         -------
         ParamsT
-            Parsed parameter object for the kernel, typically after applying the
-            parameter transform specified in :class:`ParameterSpec`.
+            A typed parameter object ready to be passed to
+            :meth:`initial_state`, :meth:`action_probabilities`, and
+            :meth:`next_state`.
         """
 
         ...
 
     def initial_state(self, n_actions: int, params: ParamsT) -> StateT:
-        """Construct the initial latent state.
+        """Create the participant's blank starting state before any learning.
+
+        Called once at the beginning of the task (and again at the start of
+        each block if ``state_reset_policy == "per_block"``). Typically
+        initialises Q-values or other internal quantities to their prior
+        values.
 
         Parameters
         ----------
         n_actions
-            Number of legal actions in the task.
+            How many response options exist in the task (e.g. 2 for a
+            two-armed bandit).
         params
-            Parsed kernel parameters.
+            The participant's parameter values, which may influence the
+            starting state (e.g. an initial-value parameter).
 
         Returns
         -------
         StateT
-            Initial latent state used at subject start or, when configured, at
-            each block boundary.
+            The initial internal state, ready for the first trial.
         """
 
         ...
@@ -173,22 +271,29 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         view: DecisionTrialView,
         params: ParamsT,
     ) -> tuple[float, ...]:
-        """Return action probabilities for the current decision view.
+        """Compute the probability of each available action on this trial.
+
+        This is the choice rule. It translates the participant's current
+        internal state (e.g. Q-values) into a probability distribution over
+        actions, typically using a softmax function governed by the inverse
+        temperature parameter.
 
         Parameters
         ----------
         state
-            Current latent state.
+            The participant's current internal state (e.g. Q-values).
         view
-            Extracted decision record.
+            A compact summary of the current decision trial, including which
+            actions are available and the trial index.
         params
-            Parsed kernel parameters.
+            The participant's parameter values.
 
         Returns
         -------
         tuple[float, ...]
-            Probabilities aligned with ``view.available_actions`` only. Illegal
-            actions must not appear in the returned tuple.
+            A probability for each action in ``view.available_actions``,
+            in the same order. Probabilities sum to 1. Only available actions
+            appear; unavailable actions are excluded entirely.
         """
 
         ...
@@ -199,22 +304,28 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         view: DecisionTrialView,
         params: ParamsT,
     ) -> StateT:
-        """Update the latent state after the decision outcome.
+        """Update the participant's internal state after observing an outcome.
+
+        This is the learning rule. It incorporates the new information from
+        the trial (e.g. reward received, or a demonstrator's choice) and
+        returns the updated state that will be used on the next trial.
 
         Parameters
         ----------
         state
-            Current latent state.
+            The participant's internal state before this update.
         view
-            Extracted decision record.
+            A compact summary of the trial outcome, containing the choice
+            made, the reward received, and (for social-learning models) the
+            demonstrator's choice and reward if available.
         params
-            Parsed kernel parameters.
+            The participant's parameter values.
 
         Returns
         -------
         StateT
-            Updated latent state after incorporating any outcome or social
-            information present in ``view``.
+            The updated internal state, incorporating whatever information
+            was present in ``view``.
         """
 
         ...
