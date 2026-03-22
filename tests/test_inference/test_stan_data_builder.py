@@ -210,6 +210,7 @@ def test_subject_to_stan_data_remaps_noncontiguous_actions() -> None:
                                 phase=EventPhase.UPDATE,
                                 event_index=3,
                                 node_id="main",
+                                payload={"choice": 5, "reward": 1.0},
                             ),
                         ),
                     ),
@@ -388,6 +389,7 @@ def test_step_data_remaps_noncontiguous_actions() -> None:
                                 phase=EventPhase.UPDATE,
                                 event_index=3,
                                 node_id="main",
+                                payload={"choice": 5, "reward": 1.0},
                             ),
                         ),
                     ),
@@ -415,6 +417,8 @@ def test_step_data_includes_social_fields_when_requested() -> None:
         This test asserts social step-stream fields.
     """
 
+    # SOCIAL_PRE_CHOICE_SCHEMA: INPUT(demo) DECISION(demo) OUTCOME(demo) UPDATE(demo→demo)
+    #   UPDATE(demo→subj) INPUT(subj) DECISION(subj) OUTCOME(subj) UPDATE(subj→subj)
     subject = SubjectData(
         subject_id="social-test",
         blocks=(
@@ -429,41 +433,42 @@ def test_step_data_includes_social_fields_when_requested() -> None:
                                 phase=EventPhase.INPUT,
                                 event_index=0,
                                 node_id="main",
+                                actor_id="demonstrator",
                                 payload={"available_actions": (0, 1)},
                             ),
                             Event(
-                                phase=EventPhase.INPUT,
-                                event_index=1,
-                                node_id="main",
-                                actor_id="demonstrator",
-                                payload={
-                                    "available_actions": (0, 1),
-                                    "observation": {"social_action": 1, "social_reward": 0.5},
-                                },
-                            ),
-                            Event(
                                 phase=EventPhase.DECISION,
-                                event_index=2,
+                                event_index=1,
                                 node_id="main",
                                 actor_id="demonstrator",
                                 payload={"action": 1},
                             ),
                             Event(
                                 phase=EventPhase.OUTCOME,
-                                event_index=3,
+                                event_index=2,
                                 node_id="main",
                                 actor_id="demonstrator",
                                 payload={"reward": 0.5},
                             ),
                             Event(
                                 phase=EventPhase.UPDATE,
+                                event_index=3,
+                                node_id="main",
+                                actor_id="demonstrator",
+                                payload={"choice": 1, "reward": 0.5},
+                            ),
+                            Event(
+                                phase=EventPhase.UPDATE,
                                 event_index=4,
                                 node_id="main",
                                 actor_id="demonstrator",
-                                payload={},
+                                payload={"choice": 1, "reward": 0.5},
                             ),
                             Event(
-                                phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}
+                                phase=EventPhase.INPUT,
+                                event_index=5,
+                                node_id="main",
+                                payload={"available_actions": (0, 1)},
                             ),
                             Event(
                                 phase=EventPhase.DECISION,
@@ -478,7 +483,10 @@ def test_step_data_includes_social_fields_when_requested() -> None:
                                 payload={"reward": 1.0},
                             ),
                             Event(
-                                phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}
+                                phase=EventPhase.UPDATE,
+                                event_index=8,
+                                node_id="main",
+                                payload={"choice": 0, "reward": 1.0},
                             ),
                         ),
                     ),
@@ -499,14 +507,15 @@ def test_step_data_includes_social_fields_when_requested() -> None:
     assert "step_social_action" in stan_data
     assert "step_social_reward" in stan_data
     # PRE_CHOICE: 3 subject steps per trial — social-update, action, self-update
-    # step 0 (social-update): social_action=2 (action 1 → index 2), social_reward=0.5
-    # step 1 (action):        choice=1 (action 0 → index 1)
-    # step 2 (self-update):   update_action=1, reward=1.0
+    # Action index mapping (first-seen order): demo action 1 → index 1, subject action 0 → index 2
+    # step 0 (social-update): social_action=1 (action 1 → index 1), social_reward=0.5
+    # step 1 (action):        choice=2 (action 0 → index 2)
+    # step 2 (self-update):   update_action=2, reward=1.0
     assert stan_data["E"] == 3
     assert stan_data["D"] == 1
-    assert stan_data["step_choice"] == [0, 1, 0]
-    assert stan_data["step_update_action"] == [0, 0, 1]
-    assert stan_data["step_social_action"] == [2, 0, 0]
+    assert stan_data["step_choice"] == [0, 2, 0]
+    assert stan_data["step_update_action"] == [0, 0, 2]
+    assert stan_data["step_social_action"] == [1, 0, 0]
     assert stan_data["step_social_reward"] == [0.5, 0.0, 0.0]
 
 
