@@ -488,3 +488,25 @@ def test_post_outcome_no_self_outcome_still_carries_social_info() -> None:
     assert learner_id == "subject"
     assert view.social_action == 1
     assert view.social_reward == 0.0
+
+
+def test_pre_choice_no_self_outcome_demonstrator_update_has_choice_and_reward() -> None:
+    """Demonstrator self-update carries the demo choice and reward."""
+    trial = _make_social_pre_choice_no_self_outcome_trial(demo_action=0, demo_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA))
+
+    _, learner_id, view = steps[0]  # demonstrator self-update
+    assert learner_id == "demonstrator"
+    assert view.choice == 0
+    assert view.reward == 1.0
+
+
+def test_post_outcome_no_self_outcome_demonstrator_update_has_choice_and_reward() -> None:
+    """Demonstrator self-update carries the demo choice and reward."""
+    trial = _make_social_post_outcome_no_self_outcome_trial(demo_action=1, demo_reward=0.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA))
+
+    _, learner_id, view = steps[1]  # demonstrator self-update
+    assert learner_id == "demonstrator"
+    assert view.choice == 1
+    assert view.reward == 0.0
