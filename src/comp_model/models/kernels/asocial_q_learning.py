@@ -201,6 +201,7 @@ class AsocialQLearningKernel:
 
         updated_q_values = list(state.q_values)
         if view.reward is not None:
+            assert view.choice is not None
             chosen_action = view.choice
             updated_q_values[chosen_action] += params.alpha * (
                 view.reward - updated_q_values[chosen_action]

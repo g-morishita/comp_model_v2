@@ -197,6 +197,7 @@ class SocialRlSelfRewardDemoRewardKernel:
 
         updated_q_values = list(state.q_values)
         if view.reward is not None:
+            assert view.choice is not None
             updated_q_values[view.choice] += params.alpha_self * (
                 view.reward - updated_q_values[view.choice]
             )

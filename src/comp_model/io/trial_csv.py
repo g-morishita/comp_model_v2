@@ -21,12 +21,14 @@ from comp_model.data import (
     EventPhase,
     SubjectData,
     Trial,
-    extract_decision_views,
+    replay_trial_steps,
     validate_dataset,
 )
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
 )
@@ -211,7 +213,7 @@ class _AsocialBanditTrialCsvConverter:
             condition=condition,
             trial_index=trial.trial_index,
             available_actions=view.available_actions,
-            choice=view.choice,
+            choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
             reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
         )
 
@@ -308,7 +310,7 @@ class _SocialTrialCsvConverter:
                 condition=condition,
                 trial_index=trial.trial_index,
                 available_actions=view.available_actions,
-                choice=view.choice,
+                choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
                 reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
             ),
             "demonstrator_action": str(
@@ -560,7 +562,7 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
 
 
 def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView:
-    """Extract the sole decision view expected by built-in row converters.
+    """Extract the sole subject decision view expected by built-in row converters.
 
     Parameters
     ----------
@@ -572,20 +574,49 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView
     Returns
     -------
     DecisionTrialView
-        The single extracted decision view.
+        The single extracted subject decision view.
 
     Raises
     ------
     ValueError
-        Raised when the schema does not yield exactly one decision view.
+        Raised when the schema does not yield exactly one subject action step.
     """
 
-    views = extract_decision_views(trial, schema)
-    if len(views) != 1:
+    choice: int | None = None
+    available_actions: tuple[int, ...] = ()
+    reward: float | None = None
+    social_action: int | None = None
+    social_reward: float | None = None
+    observation: dict[str, Any] = {}
+
+    for event_type, learner_id, view in replay_trial_steps(trial, schema):
+        if event_type == "action" and learner_id == "subject":
+            choice = view.choice
+            available_actions = view.available_actions
+            observation = dict(view.observation)
+            if view.social_action is not None:
+                social_action = view.social_action
+                social_reward = view.social_reward
+        elif event_type == "update" and learner_id == "subject":
+            if view.reward is not None:
+                reward = view.reward
+            if view.social_action is not None:
+                social_action = view.social_action
+                social_reward = view.social_reward
+
+    if choice is None:
         raise ValueError(
-            f"Schema {schema.schema_id!r} expected exactly one decision view, got {len(views)}"
+            f"Schema {schema.schema_id!r} expected at least one subject action step, got none"
         )
-    return views[0]
+    return DecisionTrialView(
+        trial_index=trial.trial_index,
+        available_actions=available_actions,
+        choice=choice,
+        reward=reward,
+        observation=observation,
+        social_action=social_action,
+        social_reward=social_reward,
+    )
 
 
 def _build_common_row(
@@ -672,6 +703,12 @@ def _build_trial_from_schema(
         payload was supplied.
     """
 
+    demonstrator_action: int | None = None
+    demonstrator_reward: float | None = None
+    if demonstrator_observation is not None:
+        demonstrator_action = demonstrator_observation.get("social_action")
+        demonstrator_reward = demonstrator_observation.get("social_reward")
+
     events: list[Event] = []
     for step_index, step in enumerate(schema.steps):
         if step.phase == EventPhase.INPUT:
@@ -687,9 +724,19 @@ def _build_trial_from_schema(
                     "observation": dict(demonstrator_observation),
                 }
         elif step.phase == EventPhase.DECISION:
-            payload = {"action": choice}
+            if step.actor_id == "subject":
+                payload = {"action": choice}
+            else:
+                if demonstrator_action is None:
+                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator action")
+                payload = {"action": demonstrator_action}
         elif step.phase == EventPhase.OUTCOME:
-            payload = {"reward": reward}
+            if step.actor_id == "subject":
+                payload = {"reward": reward}
+            else:
+                if demonstrator_reward is None:
+                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator reward")
+                payload = {"reward": demonstrator_reward}
         elif step.phase == EventPhase.UPDATE:
             payload = {}
         else:
@@ -1002,6 +1049,36 @@ def _validate_action_in_available_set(
         )
 
 
+def _require_choice(choice: int | None, schema_id: str, trial_index: int) -> int:
+    """Require a subject choice during CSV export.
+
+    Parameters
+    ----------
+    choice
+        Extracted subject choice.
+    schema_id
+        Schema identifier used in the error message.
+    trial_index
+        Trial index used in the error message.
+
+    Returns
+    -------
+    int
+        Concrete choice value.
+
+    Raises
+    ------
+    ValueError
+        Raised when the extracted trial has no subject choice.
+    """
+
+    if choice is None:
+        raise ValueError(
+            f"Schema {schema_id!r}, trial {trial_index}: subject choice is required for CSV export"
+        )
+    return choice
+
+
 def _require_reward(reward: float | None, schema_id: str, trial_index: int) -> float:
     """Require a reward value during CSV export.
 
@@ -1109,7 +1186,9 @@ def _register_builtin_converters() -> None:
     builtin_converters: tuple[TrialCsvConverter, ...] = (
         _AsocialBanditTrialCsvConverter(),
         _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA),
     )
     for converter in builtin_converters:
         if converter.schema_id not in _TRIAL_CSV_CONVERTERS:

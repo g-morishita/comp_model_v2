@@ -13,7 +13,7 @@ from comp_model.data import (
     EventPhase,
     SubjectData,
     Trial,
-    extract_decision_views,
+    replay_trial_steps,
 )
 from comp_model.io import (
     get_trial_csv_converter,
@@ -111,8 +111,8 @@ def test_load_social_pre_choice_reconstructs_demonstrator_before_decision(
     trial = loaded_dataset.subjects[0].blocks[0].trials[0]
     assert trial.events[1].phase == EventPhase.INPUT
     assert trial.events[1].actor_id == "demonstrator"
-    assert trial.events[2].phase == EventPhase.UPDATE
-    assert trial.events[3].phase == EventPhase.DECISION
+    assert trial.events[5].phase == EventPhase.UPDATE
+    assert trial.events[6].phase == EventPhase.DECISION
 
 
 def test_load_social_post_outcome_reconstructs_demonstrator_after_outcome(
@@ -139,8 +139,8 @@ def test_load_social_post_outcome_reconstructs_demonstrator_after_outcome(
 
     trial = loaded_dataset.subjects[0].blocks[0].trials[0]
     assert trial.events[2].phase == EventPhase.OUTCOME
-    assert trial.events[3].phase == EventPhase.INPUT
-    assert trial.events[3].actor_id == "demonstrator"
+    assert trial.events[4].phase == EventPhase.INPUT
+    assert trial.events[4].actor_id == "demonstrator"
 
 
 def test_load_dataset_from_csv_rejects_duplicate_trial_keys(tmp_path: Path) -> None:
@@ -503,26 +503,47 @@ def _make_social_pre_choice_dataset() -> Dataset:
                                         },
                                     ),
                                     Event(
-                                        phase=EventPhase.UPDATE,
+                                        phase=EventPhase.DECISION,
                                         event_index=2,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"action": 0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.OUTCOME,
+                                        event_index=3,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=4,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=5,
                                         node_id="main",
                                         payload={},
                                     ),
                                     Event(
                                         phase=EventPhase.DECISION,
-                                        event_index=3,
+                                        event_index=6,
                                         node_id="main",
                                         payload={"action": 1},
                                     ),
                                     Event(
                                         phase=EventPhase.OUTCOME,
-                                        event_index=4,
+                                        event_index=7,
                                         node_id="main",
                                         payload={"reward": 0.0},
                                     ),
                                     Event(
                                         phase=EventPhase.UPDATE,
-                                        event_index=5,
+                                        event_index=8,
                                         node_id="main",
                                         payload={},
                                     ),
@@ -576,8 +597,14 @@ def _make_social_post_outcome_dataset() -> Dataset:
                                         payload={"reward": 1.0},
                                     ),
                                     Event(
-                                        phase=EventPhase.INPUT,
+                                        phase=EventPhase.UPDATE,
                                         event_index=3,
+                                        node_id="main",
+                                        payload={},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.INPUT,
+                                        event_index=4,
                                         node_id="main",
                                         actor_id="demonstrator",
                                         payload={
@@ -589,8 +616,29 @@ def _make_social_post_outcome_dataset() -> Dataset:
                                         },
                                     ),
                                     Event(
+                                        phase=EventPhase.DECISION,
+                                        event_index=5,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"action": 1},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.OUTCOME,
+                                        event_index=6,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"reward": 0.0},
+                                    ),
+                                    Event(
                                         phase=EventPhase.UPDATE,
-                                        event_index=4,
+                                        event_index=7,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=8,
                                         node_id="main",
                                         payload={},
                                     ),
@@ -627,18 +675,22 @@ def _fitting_view_signatures(
     for subject in dataset.subjects:
         for block in subject.blocks:
             for trial in block.trials:
-                for view in extract_decision_views(trial, schema):
+                last_subject_update = None
+                for event_type, learner_id, view in replay_trial_steps(trial, schema):
+                    if event_type == "update" and learner_id == "subject":
+                        last_subject_update = view
+                if last_subject_update is not None:
                     signatures.append(
                         (
                             subject.subject_id,
                             block.block_index,
                             block.condition,
-                            view.trial_index,
-                            view.available_actions,
-                            view.choice,
-                            view.reward,
-                            view.social_action,
-                            view.social_reward,
+                            last_subject_update.trial_index,
+                            last_subject_update.available_actions,
+                            last_subject_update.choice,
+                            last_subject_update.reward,
+                            last_subject_update.social_action,
+                            last_subject_update.social_reward,
                         )
                     )
     return tuple(signatures)

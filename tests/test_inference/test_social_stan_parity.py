@@ -8,14 +8,14 @@ from typing import Any
 import numpy as np
 import pytest
 
-from comp_model.data.extractors import extract_decision_views
+from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.inference.bayes.stan.data_builder import subject_to_step_data
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
     SocialRlSelfRewardDemoRewardKernel,
 )
 from comp_model.models.kernels.transforms import get_transform
-from comp_model.tasks.schemas import SOCIAL_PRE_CHOICE_SCHEMA
+from comp_model.tasks.schemas import SOCIAL_POST_OUTCOME_SCHEMA
 
 _STAN_PARITY_ATOL = 5e-6
 
@@ -45,7 +45,7 @@ def _social_trial(
     Returns
     -------
     Trial
-        Event-based trial matching ``SOCIAL_PRE_CHOICE_SCHEMA``.
+        Event-based trial matching ``SOCIAL_POST_OUTCOME_SCHEMA``.
     """
 
     return Trial(
@@ -58,40 +58,44 @@ def _social_trial(
                 payload={"available_actions": (0, 1)},
             ),
             Event(
+                phase=EventPhase.DECISION, event_index=1, node_id="main", payload={"action": action}
+            ),
+            Event(
+                phase=EventPhase.OUTCOME, event_index=2, node_id="main", payload={"reward": reward}
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=3, node_id="main", payload={}),
+            Event(
                 phase=EventPhase.INPUT,
-                event_index=1,
+                event_index=4,
                 node_id="main",
                 actor_id="demonstrator",
                 payload={
                     "available_actions": (0, 1),
-                    "observation": {
-                        "social_action": social_action,
-                        "social_reward": social_reward,
-                    },
+                    "observation": {"social_action": social_action, "social_reward": social_reward},
                 },
             ),
             Event(
-                phase=EventPhase.UPDATE,
-                event_index=2,
-                node_id="main",
-            ),
-            Event(
                 phase=EventPhase.DECISION,
-                event_index=3,
+                event_index=5,
                 node_id="main",
-                payload={"action": action},
+                actor_id="demonstrator",
+                payload={"action": social_action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=4,
+                event_index=6,
                 node_id="main",
-                payload={"reward": reward},
+                actor_id="demonstrator",
+                payload={"reward": social_reward},
             ),
             Event(
                 phase=EventPhase.UPDATE,
-                event_index=5,
+                event_index=7,
                 node_id="main",
+                actor_id="demonstrator",
+                payload={},
             ),
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
         ),
     )
 
@@ -160,11 +164,15 @@ def _python_social_log_likelihoods(
     for block in subject.blocks:
         for trial in block.trials:
             trial_log_likelihood = 0.0
-            for view in extract_decision_views(trial, SOCIAL_PRE_CHOICE_SCHEMA):
-                probabilities = kernel.action_probabilities(state, view, params)
-                choice_index = view.choice
-                trial_log_likelihood += float(np.log(probabilities[choice_index]))
-                state = kernel.next_state(state, view, params)
+            for event_type, learner_id, view in replay_trial_steps(
+                trial, SOCIAL_POST_OUTCOME_SCHEMA
+            ):
+                if event_type == "action" and learner_id == "subject":
+                    probabilities = kernel.action_probabilities(state, view, params)
+                    choice_index = view.choice
+                    trial_log_likelihood += float(np.log(probabilities[choice_index]))
+                elif event_type == "update" and learner_id == "subject":
+                    state = kernel.next_state(state, view, params)
             trial_log_likelihoods.append(trial_log_likelihood)
 
     return trial_log_likelihoods
@@ -223,7 +231,7 @@ def _social_step_data(subject: SubjectData) -> dict[str, Any]:
     kernel_spec = SocialRlSelfRewardDemoRewardKernel.spec()
     return subject_to_step_data(
         subject,
-        SOCIAL_PRE_CHOICE_SCHEMA,
+        SOCIAL_POST_OUTCOME_SCHEMA,
         kernel_spec=kernel_spec,
         include_social=True,
     )
