@@ -322,14 +322,13 @@ SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA = TrialSchema(
         ),
         TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
-        TrialSchemaStep(
-            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
-        ),
+        # No demonstrator self-update here; reward is held until the combined update below.
         TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
         TrialSchemaStep(EventPhase.UPDATE, "main"),
-        # Demonstrator observes subject's action+reward and updates accordingly.
+        # Demonstrator observes subject's action+reward and does a combined update
+        # (own reward + subject's social info).
         TrialSchemaStep(
             EventPhase.INPUT,
             "main",
@@ -348,7 +347,7 @@ SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA = TrialSchema(
         TrialSchemaStep(EventPhase.INPUT, "main"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
-        TrialSchemaStep(EventPhase.UPDATE, "main"),
+        # Subject waits for demonstrator info before updating.
         TrialSchemaStep(
             EventPhase.INPUT,
             "main",
@@ -357,11 +356,10 @@ SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA = TrialSchema(
         ),
         TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
-        TrialSchemaStep(
-            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
-        ),
-        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
-        # Demonstrator observes subject's action+reward and updates accordingly.
+        # Subject combined update: own reward + demonstrator's social info.
+        TrialSchemaStep(EventPhase.UPDATE, "main"),
+        # Demonstrator observes subject's action+reward and does a combined update
+        # (own reward + subject's social info).
         TrialSchemaStep(
             EventPhase.INPUT,
             "main",
