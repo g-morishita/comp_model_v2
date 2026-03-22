@@ -347,19 +347,10 @@ SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA = TrialSchema(
         TrialSchemaStep(EventPhase.INPUT, "main"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
-        # Subject waits for demonstrator info before updating.
-        TrialSchemaStep(
-            EventPhase.INPUT,
-            "main",
-            actor_id="demonstrator",
-            observable_fields=frozenset({"action", "reward"}),
-        ),
-        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
-        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
-        # Subject combined update: own reward + demonstrator's social info.
+        # Subject self-update (own reward only; demonstrator info not yet available).
         TrialSchemaStep(EventPhase.UPDATE, "main"),
-        # Demonstrator observes subject's action+reward and does a combined update
-        # (own reward + subject's social info).
+        # Demonstrator observes subject's action+reward and updates *before* deciding,
+        # so the subject's outcome informs the demonstrator's current-trial choice.
         TrialSchemaStep(
             EventPhase.INPUT,
             "main",
@@ -369,5 +360,18 @@ SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA = TrialSchema(
         TrialSchemaStep(
             EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
         ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        # Subject observes demonstrator's action+reward and social-updates.
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
     ),
 )
