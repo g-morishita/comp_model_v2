@@ -1,8 +1,26 @@
-"""Schema-driven extraction from event traces to model-facing decision views.
+"""Translating raw event logs into flat summaries that learning models can use.
 
-This module bridges the canonical event hierarchy and backend-agnostic model
-kernels. Extraction is positional and schema-specific, while the resulting
-decision views are flat and order-agnostic.
+Raw experimental data is stored as a sequence of events (see schema.py).
+Learning models, however, need a much simpler picture: for each decision
+moment, just tell me what options were available, what was chosen, and what
+reward was received.
+
+This module does that translation. Its main job is to walk through a trial's
+events and produce ``DecisionTrialView`` objects — clean, flat summaries of
+each decision moment. Models never see raw events; they only ever see these
+summaries.
+
+The main function is ``replay_trial_steps``, which replays a trial step by
+step and emits two kinds of signals to the caller:
+
+- A **DECISION** signal: "the participant just made a choice — evaluate how
+  probable that choice was under the current model."
+- An **UPDATE** signal: "a learning step should happen now — advance the
+  model's internal state using this choice and reward."
+
+This separation keeps the model fitting code clean: the caller just needs to
+respond to these two signals without worrying about which event in the raw
+log triggered them.
 """
 
 from __future__ import annotations
@@ -21,35 +39,39 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class DecisionTrialView:
-    """Flat per-decision record consumed by model kernels.
+    """A clean summary of one decision moment, ready for the learning model to use.
+
+    Rather than handing the model a sequence of raw events, we package
+    everything it needs for one decision into this flat record. This means
+    the same model code works regardless of how the task's event sequence is
+    structured — the extractor takes care of the bookkeeping.
 
     Attributes
     ----------
     trial_index
-        Index of the source trial within its block.
+        Which trial within the current block this decision came from.
     available_actions
-        Legal actions at the decision point.
+        The options that were available at this decision point (e.g.
+        ``(0, 1, 2)`` for a three-armed bandit).
     choice
-        Chosen action value, or ``None`` when the view is produced before the
-        subject's decision (e.g. a social-only update step).
+        The action that was chosen (e.g. ``1``). This is ``None`` when the
+        view represents a social-observation update — i.e. the participant is
+        learning from watching a demonstrator, not from their own choice.
     reward
-        Observed reward, if present.
+        The reward the participant received, if this was their own decision.
+        ``None`` for social-observation update steps.
     observation
-        Subject-facing observation payload.
+        Any additional information the participant saw alongside the options
+        (e.g. stimulus features).
     social_action
-        Observed demonstrator action, if present.
+        The action the demonstrator chose, if one was observed on this step.
+        ``None`` if no demonstrator was present or their action was not visible.
     social_reward
-        Observed demonstrator reward, if present (only when ``"reward"`` is in
-        the corresponding UPDATE step's ``observable_fields``).
+        The reward the demonstrator received, if it was visible to the
+        participant. This is only populated when the task schema explicitly
+        marks the demonstrator's reward as observable. ``None`` otherwise.
     metadata
-        Additional extractor metadata.
-
-    Notes
-    -----
-    Kernels consume :class:`DecisionTrialView` rather than :class:`Event`,
-    :class:`Trial`, or :class:`TrialSchema`. This allows the same kernel to work
-    with different event orders as long as the extractor produces the same flat
-    fields.
+        Any additional bookkeeping information attached by the extractor.
     """
 
     trial_index: int
@@ -66,36 +88,56 @@ def replay_trial_steps(
     trial: Trial,
     schema: TrialSchema,
 ) -> Iterator[tuple[EventPhase, str, DecisionTrialView]]:
-    """Yield schema-ordered replay steps for engine and MLE use.
+    """Walk through a trial event-by-event and emit signals the model should respond to.
 
-    Steps through the schema positionally, emitting one item per DECISION
-    (subject only) or UPDATE step.  UPDATE event payloads carry the actor's
-    choice and reward directly, so no accumulation of choices or rewards is
-    needed beyond tracking INPUT events for ``available_actions``.
+    This function is the bridge between raw data and model fitting. It reads a
+    trial's events in order and, at the right moments, yields a signal telling
+    the caller what the model should do next. There are two kinds of signals:
+
+    - **DECISION** (``EventPhase.DECISION``): the participant just made a
+      choice. The caller should ask the model "how probable was this action?"
+      and record that probability (e.g. for computing log-likelihood).
+      Only emitted for the participant's own choices, not a demonstrator's.
+
+    - **UPDATE** (``EventPhase.UPDATE``): a learning step should happen now.
+      The caller should advance the model's internal state (e.g. update
+      action values) using the choice and reward provided in the view. The
+      UPDATE payload already contains both the choice that was made and the
+      reward that resulted, so there is no need to remember information from
+      earlier events.
+
+    Design note — why carry choice and reward in the UPDATE payload?
+    In principle you could reconstruct them by looking back at earlier events.
+    Instead, the schema pre-packages them in the UPDATE event so this function
+    can emit a complete view without accumulating state across events.
+    The only thing that does need to be tracked across events is the most
+    recent INPUT event per actor, because that is where ``available_actions``
+    lives — and we store that in ``actor_inputs`` below.
 
     Parameters
     ----------
     trial
-        Trial whose events should be replayed.
+        The trial to replay.
     schema
-        Schema defining the positional meaning of each event.
+        Defines the expected structure of this trial — which events appear in
+        which positions and what each one means.
 
     Yields
     ------
     event_phase : EventPhase
-        ``EventPhase.DECISION`` — caller should evaluate
-        ``action_probabilities`` and accumulate log-probability. Only emitted
-        for subject DECISION steps.
-        ``EventPhase.UPDATE`` — caller should call ``next_state``.
+        ``EventPhase.DECISION`` — the model should evaluate action
+        probabilities for this choice.
+        ``EventPhase.UPDATE`` — the model should update its internal state.
     learner_id : str
-        Which agent's state should be updated.
+        The identifier of the agent whose state should be updated or
+        evaluated (e.g. ``"subject"``).
     view : DecisionTrialView
-        View built from the event payload and accumulated INPUT context.
+        A complete summary of the decision moment, ready for the model.
 
     Raises
     ------
     ValueError
-        If the trial fails schema validation.
+        If the trial's events do not match the expected schema structure.
     """
 
     schema.validate_trial(trial)
@@ -103,7 +145,8 @@ def replay_trial_steps(
     events = trial.events
     steps = schema.steps
 
-    actor_inputs: dict[str, Any] = {}  # most recent INPUT event per actor
+    # Most recent INPUT event per actor — used to recover available_actions.
+    actor_inputs: dict[str, Any] = {}
 
     for event, step in zip(events, steps, strict=True):
         if step.phase == EventPhase.INPUT:
@@ -127,7 +170,8 @@ def replay_trial_steps(
                 )
 
         elif step.phase == EventPhase.OUTCOME:
-            pass  # reward flows into the following UPDATE event payload
+            # Reward flows directly into the UPDATE event payload below.
+            pass
 
         elif step.phase == EventPhase.UPDATE:
             learner = step.learner_id

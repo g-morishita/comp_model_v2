@@ -1,8 +1,23 @@
-"""Declarative event-order schemas for trial structure.
+"""Trial schemas — scripts that define the event order within a single trial.
 
-Trial schemas are the positional source of truth for trial semantics. The same
-schema definition is shared by environments, validators, and extractors so that
-simulation and replay operate on the same event-order contract.
+A schema is a precise description of what happens in a trial: which events
+occur, in what order, who is the actor for each event (subject or
+demonstrator), and what information is available to the learner at each step.
+
+Schemas serve three purposes, all using the same definition:
+
+1. Driving simulation: the environment reads the schema step by step to know
+   what event type to generate next.
+2. Validating recorded data: when loading real experimental data, each trial
+   is checked against the schema to confirm that events appear in the correct
+   order with the correct actors.
+3. Guiding data extraction: the schema tells the data extractor how to
+   interpret each event — for example, which events carry the subject's own
+   choice versus the demonstrator's observable outcome.
+
+Pre-built schemas for common experimental designs are provided at the bottom of
+this module. Choose the schema that matches your experimental protocol and pass
+it to the environment or fitting pipeline.
 """
 
 from __future__ import annotations
@@ -15,29 +30,36 @@ from comp_model.data.validation import validate_event_payload
 
 @dataclass(frozen=True, slots=True)
 class TrialSchemaStep:
-    """Single positional step inside a declarative trial schema.
+    """One event slot in a trial script.
+
+    Each step describes a single event that should occur at that position in
+    the trial. Steps are matched positionally — the first step describes the
+    first event, the second step describes the second event, and so on.
 
     Attributes
     ----------
     phase
-        Phase expected at this step.
+        The type of event expected at this position. Common phases are INPUT
+        (options become available), DECISION (a choice is recorded), OUTCOME
+        (a reward is delivered), and UPDATE (beliefs are updated).
     node_id
-        Decision-point identifier expected at this step.
+        The name of the decision point this event belongs to. Used to match
+        recorded events to the correct position in the schema.
     actor_id
-        Actor expected at this step.
+        Who performs the action at this step — either ``"subject"`` (the
+        participant) or ``"demonstrator"``. Defaults to ``"subject"``.
     learner_id
-        Whose kernel state is updated at this step. Only meaningful on UPDATE
-        steps. Defaults to ``"subject"``.
+        Whose internal model is updated at this step. Relevant only for UPDATE
+        steps. Defaults to ``"subject"``. For social learning steps the
+        ``learner_id`` and ``actor_id`` differ: the actor is the demonstrator
+        but the learner is the subject.
     observable_fields
-        For social UPDATE steps (``actor_id != learner_id``): which fields from
-        the actor's trial are visible to the learner. Must be non-empty on
-        social UPDATE steps. Valid values: ``"action"``, ``"reward"``.
-
-    Notes
-    -----
-    ``node_id`` and ``actor_id`` are matching constraints, not semantic dispatch
-    keys. Extraction logic stays schema-driven and positional instead of
-    branching on arbitrary node-name strings.
+        For UPDATE steps where the learner is watching the actor (i.e.
+        ``actor_id`` and ``learner_id`` differ): which pieces of the actor's
+        outcome are visible to the learner. Must be specified for every such
+        social update step. Allowed values are ``"action"`` (the demonstrator's
+        choice is visible) and ``"reward"`` (the demonstrator's reward is
+        visible). Omitting ``"reward"`` models action-only social observation.
     """
 
     phase: EventPhase
@@ -49,22 +71,24 @@ class TrialSchemaStep:
 
 @dataclass(frozen=True, slots=True)
 class TrialSchema:
-    """Valid event ordering for one trial type.
+    """A complete script for one type of trial.
+
+    A ``TrialSchema`` is an ordered list of steps (``TrialSchemaStep``) that
+    describes everything that should happen in a trial of this type: which
+    events occur, in what order, and who acts or learns at each step.
+
+    The same schema object drives simulation, validates recorded data, and
+    guides feature extraction — there is a single source of truth for the
+    trial structure.
 
     Attributes
     ----------
     schema_id
-        Stable identifier for the schema.
+        A short, stable name for this schema (e.g. ``"asocial_bandit"``). Used
+        for logging and error messages.
     steps
-        Ordered schema steps that each trial must match positionally.
-
-    Notes
-    -----
-    ``TrialSchema`` does three jobs with the same positional contract:
-
-    1. it tells environments what event type should occur next,
-    2. it validates recorded trials, and
-    3. it tells the extractor how to interpret events around each decision.
+        The ordered list of event slots that every trial of this type must
+        match, position by position.
     """
 
     schema_id: str
@@ -84,23 +108,29 @@ class TrialSchema:
                 )
 
     def validate_trial(self, trial: Trial) -> None:
-        """Validate a trial against the schema definition.
+        """Check that a recorded trial matches this schema exactly.
+
+        Compares the trial's events against the schema step by step. If
+        anything does not match — wrong number of events, wrong event type,
+        wrong actor, wrong position — a descriptive error is raised so you can
+        identify the problematic trial and step.
 
         Parameters
         ----------
         trial
-            Trial to validate.
+            A single recorded trial to check.
 
         Returns
         -------
         None
-            This function raises on any mismatch.
+            Returns silently if the trial is valid.
 
         Raises
         ------
         ValueError
-            Raised when event count, phase, ``node_id``, ``actor_id``, event
-            index, or required payload keys differ from the schema contract.
+            Raised with a descriptive message when the trial does not conform
+            to the schema (e.g. wrong number of events, unexpected actor,
+            mismatched event type, or missing required data fields).
         """
 
         if len(trial.events) != len(self.steps):
@@ -134,12 +164,17 @@ class TrialSchema:
 
     @property
     def decision_step_indices(self) -> tuple[int, ...]:
-        """Indices of all decision steps in the schema.
+        """The positions (0-based) in the trial where a choice is made.
+
+        A trial may contain more than one decision step — for example, in
+        social designs both the demonstrator and the subject make a choice.
+        This property returns the indices of all such steps so that downstream
+        code can locate choices without needing to know the schema structure.
 
         Returns
         -------
         tuple[int, ...]
-            Positions whose phase is :class:`~comp_model.data.schema.EventPhase.DECISION`.
+            Zero-based indices of all DECISION steps in the schema, in order.
         """
 
         return tuple(
@@ -147,6 +182,9 @@ class TrialSchema:
         )
 
 
+# Standard solo learning trial.
+# Trial order: options appear → subject chooses → subject receives reward → beliefs updated.
+# No demonstrator is present. Use this for basic multi-armed bandit experiments.
 ASOCIAL_BANDIT_SCHEMA = TrialSchema(
     schema_id="asocial_bandit",
     steps=(
@@ -157,6 +195,12 @@ ASOCIAL_BANDIT_SCHEMA = TrialSchema(
     ),
 )
 
+# Demonstrator-first social learning trial (subject sees choice AND reward before acting).
+# Trial order: demonstrator sees options → demonstrator chooses → demonstrator gets reward →
+#   demonstrator's beliefs updated → subject observes demo's choice+reward and updates →
+#   subject sees options → subject chooses → subject gets reward → subject's beliefs updated.
+# Use this when participants watch the demonstrator's full outcome before making their own choice.
+# Social learning can therefore influence the current trial's choice.
 SOCIAL_PRE_CHOICE_SCHEMA = TrialSchema(
     schema_id="social_pre_choice",
     steps=(
@@ -180,6 +224,10 @@ SOCIAL_PRE_CHOICE_SCHEMA = TrialSchema(
     ),
 )
 
+# Demonstrator-first social learning trial (subject sees choice ONLY, not reward, before acting).
+# Identical structure to SOCIAL_PRE_CHOICE_SCHEMA except that when the subject observes the
+# demonstrator, only the demonstrator's choice is visible — the reward is hidden.
+# Use this to model action imitation without outcome knowledge.
 SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA = TrialSchema(
     schema_id="social_pre_choice_action_only",
     steps=(
@@ -203,6 +251,13 @@ SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA = TrialSchema(
     ),
 )
 
+# Subject-first social learning trial (subject acts, then watches demonstrator's choice+reward).
+# Trial order: subject sees options → subject chooses → subject gets reward →
+#   subject's beliefs updated → demonstrator sees options → demonstrator chooses →
+#   demonstrator gets reward → demonstrator's beliefs updated →
+#   subject observes demo's choice+reward and updates.
+# Because the demonstrator is observed after the subject has already chosen, the social
+# information can only influence future trials, not the current one.
 SOCIAL_POST_OUTCOME_SCHEMA = TrialSchema(
     schema_id="social_post_outcome",
     steps=(
@@ -226,6 +281,9 @@ SOCIAL_POST_OUTCOME_SCHEMA = TrialSchema(
     ),
 )
 
+# Subject-first social learning trial (subject acts, then watches demonstrator's choice ONLY).
+# Identical structure to SOCIAL_POST_OUTCOME_SCHEMA except that the subject only sees the
+# demonstrator's choice, not the reward. Social learning therefore carries no outcome signal.
 SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA = TrialSchema(
     schema_id="social_post_outcome_action_only",
     steps=(
@@ -249,10 +307,14 @@ SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA = TrialSchema(
     ),
 )
 
-# Schemas where the subject's own outcome is not observable.  The subject acts
-# but receives no feedback — the trial has no subject OUTCOME or subject
-# self-UPDATE event.  Only demonstrator information drives learning.
+# Schemas where the subject acts but receives no feedback on their own outcome.
+# The subject makes a choice but is never told whether it was rewarded.
+# Only the demonstrator's outcome can drive learning in these designs.
 
+# Demonstrator-first, no self-feedback trial.
+# Trial order: demonstrator acts and gets reward → subject observes demo's choice+reward →
+#   subject chooses (but receives no reward and gets no personal update).
+# Use this to isolate pure social learning: only the demonstrator's outcome can shape beliefs.
 SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
     schema_id="social_pre_choice_no_self_outcome",
     steps=(
@@ -274,6 +336,11 @@ SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
     ),
 )
 
+# Subject-first, no self-feedback trial.
+# Trial order: subject chooses (no reward given) → demonstrator acts and gets reward →
+#   subject observes demo's choice+reward and updates.
+# Use this when you want the subject to commit to a choice before seeing the demo,
+# but still learn only from the demonstrator's outcome (no personal feedback).
 SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
     schema_id="social_post_outcome_no_self_outcome",
     steps=(
@@ -295,10 +362,17 @@ SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
     ),
 )
 
-# Schemas where the demonstrator also updates from the subject's action and
-# reward.  The social UPDATE step carries the observed actor's choice and reward
-# in its event payload, as populated by the simulation engine or CSV loader.
+# Bidirectional social learning schemas — both the subject and the demonstrator
+# learn from each other's outcomes.
+# In these designs the demonstrator also observes the subject's choice and reward
+# and updates their own beliefs accordingly. This models dyadic or reciprocal
+# social learning where influence flows in both directions.
 
+# Demonstrator-first, bidirectional learning trial.
+# Trial order: demonstrator acts+gets reward → subject observes demo (choice+reward) →
+#   subject acts+gets reward → demonstrator observes subject (choice+reward).
+# Both agents learn from each other. The subject still observes the demonstrator before
+# choosing, so social information can influence the current trial's choice.
 SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA = TrialSchema(
     schema_id="social_pre_choice_demo_learns",
     steps=(
@@ -329,6 +403,11 @@ SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA = TrialSchema(
     ),
 )
 
+# Subject-first, bidirectional learning trial.
+# Trial order: subject acts+gets reward → demonstrator observes subject (choice+reward) →
+#   demonstrator acts+gets reward → subject observes demo (choice+reward).
+# Both agents learn from each other. Because the subject acts before watching the demo,
+# social information from this trial can only shape future choices.
 SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA = TrialSchema(
     schema_id="social_post_outcome_demo_learns",
     steps=(
