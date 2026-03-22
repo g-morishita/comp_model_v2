@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import numpy as np
 
-from comp_model.data.extractors import DecisionTrialView, extract_decision_views
+from comp_model.data.extractors import DecisionTrialView, replay_trial_steps
 from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectData, Trial
 
 if TYPE_CHECKING:
@@ -51,6 +51,8 @@ def simulate_subject(
     env: Environment,
     kernel: ModelKernel[StateT, ParamsT],
     params: ParamsT,
+    demonstrator_kernel: ModelKernel[object, object] | None = None,
+    demonstrator_params: object | None = None,
     config: SimulationConfig,
     subject_id: str = "sim_subject",
 ) -> SubjectData:
@@ -63,9 +65,14 @@ def simulate_subject(
     env
         Environment instance for the task.
     kernel
-        Model kernel used to choose and update.
+        Model kernel for the subject.
     params
-        Parsed kernel parameters.
+        Parsed subject kernel parameters.
+    demonstrator_kernel
+        Optional kernel for the demonstrator agent.
+    demonstrator_params
+        Parsed demonstrator kernel parameters. Required when
+        ``demonstrator_kernel`` is provided.
     config
         Simulation configuration.
     subject_id
@@ -78,28 +85,22 @@ def simulate_subject(
 
     Notes
     -----
-    The simulation loop follows the implementation plan directly:
-
-    1. infer the action count from task metadata,
-    2. initialize kernel state once at subject start,
-    3. reset the environment at each block,
-    4. optionally reset kernel state at block boundaries according to
-       ``kernel.spec().state_reset_policy``,
-    5. step through the schema position by position, sampling subject actions
-       from ``kernel.action_probabilities`` whenever a schema step requires an
-       action, and
-    6. after the full trial event sequence is assembled, extract decision views
-       and apply ``kernel.next_state`` for replay-consistent learning.
-
-    The same extraction path is therefore used for simulation updates and later
-    likelihood evaluation.
+    The simulation loop steps through the schema position by position. At each
+    DECISION step, the relevant agent's kernel supplies the action. After the
+    full trial is assembled, ``replay_trial_steps`` drives ``next_state`` calls
+    in schema order — ensuring that updates fire at their declared positions
+    (e.g. a social update before the subject's own decision in pre-choice
+    schemas).
     """
 
     rng = np.random.default_rng(config.seed)
     blocks: list[Block] = []
 
     n_actions = _infer_n_actions_from_task(task)
-    state = kernel.initial_state(n_actions, params)
+    states: dict[str, object] = {"subject": kernel.initial_state(n_actions, params)}
+    if demonstrator_kernel is not None and demonstrator_params is not None:
+        states["demonstrator"] = demonstrator_kernel.initial_state(n_actions, demonstrator_params)
+
     reset_policy = kernel.spec().state_reset_policy
 
     for block_index, block_spec in enumerate(task.blocks):
@@ -107,7 +108,11 @@ def simulate_subject(
         schema = block_spec.schema
 
         if reset_policy == "per_block" and block_index > 0:
-            state = kernel.initial_state(n_actions, params)
+            states["subject"] = kernel.initial_state(n_actions, params)
+            if demonstrator_kernel is not None and demonstrator_params is not None:
+                states["demonstrator"] = demonstrator_kernel.initial_state(
+                    n_actions, demonstrator_params
+                )
 
         trials: list[Trial] = []
 
@@ -116,15 +121,16 @@ def simulate_subject(
 
             for step_index, schema_step in enumerate(schema.steps):
                 if schema_step.action_required:
-                    input_event = _find_subject_input(
+                    actor = schema_step.actor_id
+                    input_event = _find_actor_input(
                         trial_events,
                         schema_step.node_id,
-                        schema_step.actor_id,
+                        actor,
                     )
                     if input_event is None:
                         raise ValueError(
-                            f"Trial {trial_index}: no subject INPUT found before DECISION at "
-                            f"step {step_index}"
+                            f"Trial {trial_index}: no INPUT found for actor {actor!r} "
+                            f"before DECISION at step {step_index}"
                         )
 
                     raw_observation = input_event.payload.get("observation")
@@ -135,10 +141,23 @@ def simulate_subject(
                     partial_view = DecisionTrialView(
                         trial_index=trial_index,
                         available_actions=available_actions,
-                        choice=-1,
                         observation=observation,
                     )
-                    probabilities = kernel.action_probabilities(state, partial_view, params)
+
+                    if actor == "subject":
+                        probabilities = kernel.action_probabilities(
+                            cast("StateT", states["subject"]), partial_view, params
+                        )
+                    elif demonstrator_kernel is not None and demonstrator_params is not None:
+                        probabilities = demonstrator_kernel.action_probabilities(
+                            states["demonstrator"], partial_view, demonstrator_params
+                        )
+                    else:
+                        raise ValueError(
+                            f"Trial {trial_index}: DECISION step requires actor {actor!r} "
+                            f"but no kernel provided for that actor"
+                        )
+
                     action_index = int(
                         rng.choice(len(available_actions), p=np.array(probabilities))
                     )
@@ -150,8 +169,16 @@ def simulate_subject(
                 trial_events.extend(events)
 
             trial = Trial(trial_index=trial_index, events=tuple(trial_events))
-            for view in extract_decision_views(trial, schema):
-                state = kernel.next_state(state, view, params)
+            for event_type, learner_id, view in replay_trial_steps(trial, schema):
+                if event_type == "update":
+                    if learner_id == "subject":
+                        states["subject"] = kernel.next_state(
+                            cast("StateT", states["subject"]), view, params
+                        )
+                    elif demonstrator_kernel is not None and demonstrator_params is not None:
+                        states["demonstrator"] = demonstrator_kernel.next_state(
+                            states["demonstrator"], view, demonstrator_params
+                        )
             trials.append(trial)
 
         blocks.append(
@@ -220,8 +247,8 @@ def simulate_dataset(
     return Dataset(subjects=tuple(subjects))
 
 
-def _find_subject_input(events: list[Event], node_id: str, actor_id: str) -> Event | None:
-    """Find the subject INPUT event preceding a decision.
+def _find_actor_input(events: list[Event], node_id: str, actor_id: str) -> Event | None:
+    """Find the INPUT event for a given actor preceding a decision.
 
     Parameters
     ----------
@@ -230,18 +257,18 @@ def _find_subject_input(events: list[Event], node_id: str, actor_id: str) -> Eve
     node_id
         Node identifier of the decision point.
     actor_id
-        Actor identifier of the decision point.
+        Actor identifier whose INPUT event is sought.
 
     Returns
     -------
     Event | None
-        Matching subject INPUT event, if any.
+        Matching INPUT event, if any.
 
     Notes
     -----
     This helper searches only the events accumulated for the current in-progress
     trial, which matches the runtime contract that an action-required decision
-    must have already been preceded by its subject INPUT event.
+    must have already been preceded by its actor's INPUT event.
     """
 
     for event in events:

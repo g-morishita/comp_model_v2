@@ -1,25 +1,22 @@
-"""Tests for schema-driven decision view extraction."""
+"""Tests for schema-driven trial replay and decision view extraction."""
 
-from comp_model.data.extractors import extract_decision_views
+from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import Event, EventPhase, Trial
 from comp_model.tasks.schemas import (
     ASOCIAL_BANDIT_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
 )
 
 
-def test_extract_asocial_trial_view() -> None:
-    """Ensure asocial trials extract choice and reward correctly.
-
-    Returns
-    -------
-    None
-        This test asserts extracted scalar fields.
-    """
-
-    trial = Trial(
-        trial_index=0,
+def _make_asocial_trial(
+    trial_index: int = 0,
+    action: int = 1,
+    reward: float = 0.5,
+) -> Trial:
+    return Trial(
+        trial_index=trial_index,
         events=(
             Event(
                 phase=EventPhase.INPUT,
@@ -28,41 +25,25 @@ def test_extract_asocial_trial_view() -> None:
                 payload={"available_actions": (0, 1), "observation": {"cue": "left"}},
             ),
             Event(
-                phase=EventPhase.DECISION,
-                event_index=1,
-                node_id="main",
-                payload={"action": 1},
+                phase=EventPhase.DECISION, event_index=1, node_id="main", payload={"action": action}
             ),
             Event(
-                phase=EventPhase.OUTCOME,
-                event_index=2,
-                node_id="main",
-                payload={"reward": 0.5},
+                phase=EventPhase.OUTCOME, event_index=2, node_id="main", payload={"reward": reward}
             ),
             Event(phase=EventPhase.UPDATE, event_index=3, node_id="main", payload={}),
         ),
     )
 
-    (view,) = extract_decision_views(trial, ASOCIAL_BANDIT_SCHEMA)
 
-    assert view.available_actions == (0, 1)
-    assert view.choice == 1
-    assert view.reward == 0.5
-    assert dict(view.observation) == {"cue": "left"}
-    assert view.social_action is None
-
-
-def test_extract_social_pre_choice_view_reads_social_fields() -> None:
-    """Ensure pre-choice social input is unpacked into social fields.
-
-    Returns
-    -------
-    None
-        This test asserts extracted demonstrator information.
-    """
-
-    trial = Trial(
-        trial_index=1,
+def _make_social_pre_choice_trial(
+    trial_index: int = 0,
+    subject_action: int = 1,
+    subject_reward: float = 0.0,
+    demo_action: int = 0,
+    demo_reward: float = 1.0,
+) -> Trial:
+    return Trial(
+        trial_index=trial_index,
         events=(
             Event(
                 phase=EventPhase.INPUT,
@@ -77,44 +58,57 @@ def test_extract_social_pre_choice_view_reads_social_fields() -> None:
                 actor_id="demonstrator",
                 payload={
                     "available_actions": (0, 1),
-                    "observation": {"social_action": 0, "social_reward": 1.0},
+                    "observation": {"social_action": demo_action, "social_reward": demo_reward},
                 },
             ),
-            Event(phase=EventPhase.UPDATE, event_index=2, node_id="main", payload={}),
             Event(
                 phase=EventPhase.DECISION,
-                event_index=3,
+                event_index=2,
                 node_id="main",
-                payload={"action": 1},
+                actor_id="demonstrator",
+                payload={"action": demo_action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
+                event_index=3,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"reward": demo_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
                 event_index=4,
                 node_id="main",
-                payload={"reward": 0.0},
+                actor_id="demonstrator",
+                payload={},
             ),
             Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=6,
+                node_id="main",
+                payload={"action": subject_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=7,
+                node_id="main",
+                payload={"reward": subject_reward},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
         ),
     )
 
-    (view,) = extract_decision_views(trial, SOCIAL_PRE_CHOICE_SCHEMA)
 
-    assert view.choice == 1
-    assert view.social_action == 0
-    assert view.social_reward == 1.0
-
-
-def test_extract_social_post_outcome_view_ignores_position_difference() -> None:
-    """Ensure post-outcome social input extracts the same flat fields.
-
-    Returns
-    -------
-    None
-        This test asserts schema-order agnostic extraction.
-    """
-
-    trial = Trial(
-        trial_index=2,
+def _make_social_post_outcome_trial(
+    trial_index: int = 0,
+    subject_action: int = 0,
+    subject_reward: float = 1.0,
+    demo_action: int = 1,
+    demo_reward: float = 0.0,
+) -> Trial:
+    return Trial(
+        trial_index=trial_index,
         events=(
             Event(
                 phase=EventPhase.INPUT,
@@ -126,31 +120,203 @@ def test_extract_social_post_outcome_view_ignores_position_difference() -> None:
                 phase=EventPhase.DECISION,
                 event_index=1,
                 node_id="main",
-                payload={"action": 0},
+                payload={"action": subject_action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
                 event_index=2,
                 node_id="main",
-                payload={"reward": 1.0},
+                payload={"reward": subject_reward},
             ),
+            Event(phase=EventPhase.UPDATE, event_index=3, node_id="main", payload={}),
             Event(
                 phase=EventPhase.INPUT,
-                event_index=3,
+                event_index=4,
                 node_id="main",
                 actor_id="demonstrator",
                 payload={
                     "available_actions": (0, 1),
-                    "observation": {"social_action": 1, "social_reward": 0.0},
+                    "observation": {"social_action": demo_action, "social_reward": demo_reward},
                 },
             ),
-            Event(phase=EventPhase.UPDATE, event_index=4, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=5,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"action": demo_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=6,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"reward": demo_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=7,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
         ),
     )
 
-    (view,) = extract_decision_views(trial, SOCIAL_POST_OUTCOME_SCHEMA)
 
+# ---------------------------------------------------------------------------
+# Asocial schema
+# ---------------------------------------------------------------------------
+
+
+def test_asocial_replay_yields_one_action_and_one_update() -> None:
+    trial = _make_asocial_trial(action=1, reward=0.5)
+    steps = list(replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA))
+
+    event_types = [s[0] for s in steps]
+    assert event_types == ["action", "update"]
+
+
+def test_asocial_action_step_has_choice_and_no_reward() -> None:
+    trial = _make_asocial_trial(action=1, reward=0.5)
+    _, learner_id, view = next(replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA))
+
+    assert view.choice == 1
+    assert view.reward is None
+    assert view.available_actions == (0, 1)
+    assert dict(view.observation) == {"cue": "left"}
+    assert learner_id == "subject"
+
+
+def test_asocial_update_step_has_choice_and_reward() -> None:
+    trial = _make_asocial_trial(action=1, reward=0.5)
+    steps = list(replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA))
+    _, learner_id, view = steps[1]
+
+    assert view.choice == 1
+    assert view.reward == 0.5
+    assert learner_id == "subject"
+
+
+# ---------------------------------------------------------------------------
+# Social pre-choice schema
+# ---------------------------------------------------------------------------
+
+
+def test_social_pre_choice_replay_step_order() -> None:
+    trial = _make_social_pre_choice_trial()
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
+
+    event_types = [(s[0], s[1]) for s in steps]
+    assert event_types == [
+        ("update", "demonstrator"),  # demonstrator self-update
+        ("update", "subject"),  # subject social-update (before choice)
+        ("action", "subject"),  # subject action
+        ("update", "subject"),  # subject self-update (after outcome)
+    ]
+
+
+def test_social_pre_choice_subject_social_update_has_no_choice_and_no_reward() -> None:
+    """Subject social update fires before choice — choice and own reward are None."""
+    trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
+
+    _, learner_id, view = steps[1]  # subject social update
+    assert learner_id == "subject"
+    assert view.choice is None
+    assert view.reward is None
+    assert view.social_action == 0
+    assert view.social_reward == 1.0
+
+
+def test_social_pre_choice_action_step_has_updated_social_info() -> None:
+    """Action step carries accumulated social info so kernels can use it."""
+    trial = _make_social_pre_choice_trial(subject_action=1, demo_action=0, demo_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
+
+    _, learner_id, view = steps[2]  # action step
+    assert learner_id == "subject"
+    assert view.choice == 1
+    assert view.reward is None
+    assert view.social_action == 0
+    assert view.social_reward == 1.0
+
+
+def test_social_pre_choice_self_update_has_choice_and_reward() -> None:
+    trial = _make_social_pre_choice_trial(subject_action=1, subject_reward=0.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
+
+    _, learner_id, view = steps[3]  # subject self-update
+    assert learner_id == "subject"
+    assert view.choice == 1
+    assert view.reward == 0.0
+
+
+def test_social_pre_choice_demonstrator_update_has_demo_choice_and_reward() -> None:
+    trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
+
+    _, learner_id, view = steps[0]  # demonstrator self-update
+    assert learner_id == "demonstrator"
     assert view.choice == 0
     assert view.reward == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Social pre-choice action-only schema — observable_fields filtering
+# ---------------------------------------------------------------------------
+
+
+def test_action_only_schema_excludes_social_reward_from_update() -> None:
+    """observable_fields={"action"} should produce social_reward=None."""
+    trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA))
+
+    _, learner_id, view = steps[1]  # subject social update
+    assert learner_id == "subject"
+    assert view.social_action == 0
+    assert view.social_reward is None  # reward filtered out
+
+
+# ---------------------------------------------------------------------------
+# Social post-outcome schema
+# ---------------------------------------------------------------------------
+
+
+def test_social_post_outcome_replay_step_order() -> None:
+    trial = _make_social_post_outcome_trial()
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_SCHEMA))
+
+    event_types = [(s[0], s[1]) for s in steps]
+    assert event_types == [
+        ("action", "subject"),  # subject acts first
+        ("update", "subject"),  # subject self-update
+        ("update", "demonstrator"),  # demonstrator self-update
+        ("update", "subject"),  # subject social-update
+    ]
+
+
+def test_social_post_outcome_subject_self_update_has_no_social_info() -> None:
+    """Subject self-update fires before seeing demonstrator — no social info yet."""
+    trial = _make_social_post_outcome_trial(
+        subject_action=0, subject_reward=1.0, demo_action=1, demo_reward=0.0
+    )
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_SCHEMA))
+
+    _, learner_id, view = steps[1]  # subject self-update
+    assert learner_id == "subject"
+    assert view.choice == 0
+    assert view.reward == 1.0
+    assert view.social_action is None
+    assert view.social_reward is None
+
+
+def test_social_post_outcome_social_update_has_social_info() -> None:
+    trial = _make_social_post_outcome_trial(demo_action=1, demo_reward=0.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_SCHEMA))
+
+    _, learner_id, view = steps[3]  # subject social update
+    assert learner_id == "subject"
     assert view.social_action == 1
     assert view.social_reward == 0.0

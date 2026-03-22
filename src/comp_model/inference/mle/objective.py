@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from comp_model.data.extractors import extract_decision_views
+from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import EventPhase, SubjectData
 
 if TYPE_CHECKING:
@@ -62,11 +62,13 @@ def log_likelihood_simple(
             state = kernel.initial_state(n_actions, params)
 
         for trial in block.trials:
-            for view in extract_decision_views(trial, schema):
-                probabilities = kernel.action_probabilities(state, view, params)
-                choice_index = view.available_actions.index(view.choice)
-                total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
-                state = kernel.next_state(state, view, params)
+            for event_type, learner_id, view in replay_trial_steps(trial, schema):
+                if event_type == "action" and learner_id == "subject":
+                    probabilities = kernel.action_probabilities(state, view, params)
+                    choice_index = view.available_actions.index(view.choice)
+                    total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
+                elif event_type == "update" and learner_id == "subject":
+                    state = kernel.next_state(state, view, params)
 
     return total_log_likelihood
 
@@ -152,10 +154,12 @@ def log_likelihood_conditioned(
             state = kernel.initial_state(n_actions, condition_params)
 
         for trial in block.trials:
-            for view in extract_decision_views(trial, schema):
-                probabilities = kernel.action_probabilities(state, view, condition_params)
-                choice_index = view.available_actions.index(view.choice)
-                total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
-                state = kernel.next_state(state, view, condition_params)
+            for event_type, learner_id, view in replay_trial_steps(trial, schema):
+                if event_type == "action" and learner_id == "subject":
+                    probabilities = kernel.action_probabilities(state, view, condition_params)
+                    choice_index = view.available_actions.index(view.choice)
+                    total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
+                elif event_type == "update" and learner_id == "subject":
+                    state = kernel.next_state(state, view, condition_params)
 
     return total_log_likelihood

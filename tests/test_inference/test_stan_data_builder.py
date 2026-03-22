@@ -253,17 +253,23 @@ def test_subject_to_step_data_exports_step_stream() -> None:
     stan_data = subject_to_step_data(subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec())
 
     assert stan_data["A"] == 2
-    assert stan_data["E"] == 4
+    # 4 trials x 2 steps each (action + self-update) = 8 total steps
+    assert stan_data["E"] == 8
     assert stan_data["D"] == 4
-    assert len(stan_data["step_choice"]) == 4
-    assert len(stan_data["step_update_action"]) == 4
-    assert len(stan_data["step_reward"]) == 4
-    assert len(stan_data["step_avail_mask"]) == 4
-    assert len(stan_data["step_block"]) == 4
-    assert stan_data["step_block"] == [1, 1, 1, 1]
-    assert all(c in (1, 2) for c in stan_data["step_choice"])
-    # Each step should have update_action matching choice (immediate reward)
-    assert stan_data["step_update_action"] == stan_data["step_choice"]
+    assert len(stan_data["step_choice"]) == 8
+    assert len(stan_data["step_update_action"]) == 8
+    assert len(stan_data["step_reward"]) == 8
+    assert len(stan_data["step_avail_mask"]) == 8
+    assert len(stan_data["step_block"]) == 8
+    assert stan_data["step_block"] == [1] * 8
+    # Action steps carry the choice; update steps have step_choice == 0
+    choices = [c for c in stan_data["step_choice"] if c > 0]
+    assert len(choices) == 4
+    assert all(c in (1, 2) for c in choices)
+    # Self-update steps carry the same action as the preceding choice
+    update_actions = [c for c in stan_data["step_update_action"] if c > 0]
+    assert len(update_actions) == 4
+    assert all(c in (1, 2) for c in update_actions)
 
 
 def test_dataset_to_step_data_adds_subject_indices() -> None:
@@ -337,7 +343,8 @@ def test_subject_to_step_data_with_conditions() -> None:
         condition_map=condition_map,
     )
 
-    assert stan_data["step_condition"] == [1, 1, 2, 2]
+    # 2 trials x 2 steps per trial per condition = 4 steps per condition
+    assert stan_data["step_condition"] == [1, 1, 1, 1, 2, 2, 2, 2]
 
 
 def test_step_data_remaps_noncontiguous_actions() -> None:
@@ -393,9 +400,10 @@ def test_step_data_remaps_noncontiguous_actions() -> None:
     stan_data = subject_to_step_data(subject, ASOCIAL_BANDIT_SCHEMA, kernel_spec=kernel.spec())
 
     assert stan_data["A"] == 2
-    assert stan_data["step_choice"] == [2]
-    assert stan_data["step_update_action"] == [2]
-    assert stan_data["step_avail_mask"] == [[1.0, 1.0]]
+    # 1 trial x 2 steps (action + self-update)
+    assert stan_data["step_choice"] == [2, 0]
+    assert stan_data["step_update_action"] == [0, 2]
+    assert stan_data["step_avail_mask"] == [[1.0, 1.0], [1.0, 1.0]]
 
 
 def test_step_data_includes_social_fields_when_requested() -> None:
@@ -430,33 +438,47 @@ def test_step_data_includes_social_fields_when_requested() -> None:
                                 actor_id="demonstrator",
                                 payload={
                                     "available_actions": (0, 1),
-                                    "observation": {
-                                        "social_action": 1,
-                                        "social_reward": 0.5,
-                                    },
+                                    "observation": {"social_action": 1, "social_reward": 0.5},
                                 },
                             ),
                             Event(
-                                phase=EventPhase.UPDATE,
+                                phase=EventPhase.DECISION,
                                 event_index=2,
                                 node_id="main",
+                                actor_id="demonstrator",
+                                payload={"action": 1},
+                            ),
+                            Event(
+                                phase=EventPhase.OUTCOME,
+                                event_index=3,
+                                node_id="main",
+                                actor_id="demonstrator",
+                                payload={"reward": 0.5},
+                            ),
+                            Event(
+                                phase=EventPhase.UPDATE,
+                                event_index=4,
+                                node_id="main",
+                                actor_id="demonstrator",
+                                payload={},
+                            ),
+                            Event(
+                                phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}
                             ),
                             Event(
                                 phase=EventPhase.DECISION,
-                                event_index=3,
+                                event_index=6,
                                 node_id="main",
                                 payload={"action": 0},
                             ),
                             Event(
                                 phase=EventPhase.OUTCOME,
-                                event_index=4,
+                                event_index=7,
                                 node_id="main",
                                 payload={"reward": 1.0},
                             ),
                             Event(
-                                phase=EventPhase.UPDATE,
-                                event_index=5,
-                                node_id="main",
+                                phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}
                             ),
                         ),
                     ),
@@ -476,8 +498,16 @@ def test_step_data_includes_social_fields_when_requested() -> None:
 
     assert "step_social_action" in stan_data
     assert "step_social_reward" in stan_data
-    assert stan_data["step_social_action"] == [2]  # action 1 → 1-based index 2
-    assert stan_data["step_social_reward"] == [0.5]
+    # PRE_CHOICE: 3 subject steps per trial — social-update, action, self-update
+    # step 0 (social-update): social_action=2 (action 1 → index 2), social_reward=0.5
+    # step 1 (action):        choice=1 (action 0 → index 1)
+    # step 2 (self-update):   update_action=1, reward=1.0
+    assert stan_data["E"] == 3
+    assert stan_data["D"] == 1
+    assert stan_data["step_choice"] == [0, 1, 0]
+    assert stan_data["step_update_action"] == [0, 0, 1]
+    assert stan_data["step_social_action"] == [2, 0, 0]
+    assert stan_data["step_social_reward"] == [0.5, 0.0, 0.0]
 
 
 def test_step_data_excludes_social_fields_by_default() -> None:

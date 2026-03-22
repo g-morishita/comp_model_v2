@@ -82,7 +82,7 @@ def test_asocial_adapter_builds_subject_stan_data() -> None:
     )
 
     assert stan_data["A"] == 2
-    assert stan_data["E"] == 4
+    assert stan_data["E"] == 8  # 4 trials x 2 steps (action + self-update)
     assert "alpha_prior_family" in stan_data
 
 
@@ -137,4 +137,5 @@ def test_asocial_adapter_adds_condition_data_for_subject_condition_fit() -> None
     )
 
     assert stan_data["C"] == 2
-    assert stan_data["step_condition"] == [1, 1, 2, 2]
+    # 2 trials x 2 steps per trial per condition = 4 steps per condition
+    assert stan_data["step_condition"] == [1, 1, 1, 1, 2, 2, 2, 2]

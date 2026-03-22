@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from comp_model.data.extractors import extract_decision_views
+from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.data_builder import subject_to_step_data
@@ -217,11 +217,13 @@ def _python_trial_log_likelihoods(subject: SubjectData, alpha: float, beta: floa
     for block in subject.blocks:
         for trial in block.trials:
             trial_log_likelihood = 0.0
-            for view in extract_decision_views(trial, ASOCIAL_BANDIT_SCHEMA):
-                probabilities = kernel.action_probabilities(state, view, params)
-                choice_index = view.choice
-                trial_log_likelihood += float(np.log(probabilities[choice_index]))
-                state = kernel.next_state(state, view, params)
+            for event_type, learner_id, view in replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA):
+                if event_type == "action" and learner_id == "subject":
+                    probabilities = kernel.action_probabilities(state, view, params)
+                    choice_index = view.choice
+                    trial_log_likelihood += float(np.log(probabilities[choice_index]))
+                elif event_type == "update" and learner_id == "subject":
+                    state = kernel.next_state(state, view, params)
             trial_log_likelihoods.append(trial_log_likelihood)
 
     return trial_log_likelihoods
@@ -450,14 +452,18 @@ def test_simulation_fit_structural_parity() -> None:
         subject_id="s1",
     )
     stan_data = _subject_step_data(subject)
-    views = [
-        view
-        for block in subject.blocks
-        for trial in block.trials
-        for view in extract_decision_views(trial, ASOCIAL_BANDIT_SCHEMA)
-    ]
 
-    assert stan_data["E"] == len(views)
-    assert stan_data["step_choice"] == [view.choice + 1 for view in views]
-    expected_rewards = [float(view.reward) if view.reward is not None else 0.0 for view in views]
-    assert stan_data["step_reward"] == expected_rewards
+    # Each trial produces 2 steps (action + self-update); collect in replay order.
+    n_trials = sum(len(block.trials) for block in subject.blocks)
+    assert stan_data["E"] == n_trials * 2
+    assert stan_data["D"] == n_trials
+    # Action steps (even positions) carry the 1-based choice; update steps (odd) carry reward.
+    choices_from_actions = [c for c in stan_data["step_choice"] if c > 0]
+    rewards_from_updates = [
+        r
+        for c, r in zip(stan_data["step_update_action"], stan_data["step_reward"], strict=True)
+        if c > 0
+    ]
+    assert len(choices_from_actions) == n_trials
+    assert all(c in (1, 2) for c in choices_from_actions)
+    assert len(rewards_from_updates) == n_trials

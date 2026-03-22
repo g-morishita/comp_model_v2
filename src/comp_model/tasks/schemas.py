@@ -7,7 +7,7 @@ simulation and replay operate on the same event-order contract.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from comp_model.data.schema import EventPhase, Trial
 from comp_model.data.validation import validate_event_payload
@@ -25,8 +25,16 @@ class TrialSchemaStep:
         Decision-point identifier expected at this step.
     actor_id
         Actor expected at this step.
+    learner_id
+        Whose kernel state is updated at this step. Only meaningful on UPDATE
+        steps. Defaults to ``"subject"``.
     action_required
         Whether the simulation engine must supply an action here.
+    observable_fields
+        Declares which fields from the observed agent's events are visible to
+        the subject at this INPUT step. Only interpreted when
+        ``actor_id != "subject"``. Must be non-empty on non-subject INPUT steps.
+        Valid values: ``"action"``, ``"reward"``.
 
     Notes
     -----
@@ -38,7 +46,9 @@ class TrialSchemaStep:
     phase: EventPhase
     node_id: str
     actor_id: str = "subject"
+    learner_id: str = "subject"
     action_required: bool = False
+    observable_fields: frozenset[str] = field(default_factory=lambda: frozenset[str]())
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +73,18 @@ class TrialSchema:
 
     schema_id: str
     steps: tuple[TrialSchemaStep, ...]
+
+    def __post_init__(self) -> None:
+        for i, step in enumerate(self.steps):
+            if (
+                step.phase == EventPhase.INPUT
+                and step.actor_id != "subject"
+                and not step.observable_fields
+            ):
+                raise ValueError(
+                    f"Schema {self.schema_id!r}, step {i}: non-subject INPUT step "
+                    f"(actor_id={step.actor_id!r}) must declare observable_fields"
+                )
 
     def validate_trial(self, trial: Trial) -> None:
         """Validate a trial against the schema definition.
@@ -154,8 +176,40 @@ SOCIAL_PRE_CHOICE_SCHEMA = TrialSchema(
     schema_id="social_pre_choice",
     steps=(
         TrialSchemaStep(EventPhase.INPUT, "main"),
-        TrialSchemaStep(EventPhase.INPUT, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
+        TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main"),
         TrialSchemaStep(EventPhase.UPDATE, "main"),
+    ),
+)
+
+SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA = TrialSchema(
+    schema_id="social_pre_choice_action_only",
+    steps=(
+        TrialSchemaStep(EventPhase.INPUT, "main"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
         TrialSchemaStep(EventPhase.UPDATE, "main"),
@@ -168,7 +222,40 @@ SOCIAL_POST_OUTCOME_SCHEMA = TrialSchema(
         TrialSchemaStep(EventPhase.INPUT, "main"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
-        TrialSchemaStep(EventPhase.INPUT, "main", actor_id="demonstrator"),
         TrialSchemaStep(EventPhase.UPDATE, "main"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
+    ),
+)
+
+SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA = TrialSchema(
+    schema_id="social_post_outcome_action_only",
+    steps=(
+        TrialSchemaStep(EventPhase.INPUT, "main"),
+        TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main"),
+        TrialSchemaStep(EventPhase.UPDATE, "main"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
     ),
 )

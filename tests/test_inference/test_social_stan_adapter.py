@@ -54,34 +54,38 @@ def _social_trial(
                 actor_id="demonstrator",
                 payload={
                     "available_actions": (0, 1),
-                    "observation": {
-                        "social_action": social_action,
-                        "social_reward": social_reward,
-                    },
+                    "observation": {"social_action": social_action, "social_reward": social_reward},
                 },
             ),
             Event(
-                phase=EventPhase.UPDATE,
+                phase=EventPhase.DECISION,
                 event_index=2,
                 node_id="main",
-            ),
-            Event(
-                phase=EventPhase.DECISION,
-                event_index=3,
-                node_id="main",
-                payload={"action": action},
+                actor_id="demonstrator",
+                payload={"action": social_action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=4,
+                event_index=3,
                 node_id="main",
-                payload={"reward": reward},
+                actor_id="demonstrator",
+                payload={"reward": social_reward},
             ),
             Event(
                 phase=EventPhase.UPDATE,
-                event_index=5,
+                event_index=4,
                 node_id="main",
+                actor_id="demonstrator",
+                payload={},
             ),
+            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.DECISION, event_index=6, node_id="main", payload={"action": action}
+            ),
+            Event(
+                phase=EventPhase.OUTCOME, event_index=7, node_id="main", payload={"reward": reward}
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
         ),
     )
 
@@ -145,12 +149,13 @@ def test_social_adapter_builds_subject_stan_data() -> None:
     )
 
     assert stan_data["A"] == 2
-    assert stan_data["E"] == 2
+    # PRE_CHOICE: 3 subject steps per trial x 2 trials = 6 total steps
+    assert stan_data["E"] == 6
     assert stan_data["D"] == 2
     assert "step_social_action" in stan_data
     assert "step_social_reward" in stan_data
-    assert len(stan_data["step_social_action"]) == 2
-    assert len(stan_data["step_social_reward"]) == 2
+    assert len(stan_data["step_social_action"]) == 6
+    assert len(stan_data["step_social_reward"]) == 6
     assert "alpha_self_prior_family" in stan_data
     assert "alpha_other_prior_family" in stan_data
     assert "beta_prior_family" in stan_data
@@ -202,7 +207,8 @@ def test_social_adapter_adds_condition_data() -> None:
     )
 
     assert stan_data["C"] == 2
-    assert stan_data["step_condition"] == [1, 2]
+    # PRE_CHOICE: 3 subject steps per trial x 1 trial per block = [1,1,1, 2,2,2]
+    assert stan_data["step_condition"] == [1, 1, 1, 2, 2, 2]
     assert stan_data["baseline_cond"] == 1
 
 
