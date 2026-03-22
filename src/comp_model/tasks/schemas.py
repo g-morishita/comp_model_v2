@@ -35,11 +35,6 @@ class TrialSchemaStep:
         the subject at this INPUT step. Only interpreted when
         ``actor_id != "subject"``. Must be non-empty on non-subject INPUT steps.
         Valid values: ``"action"``, ``"reward"``.
-    outcome_observable
-        Whether the reward from this OUTCOME step is exposed to the learner's
-        subsequent UPDATE step. Set to ``False`` to model conditions where the
-        subject acts but does not observe their own outcome. Only meaningful on
-        OUTCOME steps with ``actor_id == "subject"``. Defaults to ``True``.
 
     Notes
     -----
@@ -54,7 +49,6 @@ class TrialSchemaStep:
     learner_id: str = "subject"
     action_required: bool = False
     observable_fields: frozenset[str] = field(default_factory=lambda: frozenset[str]())
-    outcome_observable: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,11 +260,9 @@ SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA = TrialSchema(
     ),
 )
 
-# Schemas where the subject's own outcome is hidden but the demonstrator's
-# outcome is visible.  The subject's OUTCOME event still occurs (it is
-# recorded in the trial for analysis), but ``outcome_observable=False``
-# prevents the extractor from surfacing it as ``reward`` in the subject's
-# UPDATE view.
+# Schemas where the subject's own outcome is not observable.  The subject acts
+# but receives no feedback — the trial has no subject OUTCOME or subject
+# self-UPDATE event.  Only demonstrator information drives learning.
 
 SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
     schema_id="social_pre_choice_no_self_outcome",
@@ -289,8 +281,6 @@ SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
         ),
         TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
-        TrialSchemaStep(EventPhase.OUTCOME, "main", outcome_observable=False),
-        TrialSchemaStep(EventPhase.UPDATE, "main"),
     ),
 )
 
@@ -299,8 +289,6 @@ SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
     steps=(
         TrialSchemaStep(EventPhase.INPUT, "main"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
-        TrialSchemaStep(EventPhase.OUTCOME, "main", outcome_observable=False),
-        TrialSchemaStep(EventPhase.UPDATE, "main"),
         TrialSchemaStep(
             EventPhase.INPUT,
             "main",

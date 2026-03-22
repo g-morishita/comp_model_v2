@@ -154,18 +154,24 @@ def test_schema_rejects_wrong_event_count() -> None:
         ASOCIAL_BANDIT_SCHEMA.validate_trial(trial)
 
 
-def test_pre_choice_no_self_outcome_schema_outcome_not_observable() -> None:
-    """Ensure the subject OUTCOME step has outcome_observable=False."""
-    # step 7 is the subject OUTCOME step (index 7 in the 9-step schema)
-    subject_outcome_step = SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA.steps[7]
-    assert subject_outcome_step.outcome_observable is False
+def test_pre_choice_no_self_outcome_schema_has_no_subject_outcome_or_self_update() -> None:
+    """Schema has 7 steps: no subject OUTCOME and no subject self-UPDATE."""
+    schema = SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA
+    assert len(schema.steps) == 7
+    subject_outcome_steps = [
+        s for s in schema.steps if s.phase == EventPhase.OUTCOME and s.actor_id == "subject"
+    ]
+    assert subject_outcome_steps == []
 
 
-def test_post_outcome_no_self_outcome_schema_outcome_not_observable() -> None:
-    """Ensure the subject OUTCOME step has outcome_observable=False."""
-    # step 2 is the subject OUTCOME step (index 2 in the 9-step schema)
-    subject_outcome_step = SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA.steps[2]
-    assert subject_outcome_step.outcome_observable is False
+def test_post_outcome_no_self_outcome_schema_has_no_subject_outcome_or_self_update() -> None:
+    """Schema has 7 steps: no subject OUTCOME and no subject self-UPDATE."""
+    schema = SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA
+    assert len(schema.steps) == 7
+    subject_outcome_steps = [
+        s for s in schema.steps if s.phase == EventPhase.OUTCOME and s.actor_id == "subject"
+    ]
+    assert subject_outcome_steps == []
 
 
 def test_non_subject_input_without_observable_fields_raises() -> None:

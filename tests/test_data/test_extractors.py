@@ -325,25 +325,139 @@ def test_social_post_outcome_social_update_has_social_info() -> None:
 
 
 # ---------------------------------------------------------------------------
-# No-self-outcome schemas — outcome_observable=False on subject OUTCOME step
+# No-self-outcome schemas — no subject OUTCOME or subject self-UPDATE step
 # ---------------------------------------------------------------------------
 
 
-def test_pre_choice_no_self_outcome_subject_self_update_has_no_reward() -> None:
-    """Subject self-update reward is None when outcome_observable=False."""
-    trial = _make_social_pre_choice_trial(subject_action=1, subject_reward=0.5)
+def _make_social_pre_choice_no_self_outcome_trial(
+    trial_index: int = 0,
+    subject_action: int = 1,
+    demo_action: int = 0,
+    demo_reward: float = 1.0,
+) -> Trial:
+    return Trial(
+        trial_index=trial_index,
+        events=(
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=0,
+                node_id="main",
+                payload={"available_actions": (0, 1)},
+            ),
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=1,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={
+                    "available_actions": (0, 1),
+                    "observation": {"social_action": demo_action, "social_reward": demo_reward},
+                },
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=2,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"action": demo_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=3,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"reward": demo_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=4,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=6,
+                node_id="main",
+                payload={"action": subject_action},
+            ),
+        ),
+    )
+
+
+def _make_social_post_outcome_no_self_outcome_trial(
+    trial_index: int = 0,
+    subject_action: int = 0,
+    demo_action: int = 1,
+    demo_reward: float = 0.0,
+) -> Trial:
+    return Trial(
+        trial_index=trial_index,
+        events=(
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=0,
+                node_id="main",
+                payload={"available_actions": (0, 1)},
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=1,
+                node_id="main",
+                payload={"action": subject_action},
+            ),
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=2,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={
+                    "available_actions": (0, 1),
+                    "observation": {"social_action": demo_action, "social_reward": demo_reward},
+                },
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=3,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"action": demo_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=4,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"reward": demo_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=5,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=6, node_id="main", payload={}),
+        ),
+    )
+
+
+def test_pre_choice_no_self_outcome_replay_step_order() -> None:
+    trial = _make_social_pre_choice_no_self_outcome_trial()
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA))
 
-    # step order: demo-update, subject-social-update, action, subject-self-update
-    _, learner_id, view = steps[3]  # subject self-update
-    assert learner_id == "subject"
-    assert view.choice == 1
-    assert view.reward is None  # hidden
+    event_types = [(s[0], s[1]) for s in steps]
+    assert event_types == [
+        ("update", "demonstrator"),  # demonstrator self-update
+        ("update", "subject"),  # subject social-update (before choice)
+        ("action", "subject"),  # subject action — no self-update follows
+    ]
 
 
 def test_pre_choice_no_self_outcome_still_carries_social_info() -> None:
-    """Demo action/reward still reaches the social update step."""
-    trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
+    """Demo action/reward reaches the subject social-update step."""
+    trial = _make_social_pre_choice_no_self_outcome_trial(demo_action=0, demo_reward=1.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA))
 
     _, learner_id, view = steps[1]  # subject social update
@@ -353,24 +467,24 @@ def test_pre_choice_no_self_outcome_still_carries_social_info() -> None:
     assert view.reward is None
 
 
-def test_post_outcome_no_self_outcome_subject_self_update_has_no_reward() -> None:
-    """Subject self-update reward is None when outcome_observable=False."""
-    trial = _make_social_post_outcome_trial(subject_action=0, subject_reward=1.0)
+def test_post_outcome_no_self_outcome_replay_step_order() -> None:
+    trial = _make_social_post_outcome_no_self_outcome_trial()
     steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA))
 
-    # step order: action, subject-self-update, demo-update, subject-social-update
-    _, learner_id, view = steps[1]  # subject self-update
-    assert learner_id == "subject"
-    assert view.choice == 0
-    assert view.reward is None  # hidden
+    event_types = [(s[0], s[1]) for s in steps]
+    assert event_types == [
+        ("action", "subject"),  # subject acts — no self-update follows
+        ("update", "demonstrator"),  # demonstrator self-update
+        ("update", "subject"),  # subject social-update
+    ]
 
 
 def test_post_outcome_no_self_outcome_still_carries_social_info() -> None:
-    """Demo action/reward still reaches the social update step."""
-    trial = _make_social_post_outcome_trial(demo_action=1, demo_reward=0.0)
+    """Demo action/reward reaches the subject social-update step."""
+    trial = _make_social_post_outcome_no_self_outcome_trial(demo_action=1, demo_reward=0.0)
     steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA))
 
-    _, learner_id, view = steps[3]  # subject social update
+    _, learner_id, view = steps[2]  # subject social update
     assert learner_id == "subject"
     assert view.social_action == 1
     assert view.social_reward == 0.0
