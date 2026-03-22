@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from comp_model.data.extractors import DecisionTrialView, replay_trial_steps
+from comp_model.data.schema import EventPhase
 from comp_model.inference.bayes.stan.prior_registry import prior_spec_to_stan_data
 
 if TYPE_CHECKING:
@@ -411,13 +412,13 @@ def _combined_subject_view_for_stan(
     social_reward: float | None = None
 
     for event_type, learner_id, view in replay_trial_steps(trial, schema):
-        if event_type == "action" and learner_id == "subject":
+        if event_type == EventPhase.DECISION and learner_id == "subject":
             choice = view.choice
             available_actions = view.available_actions
             if view.social_action is not None:
                 social_action = view.social_action
                 social_reward = view.social_reward
-        elif event_type == "update" and learner_id == "subject":
+        elif event_type == EventPhase.UPDATE and learner_id == "subject":
             if view.reward is not None:
                 reward = view.reward
             if view.social_action is not None:
@@ -625,11 +626,11 @@ def _raw_steps_to_step_dict(
         step_condition[idx] = cond_id
         for action in view.available_actions:
             step_avail_mask[idx][action_to_index[action] - 1] = 1.0
-        if event_type == "action":
+        if event_type == EventPhase.DECISION:
             if view.choice is not None:
                 step_choice[idx] = action_to_index[view.choice]
                 n_decisions += 1
-        elif event_type == "update":
+        elif event_type == EventPhase.UPDATE:
             if view.reward is not None and view.choice is not None:
                 step_update_action[idx] = action_to_index[view.choice]
                 step_reward[idx] = float(view.reward)

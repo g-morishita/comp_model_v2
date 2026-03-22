@@ -590,14 +590,11 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView
     observation: dict[str, Any] = {}
 
     for event_type, learner_id, view in replay_trial_steps(trial, schema):
-        if event_type == "action" and learner_id == "subject":
+        if event_type == EventPhase.DECISION and learner_id == "subject":
             choice = view.choice
             available_actions = view.available_actions
             observation = dict(view.observation)
-            if view.social_action is not None:
-                social_action = view.social_action
-                social_reward = view.social_reward
-        elif event_type == "update" and learner_id == "subject":
+        elif event_type == EventPhase.UPDATE and learner_id == "subject":
             if view.reward is not None:
                 reward = view.reward
             if view.social_action is not None:
@@ -712,17 +709,7 @@ def _build_trial_from_schema(
     events: list[Event] = []
     for step_index, step in enumerate(schema.steps):
         if step.phase == EventPhase.INPUT:
-            if step.actor_id == "subject":
-                payload: dict[str, Any] = {"available_actions": available_actions}
-            else:
-                if demonstrator_observation is None:
-                    raise ValueError(
-                        f"Schema {schema.schema_id!r} requires demonstrator observation data"
-                    )
-                payload = {
-                    "available_actions": available_actions,
-                    "observation": dict(demonstrator_observation),
-                }
+            payload: dict[str, Any] = {"available_actions": available_actions}
         elif step.phase == EventPhase.DECISION:
             if step.actor_id == "subject":
                 payload = {"action": choice}
@@ -738,7 +725,13 @@ def _build_trial_from_schema(
                     raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator reward")
                 payload = {"reward": demonstrator_reward}
         elif step.phase == EventPhase.UPDATE:
-            payload = {}
+            # Payload carries the actor's choice and reward for replay.
+            if step.actor_id == "subject":
+                payload = {"choice": choice, "reward": reward}
+            else:
+                if demonstrator_action is None or demonstrator_reward is None:
+                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator data")
+                payload = {"choice": demonstrator_action, "reward": demonstrator_reward}
         else:
             raise ValueError(f"Unsupported event phase {step.phase!r}")
 
