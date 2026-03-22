@@ -259,3 +259,47 @@ SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA = TrialSchema(
         TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
     ),
 )
+
+# Schemas where the subject's own outcome is not observable.  The subject acts
+# but receives no feedback — the trial has no subject OUTCOME or subject
+# self-UPDATE event.  Only demonstrator information drives learning.
+
+SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
+    schema_id="social_pre_choice_no_self_outcome",
+    steps=(
+        TrialSchemaStep(EventPhase.INPUT, "main"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
+        TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
+    ),
+)
+
+SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
+    schema_id="social_post_outcome_no_self_outcome",
+    steps=(
+        TrialSchemaStep(EventPhase.INPUT, "main"),
+        TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
+    ),
+)

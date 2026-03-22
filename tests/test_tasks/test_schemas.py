@@ -5,7 +5,9 @@ import pytest
 from comp_model.data.schema import Event, EventPhase, Trial
 from comp_model.tasks.schemas import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
     TrialSchemaStep,
@@ -150,6 +152,26 @@ def test_schema_rejects_wrong_event_count() -> None:
 
     with pytest.raises(ValueError, match="expected 4 events"):
         ASOCIAL_BANDIT_SCHEMA.validate_trial(trial)
+
+
+def test_pre_choice_no_self_outcome_schema_has_no_subject_outcome_or_self_update() -> None:
+    """Schema has 7 steps: no subject OUTCOME and no subject self-UPDATE."""
+    schema = SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA
+    assert len(schema.steps) == 7
+    subject_outcome_steps = [
+        s for s in schema.steps if s.phase == EventPhase.OUTCOME and s.actor_id == "subject"
+    ]
+    assert subject_outcome_steps == []
+
+
+def test_post_outcome_no_self_outcome_schema_has_no_subject_outcome_or_self_update() -> None:
+    """Schema has 7 steps: no subject OUTCOME and no subject self-UPDATE."""
+    schema = SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA
+    assert len(schema.steps) == 7
+    subject_outcome_steps = [
+        s for s in schema.steps if s.phase == EventPhase.OUTCOME and s.actor_id == "subject"
+    ]
+    assert subject_outcome_steps == []
 
 
 def test_non_subject_input_without_observable_fields_raises() -> None:
