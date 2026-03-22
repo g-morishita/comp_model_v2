@@ -322,13 +322,16 @@ SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA = TrialSchema(
         ),
         TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
-        # No demonstrator self-update here; reward is held until the combined update below.
+        # Demonstrator self-update immediately after its own outcome.
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
         TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
         TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
         TrialSchemaStep(EventPhase.OUTCOME, "main"),
+        # Subject self-update immediately after its own outcome.
         TrialSchemaStep(EventPhase.UPDATE, "main"),
-        # Demonstrator observes subject's action+reward and does a combined update
-        # (own reward + subject's social info).
+        # Demonstrator observes subject's action+reward and social-updates.
         TrialSchemaStep(
             EventPhase.INPUT,
             "main",

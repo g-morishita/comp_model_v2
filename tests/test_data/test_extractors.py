@@ -526,10 +526,10 @@ def _make_social_pre_choice_demo_learns_trial(
     demo_action: int = 0,
     demo_reward: float = 1.0,
 ) -> Trial:
-    """10-event trial for SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA.
+    """11-event trial for SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA.
 
-    The demonstrator has no separate self-update; its single UPDATE at the end
-    carries both its own reward (held since OUTCOME) and the subject's social info.
+    Each agent self-updates immediately after its own outcome.  The demonstrator
+    also social-updates from the subject's action+reward at the end.
     """
     return Trial(
         trial_index=trial_index,
@@ -564,25 +564,33 @@ def _make_social_pre_choice_demo_learns_trial(
                 actor_id="demonstrator",
                 payload={"reward": demo_reward},
             ),
-            # No demonstrator self-update; reward is held for the combined update below.
-            Event(phase=EventPhase.UPDATE, event_index=4, node_id="main", payload={}),
+            # Demonstrator self-update immediately after its own outcome.
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=4,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
             Event(
                 phase=EventPhase.DECISION,
-                event_index=5,
+                event_index=6,
                 node_id="main",
                 payload={"action": subject_action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=6,
+                event_index=7,
                 node_id="main",
                 payload={"reward": subject_reward},
             ),
-            Event(phase=EventPhase.UPDATE, event_index=7, node_id="main", payload={}),
-            # Demonstrator INPUT carrying subject's action+reward
+            # Subject self-update immediately after its own outcome.
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
+            # Demonstrator INPUT carrying subject's action+reward.
             Event(
                 phase=EventPhase.INPUT,
-                event_index=8,
+                event_index=9,
                 node_id="main",
                 actor_id="demonstrator",
                 payload={
@@ -593,9 +601,10 @@ def _make_social_pre_choice_demo_learns_trial(
                     },
                 },
             ),
+            # Demonstrator social-update from subject.
             Event(
                 phase=EventPhase.UPDATE,
-                event_index=9,
+                event_index=10,
                 node_id="main",
                 actor_id="demonstrator",
                 payload={},
@@ -709,25 +718,38 @@ def test_pre_choice_demo_learns_replay_step_order() -> None:
 
     event_types = [(s[0], s[1]) for s in steps]
     assert event_types == [
+        ("update", "demonstrator"),  # demo self-update (own outcome)
         ("update", "subject"),  # subject social-update (from demo, before own decision)
         ("action", "subject"),  # subject acts
         ("update", "subject"),  # subject self-update (own outcome)
-        ("update", "demonstrator"),  # demo combined update (own reward + subject's info)
+        ("update", "demonstrator"),  # demo social-update from subject
     ]
 
 
-def test_pre_choice_demo_learns_demo_update_carries_both_rewards() -> None:
-    """Demonstrator UPDATE carries own reward and subject's social info (combined update)."""
+def test_pre_choice_demo_learns_demo_self_update() -> None:
+    """Demonstrator self-UPDATE (immediately after own outcome) carries own reward."""
     trial = _make_social_pre_choice_demo_learns_trial(
         subject_action=1, subject_reward=0.5, demo_action=0, demo_reward=1.0
     )
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA))
 
-    _, learner_id, view = steps[3]  # demo combined update
+    _, learner_id, view = steps[0]  # demo self-update
     assert learner_id == "demonstrator"
     assert view.reward == 1.0  # demo's own reward
+
+
+def test_pre_choice_demo_learns_demo_social_update_from_subject() -> None:
+    """Demonstrator social-UPDATE (at end) carries subject's action+reward, reward=None."""
+    trial = _make_social_pre_choice_demo_learns_trial(
+        subject_action=1, subject_reward=0.5, demo_action=0, demo_reward=1.0
+    )
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA))
+
+    _, learner_id, view = steps[4]  # demo social-update from subject
+    assert learner_id == "demonstrator"
     assert view.social_action == 1  # subject's choice
     assert view.social_reward == 0.5  # subject's reward
+    assert view.reward is None  # own reward was already consumed in self-update
 
 
 def test_post_outcome_demo_learns_replay_step_order() -> None:
