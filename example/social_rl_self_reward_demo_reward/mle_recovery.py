@@ -11,10 +11,14 @@ Usage:
 
 from scipy import stats
 
-from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
+from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.inference.mle.optimize import MleOptimizerConfig
-from comp_model.models.kernels import SocialRlSelfRewardDemoRewardKernel
+from comp_model.models.kernels import (
+    AsocialQLearningKernel,
+    QParams,
+    SocialRlSelfRewardDemoRewardKernel,
+)
 from comp_model.recovery import (
     ParamDist,
     RecoveryStudyConfig,
@@ -54,10 +58,11 @@ def main() -> None:
             ParamDist("beta", stats.norm(1.687, 0.5), scale="unconstrained"),
         ),
         task=task,
-        env_factory=lambda: SocialBanditEnvironment(
-            inner=StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=(0.8, 0.2)),
-            demonstrator_policy=(0.5, 0.5),
+        env_factory=lambda: StationaryBanditEnvironment(
+            n_actions=N_ACTIONS, reward_probs=(0.8, 0.2)
         ),
+        demonstrator_kernel=AsocialQLearningKernel(),
+        demonstrator_params=QParams(alpha=0.0, beta=0.0),
         kernel=kernel,
         schema=SOCIAL_PRE_CHOICE_SCHEMA,
         inference_config=InferenceConfig(

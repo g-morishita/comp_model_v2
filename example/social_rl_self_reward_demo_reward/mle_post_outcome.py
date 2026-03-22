@@ -6,12 +6,17 @@ Ground-truth: alpha_self=0.3, alpha_other=0.2, beta=2.0
 
 from pathlib import Path
 
-from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
+from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.inference.mle.optimize import MleOptimizerConfig
 from comp_model.io import load_dataset_from_csv, save_dataset_to_csv
-from comp_model.models.kernels import SocialQParams, SocialRlSelfRewardDemoRewardKernel
+from comp_model.models.kernels import (
+    AsocialQLearningKernel,
+    QParams,
+    SocialQParams,
+    SocialRlSelfRewardDemoRewardKernel,
+)
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
 
@@ -48,13 +53,12 @@ params_per_subject = {f"sub_{i:02d}": true_params for i in range(N_SUBJECTS)}
 
 dataset = simulate_dataset(
     task=task,
-    env_factory=lambda: SocialBanditEnvironment(
-        inner=StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS),
-        demonstrator_policy=(0.5, 0.5),
-    ),
+    env_factory=lambda: StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS),
     kernel=kernel,
     params_per_subject=params_per_subject,
     config=SimulationConfig(seed=42),
+    demonstrator_kernel=AsocialQLearningKernel(),
+    demonstrator_params=QParams(alpha=0.0, beta=0.0),
 )
 
 # ── 4. Save and reload CSV ─────────────────────────────────────────────────
