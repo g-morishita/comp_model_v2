@@ -42,7 +42,7 @@ def _valid_trial() -> Trial:
             Event(
                 phase=EventPhase.UPDATE,
                 event_index=3,
-                payload={},
+                payload={"choice": 1, "reward": 1.0},
             ),
         ),
     )

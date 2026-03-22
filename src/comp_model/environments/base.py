@@ -1,7 +1,8 @@
 """Environment protocol for executable task dynamics.
 
-Environments execute the task layer one schema step at a time and emit events
-that satisfy the current :class:`~comp_model.tasks.schemas.TrialSchema`.
+Environments are pure reward oracles. The simulation engine owns all event
+construction and phase logic; the environment only generates stochastic
+outcomes for a given action.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     import numpy as np
 
-    from comp_model.data.schema import Event
     from comp_model.tasks.spec import BlockSpec
 
 
@@ -21,8 +21,8 @@ class Environment(Protocol):
     Notes
     -----
     The runtime owns the outer loop over blocks, trials, and agent decisions.
-    The environment owns only task-side dynamics: resetting block state and
-    emitting one or more events for the next schema position.
+    The environment owns only reward generation: resetting block state and
+    returning a scalar reward for each action taken.
     """
 
     @property
@@ -61,24 +61,24 @@ class Environment(Protocol):
 
         ...
 
-    def step(self, action: int | None = None) -> tuple[Event, ...]:
-        """Advance the environment by one schema step.
+    def step(self, action: int) -> float:
+        """Return the reward for the given action.
 
         Parameters
         ----------
         action
-            Optional externally supplied action for action-required steps.
+            Action taken by the acting agent at this OUTCOME step.
 
         Returns
         -------
-        tuple[Event, ...]
-            Events emitted for the current schema step.
+        float
+            Scalar reward for the action.
 
         Notes
         -----
-        ``action`` is supplied only for schema steps whose
-        ``action_required`` flag is true. The environment is responsible for
-        converting that action into one or more canonical events.
+        Called only at OUTCOME steps by the simulation engine. The environment
+        has no knowledge of phases, events, or schemas — it is a pure reward
+        oracle.
         """
 
         ...

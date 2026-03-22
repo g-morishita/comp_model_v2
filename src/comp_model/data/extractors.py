@@ -40,7 +40,7 @@ class DecisionTrialView:
         Observed demonstrator action, if present.
     social_reward
         Observed demonstrator reward, if present (only when ``"reward"`` is in
-        the corresponding INPUT step's ``observable_fields``).
+        the corresponding UPDATE step's ``observable_fields``).
     metadata
         Additional extractor metadata.
 
@@ -65,13 +65,13 @@ class DecisionTrialView:
 def replay_trial_steps(
     trial: Trial,
     schema: TrialSchema,
-) -> Iterator[tuple[str, str, DecisionTrialView]]:
+) -> Iterator[tuple[EventPhase, str, DecisionTrialView]]:
     """Yield schema-ordered replay steps for engine and MLE use.
 
-    Steps through the schema positionally, emitting one item per DECISION or
-    UPDATE step. The view attached to each item contains only information that
-    has been accumulated up to that point in the schema, respecting
-    ``observable_fields`` on non-subject INPUT steps.
+    Steps through the schema positionally, emitting one item per DECISION
+    (subject only) or UPDATE step.  UPDATE event payloads carry the actor's
+    choice and reward directly, so no accumulation of choices or rewards is
+    needed beyond tracking INPUT events for ``available_actions``.
 
     Parameters
     ----------
@@ -82,21 +82,15 @@ def replay_trial_steps(
 
     Yields
     ------
-    event_type : str
-        ``"action"`` — caller should evaluate ``action_probabilities`` and
-        accumulate log-probability. Only emitted for subject DECISION steps.
-        ``"update"`` — caller should call ``next_state``.
+    event_phase : EventPhase
+        ``EventPhase.DECISION`` — caller should evaluate
+        ``action_probabilities`` and accumulate log-probability. Only emitted
+        for subject DECISION steps.
+        ``EventPhase.UPDATE`` — caller should call ``next_state``.
     learner_id : str
-        Which agent's state should be updated. Always ``"subject"`` for
-        ``"action"`` steps. Taken from the UPDATE step's ``learner_id`` for
-        ``"update"`` steps.
+        Which agent's state should be updated.
     view : DecisionTrialView
-        Partial view built from context accumulated so far.
-        For ``"action"`` steps: ``available_actions`` and ``choice`` are set;
-        ``reward`` is always ``None`` (outcome not yet seen).
-        For ``"update"`` steps: contains whatever has been observed up to this
-        point — social info filtered by ``observable_fields``, own reward only
-        if OUTCOME has already been seen for the subject.
+        View built from the event payload and accumulated INPUT context.
 
     Raises
     ------
@@ -109,73 +103,61 @@ def replay_trial_steps(
     events = trial.events
     steps = schema.steps
 
-    # Accumulated context per actor_id
-    available_actions: dict[str, tuple[int, ...]] = {}
-    observation: dict[str, dict[str, Any]] = {}
-    choices: dict[str, int] = {}
-    rewards: dict[str, float] = {}
-    social_action: int | None = None
-    social_reward: float | None = None
+    actor_inputs: dict[str, Any] = {}  # most recent INPUT event per actor
 
-    for _step_index, (event, step) in enumerate(zip(events, steps, strict=True)):
+    for event, step in zip(events, steps, strict=True):
         if step.phase == EventPhase.INPUT:
-            if step.actor_id == "subject":
-                available_actions["subject"] = tuple(event.payload["available_actions"])
-                raw_obs = event.payload.get("observation")
-                if isinstance(raw_obs, dict):
-                    observation["subject"] = dict(raw_obs)
-                elif raw_obs is not None:
-                    observation["subject"] = {"value": raw_obs}
-            else:
-                # Non-subject INPUT: apply observable_fields filter
-                obs_payload = event.payload.get("observation", {})
-                if isinstance(obs_payload, dict):
-                    if "action" in step.observable_fields and "social_action" in obs_payload:
-                        social_action = int(obs_payload["social_action"])
-                    if "reward" in step.observable_fields and "social_reward" in obs_payload:
-                        social_reward = float(obs_payload["social_reward"])
+            actor_inputs[step.actor_id] = event
 
         elif step.phase == EventPhase.DECISION:
-            choices[step.actor_id] = int(event.payload["action"])
-            if step.actor_id == "subject" and step.action_required:
-                # Emit an "action" step so the caller can evaluate action probs
+            if step.actor_id == "subject":
+                input_event = actor_inputs["subject"]
                 yield (
-                    "action",
+                    EventPhase.DECISION,
                     "subject",
                     DecisionTrialView(
                         trial_index=trial.trial_index,
-                        available_actions=available_actions.get("subject", ()),
-                        choice=choices["subject"],
+                        available_actions=tuple(input_event.payload["available_actions"]),
+                        choice=int(event.payload["action"]),
                         reward=None,
-                        observation=observation.get("subject", {}),
-                        social_action=social_action,
-                        social_reward=social_reward,
+                        observation=input_event.payload.get("observation", {}),
+                        social_action=None,
+                        social_reward=None,
                     ),
                 )
-                # Clear social info after the action step so subsequent UPDATE
-                # steps (e.g. subject self-update) don't re-apply social learning.
-                social_action = None
-                social_reward = None
 
         elif step.phase == EventPhase.OUTCOME:
-            rewards[step.actor_id] = float(event.payload["reward"])
+            pass  # reward flows into the following UPDATE event payload
 
         elif step.phase == EventPhase.UPDATE:
             learner = step.learner_id
-            yield (
-                "update",
-                learner,
-                DecisionTrialView(
-                    trial_index=trial.trial_index,
-                    available_actions=available_actions.get(learner, ()),
-                    choice=choices.get(learner),
-                    reward=rewards.get(learner),
-                    observation=observation.get(learner, {}),
-                    social_action=social_action,
-                    social_reward=social_reward,
-                ),
+            actor = step.actor_id
+            actor_choice = int(event.payload["choice"])
+            actor_reward = float(event.payload["reward"])
+
+            learner_input = actor_inputs.get(learner)
+            available_actions: tuple[int, ...] = (
+                tuple(learner_input.payload["available_actions"]) if learner_input else ()
             )
-            # Clear reward after it is consumed so a subsequent UPDATE for the
-            # same learner (e.g. social-update after self-update) does not
-            # re-apply the self-learning signal.
-            rewards.pop(learner, None)
+
+            if actor == learner:
+                view = DecisionTrialView(
+                    trial_index=trial.trial_index,
+                    available_actions=available_actions,
+                    choice=actor_choice,
+                    reward=actor_reward,
+                    social_action=None,
+                    social_reward=None,
+                )
+            else:
+                obs = step.observable_fields
+                view = DecisionTrialView(
+                    trial_index=trial.trial_index,
+                    available_actions=available_actions,
+                    choice=None,
+                    reward=None,
+                    social_action=actor_choice if "action" in obs else None,
+                    social_reward=actor_reward if "reward" in obs else None,
+                )
+
+            yield (EventPhase.UPDATE, learner, view)

@@ -63,11 +63,11 @@ def log_likelihood_simple(
 
         for trial in block.trials:
             for event_type, learner_id, view in replay_trial_steps(trial, schema):
-                if event_type == "action" and learner_id == "subject":
+                if event_type == EventPhase.DECISION and learner_id == "subject":
                     probabilities = kernel.action_probabilities(state, view, params)
                     choice_index = view.available_actions.index(view.choice)
                     total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
-                elif event_type == "update" and learner_id == "subject":
+                elif event_type == EventPhase.UPDATE and learner_id == "subject":
                     state = kernel.next_state(state, view, params)
 
     return total_log_likelihood
@@ -155,11 +155,11 @@ def log_likelihood_conditioned(
 
         for trial in block.trials:
             for event_type, learner_id, view in replay_trial_steps(trial, schema):
-                if event_type == "action" and learner_id == "subject":
+                if event_type == EventPhase.DECISION and learner_id == "subject":
                     probabilities = kernel.action_probabilities(state, view, condition_params)
                     choice_index = view.available_actions.index(view.choice)
                     total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
-                elif event_type == "update" and learner_id == "subject":
+                elif event_type == EventPhase.UPDATE and learner_id == "subject":
                     state = kernel.next_state(state, view, condition_params)
 
     return total_log_likelihood

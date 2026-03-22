@@ -15,12 +15,17 @@ import numpy as np
 from scipy.special import expit as sigmoid_vec
 from scipy.special import logit as inv_sigmoid_vec
 
-from comp_model.environments import SocialBanditEnvironment, StationaryBanditEnvironment
+from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference import fit
 from comp_model.inference.bayes.stan import SocialRlSelfRewardDemoRewardStanAdapter, StanFitConfig
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.io import save_dataset_to_csv
-from comp_model.models.kernels import SocialQParams, SocialRlSelfRewardDemoRewardKernel
+from comp_model.models.kernels import (
+    AsocialQLearningKernel,
+    QParams,
+    SocialRlSelfRewardDemoRewardKernel,
+    SocialRlSelfRewardDemoRewardParams,
+)
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
 
@@ -71,7 +76,7 @@ true_betas = softplus_vec(true_beta_z)
 
 # ── 3. Simulate dataset ────────────────────────────────────────────────────
 params_per_subject = {
-    f"sub_{i:02d}": SocialQParams(
+    f"sub_{i:02d}": SocialRlSelfRewardDemoRewardParams(
         alpha_self=float(true_alpha_selfs[i]),
         alpha_other=float(true_alpha_others[i]),
         beta=float(true_betas[i]),
@@ -95,13 +100,12 @@ print(
 
 dataset = simulate_dataset(
     task=task,
-    env_factory=lambda: SocialBanditEnvironment(
-        inner=StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS),
-        demonstrator_policy=(0.5, 0.5),
-    ),
+    env_factory=lambda: StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=REWARD_PROBS),
     kernel=kernel,
     params_per_subject=params_per_subject,
     config=SimulationConfig(seed=42),
+    demonstrator_kernel=AsocialQLearningKernel(),
+    demonstrator_params=QParams(alpha=0.0, beta=0.0),
 )
 
 # ── 4. Save to CSV ─────────────────────────────────────────────────────────

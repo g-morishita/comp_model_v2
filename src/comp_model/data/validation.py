@@ -80,6 +80,11 @@ def validate_event_payload(event: Event, trial_index: int, step_index: int) -> N
             raise ValueError(f"{prefix}: DECISION missing 'action'")
     elif event.phase == EventPhase.OUTCOME and "reward" not in payload:
         raise ValueError(f"{prefix}: OUTCOME missing 'reward'")
+    elif event.phase == EventPhase.UPDATE:
+        if "choice" not in payload:
+            raise ValueError(f"{prefix}: UPDATE missing 'choice'")
+        if "reward" not in payload:
+            raise ValueError(f"{prefix}: UPDATE missing 'reward'")
 
 
 def validate_event(event: Event, trial_index: int, step_index: int) -> None:

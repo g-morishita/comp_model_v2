@@ -309,6 +309,8 @@ def _simulate_simple(
         kernel=config.kernel,
         params_per_subject=params_per_subject,
         config=SimulationConfig(seed=seed),
+        demonstrator_kernel=config.demonstrator_kernel,
+        demonstrator_params=config.demonstrator_params,
     )
 
 
@@ -347,6 +349,8 @@ def _simulate_condition_aware(
                 params=condition_params[condition],
                 config=SimulationConfig(seed=seed + i * 1000 + block_idx),
                 subject_id=sid,
+                demonstrator_kernel=config.demonstrator_kernel,
+                demonstrator_params=config.demonstrator_params,
             )
             blocks.append(
                 Block(

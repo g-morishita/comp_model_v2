@@ -38,6 +38,8 @@ def _social_trial(
         Event-based trial matching ``SOCIAL_PRE_CHOICE_SCHEMA``.
     """
 
+    # Schema: INPUT(demo) DECISION(demo) OUTCOME(demo) UPDATE(demo→demo) UPDATE(demo→subj)
+    #         INPUT(subj) DECISION(subj) OUTCOME(subj) UPDATE(subj→subj)
     return Trial(
         trial_index=trial_index,
         events=(
@@ -45,47 +47,55 @@ def _social_trial(
                 phase=EventPhase.INPUT,
                 event_index=0,
                 node_id="main",
+                actor_id="demonstrator",
                 payload={"available_actions": (0, 1)},
             ),
             Event(
-                phase=EventPhase.INPUT,
-                event_index=1,
-                node_id="main",
-                actor_id="demonstrator",
-                payload={
-                    "available_actions": (0, 1),
-                    "observation": {"social_action": social_action, "social_reward": social_reward},
-                },
-            ),
-            Event(
                 phase=EventPhase.DECISION,
-                event_index=2,
+                event_index=1,
                 node_id="main",
                 actor_id="demonstrator",
                 payload={"action": social_action},
             ),
             Event(
                 phase=EventPhase.OUTCOME,
-                event_index=3,
+                event_index=2,
                 node_id="main",
                 actor_id="demonstrator",
                 payload={"reward": social_reward},
             ),
             Event(
                 phase=EventPhase.UPDATE,
+                event_index=3,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"choice": social_action, "reward": social_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
                 event_index=4,
                 node_id="main",
                 actor_id="demonstrator",
-                payload={},
+                payload={"choice": social_action, "reward": social_reward},
             ),
-            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=5,
+                node_id="main",
+                payload={"available_actions": (0, 1)},
+            ),
             Event(
                 phase=EventPhase.DECISION, event_index=6, node_id="main", payload={"action": action}
             ),
             Event(
                 phase=EventPhase.OUTCOME, event_index=7, node_id="main", payload={"reward": reward}
             ),
-            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=8,
+                node_id="main",
+                payload={"choice": action, "reward": reward},
+            ),
         ),
     )
 

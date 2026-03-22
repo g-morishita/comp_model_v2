@@ -109,9 +109,10 @@ def test_load_social_pre_choice_reconstructs_demonstrator_before_decision(
     loaded_dataset = load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
 
     trial = loaded_dataset.subjects[0].blocks[0].trials[0]
-    assert trial.events[1].phase == EventPhase.INPUT
-    assert trial.events[1].actor_id == "demonstrator"
-    assert trial.events[5].phase == EventPhase.UPDATE
+    # New schema: INPUT(demo) first, social UPDATE at index 4, subject DECISION at 6
+    assert trial.events[0].phase == EventPhase.INPUT
+    assert trial.events[0].actor_id == "demonstrator"
+    assert trial.events[4].phase == EventPhase.UPDATE
     assert trial.events[6].phase == EventPhase.DECISION
 
 
@@ -421,7 +422,7 @@ def _make_asocial_dataset() -> Dataset:
                                         phase=EventPhase.UPDATE,
                                         event_index=3,
                                         node_id="main",
-                                        payload={},
+                                        payload={"choice": 1, "reward": 1.0},
                                     ),
                                 ),
                             ),
@@ -450,7 +451,7 @@ def _make_asocial_dataset() -> Dataset:
                                         phase=EventPhase.UPDATE,
                                         event_index=3,
                                         node_id="main",
-                                        payload={},
+                                        payload={"choice": 0, "reward": 0.0},
                                     ),
                                 ),
                             ),
@@ -471,6 +472,8 @@ def _make_social_pre_choice_dataset() -> Dataset:
         Dataset with one subject and one pre-choice social block.
     """
 
+    # SOCIAL_PRE_CHOICE_SCHEMA: INPUT(demo) DECISION(demo) OUTCOME(demo) UPDATE(demo→demo)
+    #   UPDATE(demo→subj) INPUT(subj) DECISION(subj) OUTCOME(subj) UPDATE(subj→subj)
     return Dataset(
         subjects=(
             SubjectData(
@@ -487,47 +490,42 @@ def _make_social_pre_choice_dataset() -> Dataset:
                                         phase=EventPhase.INPUT,
                                         event_index=0,
                                         node_id="main",
+                                        actor_id="demonstrator",
                                         payload={"available_actions": (0, 1)},
                                     ),
                                     Event(
-                                        phase=EventPhase.INPUT,
-                                        event_index=1,
-                                        node_id="main",
-                                        actor_id="demonstrator",
-                                        payload={
-                                            "available_actions": (0, 1),
-                                            "observation": {
-                                                "social_action": 0,
-                                                "social_reward": 1.0,
-                                            },
-                                        },
-                                    ),
-                                    Event(
                                         phase=EventPhase.DECISION,
-                                        event_index=2,
+                                        event_index=1,
                                         node_id="main",
                                         actor_id="demonstrator",
                                         payload={"action": 0},
                                     ),
                                     Event(
                                         phase=EventPhase.OUTCOME,
-                                        event_index=3,
+                                        event_index=2,
                                         node_id="main",
                                         actor_id="demonstrator",
                                         payload={"reward": 1.0},
                                     ),
                                     Event(
                                         phase=EventPhase.UPDATE,
-                                        event_index=4,
+                                        event_index=3,
                                         node_id="main",
                                         actor_id="demonstrator",
-                                        payload={},
+                                        payload={"choice": 0, "reward": 1.0},
                                     ),
                                     Event(
                                         phase=EventPhase.UPDATE,
+                                        event_index=4,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"choice": 0, "reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.INPUT,
                                         event_index=5,
                                         node_id="main",
-                                        payload={},
+                                        payload={"available_actions": (0, 1)},
                                     ),
                                     Event(
                                         phase=EventPhase.DECISION,
@@ -545,7 +543,7 @@ def _make_social_pre_choice_dataset() -> Dataset:
                                         phase=EventPhase.UPDATE,
                                         event_index=8,
                                         node_id="main",
-                                        payload={},
+                                        payload={"choice": 1, "reward": 0.0},
                                     ),
                                 ),
                             ),
@@ -566,6 +564,8 @@ def _make_social_post_outcome_dataset() -> Dataset:
         Dataset with one subject and one post-outcome social block.
     """
 
+    # SOCIAL_POST_OUTCOME_SCHEMA: INPUT(subj) DECISION(subj) OUTCOME(subj) UPDATE(subj→subj)
+    #   INPUT(demo) DECISION(demo) OUTCOME(demo) UPDATE(demo→demo) UPDATE(demo→subj)
     return Dataset(
         subjects=(
             SubjectData(
@@ -600,20 +600,14 @@ def _make_social_post_outcome_dataset() -> Dataset:
                                         phase=EventPhase.UPDATE,
                                         event_index=3,
                                         node_id="main",
-                                        payload={},
+                                        payload={"choice": 0, "reward": 1.0},
                                     ),
                                     Event(
                                         phase=EventPhase.INPUT,
                                         event_index=4,
                                         node_id="main",
                                         actor_id="demonstrator",
-                                        payload={
-                                            "available_actions": (0, 1),
-                                            "observation": {
-                                                "social_action": 1,
-                                                "social_reward": 0.0,
-                                            },
-                                        },
+                                        payload={"available_actions": (0, 1)},
                                     ),
                                     Event(
                                         phase=EventPhase.DECISION,
@@ -634,13 +628,14 @@ def _make_social_post_outcome_dataset() -> Dataset:
                                         event_index=7,
                                         node_id="main",
                                         actor_id="demonstrator",
-                                        payload={},
+                                        payload={"choice": 1, "reward": 0.0},
                                     ),
                                     Event(
                                         phase=EventPhase.UPDATE,
                                         event_index=8,
                                         node_id="main",
-                                        payload={},
+                                        actor_id="demonstrator",
+                                        payload={"choice": 1, "reward": 0.0},
                                     ),
                                 ),
                             ),
@@ -677,7 +672,7 @@ def _fitting_view_signatures(
             for trial in block.trials:
                 last_subject_update = None
                 for event_type, learner_id, view in replay_trial_steps(trial, schema):
-                    if event_type == "update" and learner_id == "subject":
+                    if event_type == EventPhase.UPDATE and learner_id == "subject":
                         last_subject_update = view
                 if last_subject_update is not None:
                     signatures.append(

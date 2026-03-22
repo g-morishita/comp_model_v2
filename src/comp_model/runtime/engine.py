@@ -8,11 +8,11 @@ objects later consumed by validation, replay, and Stan export.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 import numpy as np
 
-from comp_model.data.extractors import DecisionTrialView, replay_trial_steps
+from comp_model.data.extractors import DecisionTrialView
 from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectData, Trial
 
 if TYPE_CHECKING:
@@ -85,12 +85,13 @@ def simulate_subject(
 
     Notes
     -----
-    The simulation loop steps through the schema position by position. At each
-    DECISION step, the relevant agent's kernel supplies the action. After the
-    full trial is assembled, ``replay_trial_steps`` drives ``next_state`` calls
-    in schema order — ensuring that updates fire at their declared positions
-    (e.g. a social update before the subject's own decision in pre-choice
-    schemas).
+    The simulation loop steps through the schema position by position, constructing
+    events and updating agent states in a single pass. At each DECISION step the
+    relevant agent's kernel supplies action probabilities. At each OUTCOME step
+    the environment is queried for a reward. At each UPDATE step the learner's
+    state is advanced immediately, so updates fire at their declared schema
+    positions (e.g. a social update before the subject's own decision in
+    pre-choice schemas).
     """
 
     rng = np.random.default_rng(config.seed)
@@ -106,6 +107,7 @@ def simulate_subject(
     for block_index, block_spec in enumerate(task.blocks):
         env.reset(block_spec, rng=rng)
         schema = block_spec.schema
+        available_actions = tuple(range(int(block_spec.metadata["n_actions"])))
 
         if reset_policy == "per_block" and block_index > 0:
             states["subject"] = kernel.initial_state(n_actions, params)
@@ -117,61 +119,102 @@ def simulate_subject(
         trials: list[Trial] = []
 
         for trial_index in range(block_spec.n_trials):
+            choices: dict[str, int] = {}
+            rewards: dict[str, float] = {}
             trial_events: list[Event] = []
 
-            for step_index, schema_step in enumerate(schema.steps):
-                if schema_step.action_required:
-                    actor = schema_step.actor_id
-                    input_event = _find_actor_input(
-                        trial_events,
-                        schema_step.node_id,
-                        actor,
-                    )
-                    if input_event is None:
-                        raise ValueError(
-                            f"Trial {trial_index}: no INPUT found for actor {actor!r} "
-                            f"before DECISION at step {step_index}"
+            for event_index, step in enumerate(schema.steps):
+                if step.phase == EventPhase.INPUT:
+                    trial_events.append(
+                        Event(
+                            phase=EventPhase.INPUT,
+                            event_index=event_index,
+                            node_id=step.node_id,
+                            actor_id=step.actor_id,
+                            payload={"available_actions": available_actions},
                         )
+                    )
 
-                    raw_observation = input_event.payload.get("observation")
-                    observation: dict[str, Any] = {}
-                    if isinstance(raw_observation, dict):
-                        observation = cast("dict[str, Any]", raw_observation)
-                    available_actions = tuple(input_event.payload["available_actions"])
-                    partial_view = DecisionTrialView(
+                elif step.phase == EventPhase.DECISION:
+                    actor = step.actor_id
+                    view = DecisionTrialView(
                         trial_index=trial_index,
                         available_actions=available_actions,
-                        observation=observation,
                     )
-
                     if actor == "subject":
                         probabilities = kernel.action_probabilities(
-                            cast("StateT", states["subject"]), partial_view, params
+                            cast("StateT", states["subject"]), view, params
                         )
                     elif demonstrator_kernel is not None and demonstrator_params is not None:
                         probabilities = demonstrator_kernel.action_probabilities(
-                            states["demonstrator"], partial_view, demonstrator_params
+                            states["demonstrator"], view, demonstrator_params
                         )
                     else:
                         raise ValueError(
-                            f"Trial {trial_index}: DECISION step requires actor {actor!r} "
+                            f"Trial {trial_index}: DECISION step for actor {actor!r} "
                             f"but no kernel provided for that actor"
                         )
-
                     action_index = int(
                         rng.choice(len(available_actions), p=np.array(probabilities))
                     )
                     action = available_actions[action_index]
-                    events = env.step(action=action)
-                else:
-                    events = env.step(action=None)
+                    choices[actor] = action
+                    trial_events.append(
+                        Event(
+                            phase=EventPhase.DECISION,
+                            event_index=event_index,
+                            node_id=step.node_id,
+                            actor_id=actor,
+                            payload={"action": action},
+                        )
+                    )
 
-                trial_events.extend(events)
+                elif step.phase == EventPhase.OUTCOME:
+                    actor = step.actor_id
+                    reward = env.step(choices[actor])
+                    rewards[actor] = reward
+                    trial_events.append(
+                        Event(
+                            phase=EventPhase.OUTCOME,
+                            event_index=event_index,
+                            node_id=step.node_id,
+                            actor_id=actor,
+                            payload={"reward": reward},
+                        )
+                    )
 
-            trial = Trial(trial_index=trial_index, events=tuple(trial_events))
-            for event_type, learner_id, view in replay_trial_steps(trial, schema):
-                if event_type == "update":
-                    if learner_id == "subject":
+                elif step.phase == EventPhase.UPDATE:
+                    actor = step.actor_id
+                    learner = step.learner_id
+                    trial_events.append(
+                        Event(
+                            phase=EventPhase.UPDATE,
+                            event_index=event_index,
+                            node_id=step.node_id,
+                            actor_id=actor,
+                            payload={"choice": choices[actor], "reward": rewards[actor]},
+                        )
+                    )
+
+                    if actor == learner:
+                        view = DecisionTrialView(
+                            trial_index=trial_index,
+                            available_actions=available_actions,
+                            choice=choices[actor],
+                            reward=rewards[actor],
+                        )
+                    else:
+                        obs = step.observable_fields
+                        view = DecisionTrialView(
+                            trial_index=trial_index,
+                            available_actions=available_actions,
+                            choice=None,
+                            reward=None,
+                            social_action=choices[actor] if "action" in obs else None,
+                            social_reward=rewards[actor] if "reward" in obs else None,
+                        )
+
+                    if learner == "subject":
                         states["subject"] = kernel.next_state(
                             cast("StateT", states["subject"]), view, params
                         )
@@ -179,7 +222,8 @@ def simulate_subject(
                         states["demonstrator"] = demonstrator_kernel.next_state(
                             states["demonstrator"], view, demonstrator_params
                         )
-            trials.append(trial)
+
+            trials.append(Trial(trial_index=trial_index, events=tuple(trial_events)))
 
         blocks.append(
             Block(
@@ -200,6 +244,8 @@ def simulate_dataset(
     kernel: ModelKernel[StateT, ParamsT],
     params_per_subject: dict[str, ParamsT],
     config: SimulationConfig,
+    demonstrator_kernel: ModelKernel[object, object] | None = None,
+    demonstrator_params: object | None = None,
 ) -> Dataset:
     """Simulate a dataset for multiple subjects.
 
@@ -215,6 +261,11 @@ def simulate_dataset(
         Parsed kernel parameters keyed by subject identifier.
     config
         Simulation configuration shared across subjects.
+    demonstrator_kernel
+        Optional kernel for the demonstrator agent.
+    demonstrator_params
+        Parsed demonstrator kernel parameters. Required when
+        ``demonstrator_kernel`` is provided.
 
     Returns
     -------
@@ -242,43 +293,11 @@ def simulate_dataset(
                 params=params,
                 config=subject_config,
                 subject_id=subject_id,
+                demonstrator_kernel=demonstrator_kernel,
+                demonstrator_params=demonstrator_params,
             )
         )
     return Dataset(subjects=tuple(subjects))
-
-
-def _find_actor_input(events: list[Event], node_id: str, actor_id: str) -> Event | None:
-    """Find the INPUT event for a given actor preceding a decision.
-
-    Parameters
-    ----------
-    events
-        Events accumulated so far for the current trial.
-    node_id
-        Node identifier of the decision point.
-    actor_id
-        Actor identifier whose INPUT event is sought.
-
-    Returns
-    -------
-    Event | None
-        Matching INPUT event, if any.
-
-    Notes
-    -----
-    This helper searches only the events accumulated for the current in-progress
-    trial, which matches the runtime contract that an action-required decision
-    must have already been preceded by its actor's INPUT event.
-    """
-
-    for event in events:
-        if (
-            event.phase == EventPhase.INPUT
-            and event.node_id == node_id
-            and event.actor_id == actor_id
-        ):
-            return event
-    return None
 
 
 def _infer_n_actions_from_task(task: TaskSpec) -> int:

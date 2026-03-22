@@ -166,6 +166,7 @@ def _two_block_manual_subject() -> SubjectData:
                     phase=EventPhase.UPDATE,
                     event_index=3,
                     node_id="main",
+                    payload={"choice": action, "reward": reward},
                 ),
             ),
         )
@@ -218,7 +219,7 @@ def _python_trial_log_likelihoods(subject: SubjectData, alpha: float, beta: floa
         for trial in block.trials:
             trial_log_likelihood = 0.0
             for event_type, learner_id, view in replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA):
-                if event_type == "action" and learner_id == "subject":
+                if event_type == EventPhase.DECISION and learner_id == "subject":
                     probabilities = kernel.action_probabilities(state, view, params)
                     choice_index = view.choice
                     trial_log_likelihood += float(np.log(probabilities[choice_index]))

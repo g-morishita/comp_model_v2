@@ -118,6 +118,8 @@ class RecoveryStudyConfig:
     adapter: object | None = None
     simulation_base_seed: int = 42
     max_workers: int | None = None
+    demonstrator_kernel: ModelKernel[Any, Any] | None = None
+    demonstrator_params: Any | None = None
 
 
 def get_true_population_params(

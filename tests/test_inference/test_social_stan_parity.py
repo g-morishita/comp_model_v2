@@ -48,6 +48,8 @@ def _social_trial(
         Event-based trial matching ``SOCIAL_POST_OUTCOME_SCHEMA``.
     """
 
+    # Schema: INPUT(subj) DECISION(subj) OUTCOME(subj) UPDATE(subj→subj)
+    #         INPUT(demo) DECISION(demo) OUTCOME(demo) UPDATE(demo→demo) UPDATE(demo→subj)
     return Trial(
         trial_index=trial_index,
         events=(
@@ -63,16 +65,18 @@ def _social_trial(
             Event(
                 phase=EventPhase.OUTCOME, event_index=2, node_id="main", payload={"reward": reward}
             ),
-            Event(phase=EventPhase.UPDATE, event_index=3, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=3,
+                node_id="main",
+                payload={"choice": action, "reward": reward},
+            ),
             Event(
                 phase=EventPhase.INPUT,
                 event_index=4,
                 node_id="main",
                 actor_id="demonstrator",
-                payload={
-                    "available_actions": (0, 1),
-                    "observation": {"social_action": social_action, "social_reward": social_reward},
-                },
+                payload={"available_actions": (0, 1)},
             ),
             Event(
                 phase=EventPhase.DECISION,
@@ -93,9 +97,15 @@ def _social_trial(
                 event_index=7,
                 node_id="main",
                 actor_id="demonstrator",
-                payload={},
+                payload={"choice": social_action, "reward": social_reward},
             ),
-            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=8,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"choice": social_action, "reward": social_reward},
+            ),
         ),
     )
 
@@ -167,7 +177,7 @@ def _python_social_log_likelihoods(
             for event_type, learner_id, view in replay_trial_steps(
                 trial, SOCIAL_POST_OUTCOME_SCHEMA
             ):
-                if event_type == "action" and learner_id == "subject":
+                if event_type == EventPhase.DECISION and learner_id == "subject":
                     probabilities = kernel.action_probabilities(state, view, params)
                     choice_index = view.choice
                     trial_log_likelihood += float(np.log(probabilities[choice_index]))
