@@ -12,7 +12,7 @@ from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.inference.bayes.stan.data_builder import subject_to_step_data
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
-    SocialRlSelfRewardDemoRewardKernel,
+    SocialQLearningKernel,
 )
 from comp_model.models.kernels.transforms import get_transform
 from comp_model.tasks.schemas import SOCIAL_POST_OUTCOME_SCHEMA
@@ -161,7 +161,7 @@ def _python_social_log_likelihoods(
         Per-trial log-likelihood values.
     """
 
-    kernel = SocialRlSelfRewardDemoRewardKernel()
+    kernel = SocialQLearningKernel()
     raw_params = {
         "alpha_self": get_transform("sigmoid").inverse(alpha_self),
         "alpha_other": get_transform("sigmoid").inverse(alpha_other),
@@ -238,7 +238,7 @@ def _social_step_data(subject: SubjectData) -> dict[str, Any]:
         Step-stream Stan data dict with social fields.
     """
 
-    kernel_spec = SocialRlSelfRewardDemoRewardKernel.spec()
+    kernel_spec = SocialQLearningKernel.spec()
     return subject_to_step_data(
         subject,
         SOCIAL_POST_OUTCOME_SCHEMA,

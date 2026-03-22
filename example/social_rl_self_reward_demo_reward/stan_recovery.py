@@ -16,7 +16,7 @@ from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     QParams,
-    SocialRlSelfRewardDemoRewardKernel,
+    SocialQLearningKernel,
 )
 from comp_model.recovery import (
     ParamDist,
@@ -44,7 +44,7 @@ def main() -> None:
         ),
     )
 
-    kernel = SocialRlSelfRewardDemoRewardKernel()
+    kernel = SocialQLearningKernel()
     adapter = SocialRlSelfRewardDemoRewardStanAdapter()
 
     config = RecoveryStudyConfig(

@@ -15,7 +15,7 @@ from comp_model.inference.bayes.stan.data_builder import (
 )
 from comp_model.inference.config import HierarchyStructure, PriorSpec
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
-    SocialRlSelfRewardDemoRewardKernel,
+    SocialQLearningKernel,
 )
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
     """Stan adapter for the social self-reward + demo-reward RL kernel."""
 
     def kernel_spec(self) -> ModelKernelSpec:
-        return SocialRlSelfRewardDemoRewardKernel.spec()
+        return SocialQLearningKernel.spec()
 
     def stan_program_path(self, hierarchy: HierarchyStructure) -> str:
         programs_dir = Path(__file__).resolve().parent.parent / "programs"

@@ -14,8 +14,8 @@ from comp_model.io import load_dataset_from_csv, save_dataset_to_csv
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     QParams,
+    SocialQLearningKernel,
     SocialQParams,
-    SocialRlSelfRewardDemoRewardKernel,
 )
 from comp_model.runtime import SimulationConfig, simulate_dataset
 from comp_model.tasks import SOCIAL_POST_OUTCOME_SCHEMA, BlockSpec, TaskSpec
@@ -43,7 +43,7 @@ TRUE_ALPHA_SELF = 0.3
 TRUE_ALPHA_OTHER = 0.2
 TRUE_BETA = 2.0
 
-kernel = SocialRlSelfRewardDemoRewardKernel()
+kernel = SocialQLearningKernel()
 true_params = SocialQParams(
     alpha_self=TRUE_ALPHA_SELF, alpha_other=TRUE_ALPHA_OTHER, beta=TRUE_BETA
 )

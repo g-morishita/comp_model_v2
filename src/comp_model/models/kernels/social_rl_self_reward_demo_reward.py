@@ -50,7 +50,7 @@ class SocialQState:
     q_values: list[float]
 
 
-class SocialRlSelfRewardDemoRewardKernel:
+class SocialQLearningKernel:
     """Social RL kernel that updates from self reward and demonstrator reward.
 
     Notes

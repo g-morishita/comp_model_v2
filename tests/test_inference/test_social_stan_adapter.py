@@ -9,7 +9,7 @@ from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward 
 from comp_model.inference.config import HierarchyStructure
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
-    SocialRlSelfRewardDemoRewardKernel,
+    SocialQLearningKernel,
 )
 from comp_model.tasks.schemas import SOCIAL_PRE_CHOICE_SCHEMA
 
@@ -202,7 +202,7 @@ def test_social_adapter_adds_condition_data() -> None:
         ),
     )
     adapter = SocialRlSelfRewardDemoRewardStanAdapter()
-    kernel = SocialRlSelfRewardDemoRewardKernel()
+    kernel = SocialQLearningKernel()
     layout = SharedDeltaLayout(
         kernel_spec=kernel.spec(),
         conditions=("baseline", "social"),

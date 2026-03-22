@@ -2,7 +2,7 @@
 
 from comp_model.data.extractors import DecisionTrialView
 from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
-    SocialRlSelfRewardDemoRewardKernel,
+    SocialQLearningKernel,
 )
 
 
@@ -15,7 +15,7 @@ def test_social_kernel_reports_social_requirement() -> None:
         This test asserts static kernel metadata.
     """
 
-    assert SocialRlSelfRewardDemoRewardKernel.spec().requires_social is True
+    assert SocialQLearningKernel.spec().requires_social is True
 
 
 def test_social_kernel_updates_self_and_social_q_values() -> None:
@@ -27,7 +27,7 @@ def test_social_kernel_updates_self_and_social_q_values() -> None:
         This test asserts both update paths.
     """
 
-    kernel = SocialRlSelfRewardDemoRewardKernel()
+    kernel = SocialQLearningKernel()
     params = kernel.parse_params({"alpha_self": 0.0, "alpha_other": 0.0, "beta": 1.0})
     state = kernel.initial_state(2, params)
     view = DecisionTrialView(
