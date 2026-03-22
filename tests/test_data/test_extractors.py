@@ -4,9 +4,11 @@ from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import Event, EventPhase, Trial
 from comp_model.tasks.schemas import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
     SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
     SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
 )
@@ -510,3 +512,238 @@ def test_post_outcome_no_self_outcome_demonstrator_update_has_choice_and_reward(
     assert learner_id == "demonstrator"
     assert view.choice == 1
     assert view.reward == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Demo-learns schemas — demonstrator also updates from subject's action+reward
+# ---------------------------------------------------------------------------
+
+
+def _make_social_pre_choice_demo_learns_trial(
+    trial_index: int = 0,
+    subject_action: int = 1,
+    subject_reward: float = 0.0,
+    demo_action: int = 0,
+    demo_reward: float = 1.0,
+) -> Trial:
+    """11-event trial for SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA."""
+    return Trial(
+        trial_index=trial_index,
+        events=(
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=0,
+                node_id="main",
+                payload={"available_actions": (0, 1)},
+            ),
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=1,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={
+                    "available_actions": (0, 1),
+                    "observation": {"social_action": demo_action, "social_reward": demo_reward},
+                },
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=2,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"action": demo_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=3,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"reward": demo_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=4,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=5, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=6,
+                node_id="main",
+                payload={"action": subject_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=7,
+                node_id="main",
+                payload={"reward": subject_reward},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
+            # Demonstrator INPUT carrying subject's action+reward
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=9,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={
+                    "available_actions": (0, 1),
+                    "observation": {
+                        "social_action": subject_action,
+                        "social_reward": subject_reward,
+                    },
+                },
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=10,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+        ),
+    )
+
+
+def _make_social_post_outcome_demo_learns_trial(
+    trial_index: int = 0,
+    subject_action: int = 0,
+    subject_reward: float = 1.0,
+    demo_action: int = 1,
+    demo_reward: float = 0.0,
+) -> Trial:
+    """11-event trial for SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA."""
+    return Trial(
+        trial_index=trial_index,
+        events=(
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=0,
+                node_id="main",
+                payload={"available_actions": (0, 1)},
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=1,
+                node_id="main",
+                payload={"action": subject_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=2,
+                node_id="main",
+                payload={"reward": subject_reward},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=3, node_id="main", payload={}),
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=4,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={
+                    "available_actions": (0, 1),
+                    "observation": {"social_action": demo_action, "social_reward": demo_reward},
+                },
+            ),
+            Event(
+                phase=EventPhase.DECISION,
+                event_index=5,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"action": demo_action},
+            ),
+            Event(
+                phase=EventPhase.OUTCOME,
+                event_index=6,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={"reward": demo_reward},
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=7,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+            Event(phase=EventPhase.UPDATE, event_index=8, node_id="main", payload={}),
+            # Demonstrator INPUT carrying subject's action+reward
+            Event(
+                phase=EventPhase.INPUT,
+                event_index=9,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={
+                    "available_actions": (0, 1),
+                    "observation": {
+                        "social_action": subject_action,
+                        "social_reward": subject_reward,
+                    },
+                },
+            ),
+            Event(
+                phase=EventPhase.UPDATE,
+                event_index=10,
+                node_id="main",
+                actor_id="demonstrator",
+                payload={},
+            ),
+        ),
+    )
+
+
+def test_pre_choice_demo_learns_replay_step_order() -> None:
+    trial = _make_social_pre_choice_demo_learns_trial()
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA))
+
+    event_types = [(s[0], s[1]) for s in steps]
+    assert event_types == [
+        ("update", "demonstrator"),  # demo self-update (own outcome)
+        ("update", "subject"),  # subject social-update (from demo)
+        ("action", "subject"),  # subject acts
+        ("update", "subject"),  # subject self-update (own outcome)
+        ("update", "demonstrator"),  # demo update from subject's outcome
+    ]
+
+
+def test_pre_choice_demo_learns_second_demo_update_carries_subject_info() -> None:
+    """Second demonstrator UPDATE carries subject's action+reward as social info."""
+    trial = _make_social_pre_choice_demo_learns_trial(
+        subject_action=1, subject_reward=0.5, demo_action=0, demo_reward=1.0
+    )
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA))
+
+    _, learner_id, view = steps[4]  # second demo update
+    assert learner_id == "demonstrator"
+    assert view.social_action == 1  # subject's choice
+    assert view.social_reward == 0.5  # subject's reward
+    assert view.reward is None  # demo's own reward was already consumed
+
+
+def test_post_outcome_demo_learns_replay_step_order() -> None:
+    trial = _make_social_post_outcome_demo_learns_trial()
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA))
+
+    event_types = [(s[0], s[1]) for s in steps]
+    assert event_types == [
+        ("action", "subject"),  # subject acts
+        ("update", "subject"),  # subject self-update (own outcome)
+        ("update", "demonstrator"),  # demo self-update (own outcome)
+        ("update", "subject"),  # subject social-update (from demo)
+        ("update", "demonstrator"),  # demo update from subject's outcome
+    ]
+
+
+def test_post_outcome_demo_learns_second_demo_update_carries_subject_info() -> None:
+    """Second demonstrator UPDATE carries subject's action+reward as social info."""
+    trial = _make_social_post_outcome_demo_learns_trial(
+        subject_action=0, subject_reward=1.0, demo_action=1, demo_reward=0.0
+    )
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA))
+
+    _, learner_id, view = steps[4]  # second demo update
+    assert learner_id == "demonstrator"
+    assert view.social_action == 0  # subject's choice
+    assert view.social_reward == 1.0  # subject's reward
+    assert view.reward is None  # demo's own reward was already consumed

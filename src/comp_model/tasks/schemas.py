@@ -303,3 +303,73 @@ SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA = TrialSchema(
         TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
     ),
 )
+
+# Schemas where the demonstrator also updates from the subject's action and
+# reward.  After the subject completes the trial, an INPUT(demonstrator) step
+# carries the subject's action/reward as observable fields, followed by a
+# second UPDATE(demonstrator) that gives the demo kernel
+# social_action=subject_action and social_reward=subject_reward.
+
+SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA = TrialSchema(
+    schema_id="social_pre_choice_demo_learns",
+    steps=(
+        TrialSchemaStep(EventPhase.INPUT, "main"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
+        TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main"),
+        TrialSchemaStep(EventPhase.UPDATE, "main"),
+        # Demonstrator observes subject's action+reward and updates accordingly.
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+    ),
+)
+
+SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA = TrialSchema(
+    schema_id="social_post_outcome_demo_learns",
+    steps=(
+        TrialSchemaStep(EventPhase.INPUT, "main"),
+        TrialSchemaStep(EventPhase.DECISION, "main", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main"),
+        TrialSchemaStep(EventPhase.UPDATE, "main"),
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(EventPhase.DECISION, "main", actor_id="demonstrator", action_required=True),
+        TrialSchemaStep(EventPhase.OUTCOME, "main", actor_id="demonstrator"),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+        TrialSchemaStep(EventPhase.UPDATE, "main", learner_id="subject"),
+        # Demonstrator observes subject's action+reward and updates accordingly.
+        TrialSchemaStep(
+            EventPhase.INPUT,
+            "main",
+            actor_id="demonstrator",
+            observable_fields=frozenset({"action", "reward"}),
+        ),
+        TrialSchemaStep(
+            EventPhase.UPDATE, "main", actor_id="demonstrator", learner_id="demonstrator"
+        ),
+    ),
+)
