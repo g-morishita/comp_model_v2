@@ -5,7 +5,9 @@ import pytest
 from comp_model.data.schema import Event, EventPhase, Trial
 from comp_model.tasks.schemas import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
     TrialSchemaStep,
@@ -150,6 +152,20 @@ def test_schema_rejects_wrong_event_count() -> None:
 
     with pytest.raises(ValueError, match="expected 4 events"):
         ASOCIAL_BANDIT_SCHEMA.validate_trial(trial)
+
+
+def test_pre_choice_no_self_outcome_schema_outcome_not_observable() -> None:
+    """Ensure the subject OUTCOME step has outcome_observable=False."""
+    # step 7 is the subject OUTCOME step (index 7 in the 9-step schema)
+    subject_outcome_step = SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA.steps[7]
+    assert subject_outcome_step.outcome_observable is False
+
+
+def test_post_outcome_no_self_outcome_schema_outcome_not_observable() -> None:
+    """Ensure the subject OUTCOME step has outcome_observable=False."""
+    # step 2 is the subject OUTCOME step (index 2 in the 9-step schema)
+    subject_outcome_step = SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA.steps[2]
+    assert subject_outcome_step.outcome_observable is False
 
 
 def test_non_subject_input_without_observable_fields_raises() -> None:

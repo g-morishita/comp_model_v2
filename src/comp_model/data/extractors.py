@@ -158,7 +158,8 @@ def replay_trial_steps(
                 social_reward = None
 
         elif step.phase == EventPhase.OUTCOME:
-            rewards[step.actor_id] = float(event.payload["reward"])
+            if step.outcome_observable:
+                rewards[step.actor_id] = float(event.payload["reward"])
 
         elif step.phase == EventPhase.UPDATE:
             learner = step.learner_id

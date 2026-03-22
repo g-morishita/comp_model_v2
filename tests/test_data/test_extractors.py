@@ -4,8 +4,10 @@ from comp_model.data.extractors import replay_trial_steps
 from comp_model.data.schema import Event, EventPhase, Trial
 from comp_model.tasks.schemas import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
 )
 
@@ -315,6 +317,58 @@ def test_social_post_outcome_subject_self_update_has_no_social_info() -> None:
 def test_social_post_outcome_social_update_has_social_info() -> None:
     trial = _make_social_post_outcome_trial(demo_action=1, demo_reward=0.0)
     steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_SCHEMA))
+
+    _, learner_id, view = steps[3]  # subject social update
+    assert learner_id == "subject"
+    assert view.social_action == 1
+    assert view.social_reward == 0.0
+
+
+# ---------------------------------------------------------------------------
+# No-self-outcome schemas — outcome_observable=False on subject OUTCOME step
+# ---------------------------------------------------------------------------
+
+
+def test_pre_choice_no_self_outcome_subject_self_update_has_no_reward() -> None:
+    """Subject self-update reward is None when outcome_observable=False."""
+    trial = _make_social_pre_choice_trial(subject_action=1, subject_reward=0.5)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA))
+
+    # step order: demo-update, subject-social-update, action, subject-self-update
+    _, learner_id, view = steps[3]  # subject self-update
+    assert learner_id == "subject"
+    assert view.choice == 1
+    assert view.reward is None  # hidden
+
+
+def test_pre_choice_no_self_outcome_still_carries_social_info() -> None:
+    """Demo action/reward still reaches the social update step."""
+    trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA))
+
+    _, learner_id, view = steps[1]  # subject social update
+    assert learner_id == "subject"
+    assert view.social_action == 0
+    assert view.social_reward == 1.0
+    assert view.reward is None
+
+
+def test_post_outcome_no_self_outcome_subject_self_update_has_no_reward() -> None:
+    """Subject self-update reward is None when outcome_observable=False."""
+    trial = _make_social_post_outcome_trial(subject_action=0, subject_reward=1.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA))
+
+    # step order: action, subject-self-update, demo-update, subject-social-update
+    _, learner_id, view = steps[1]  # subject self-update
+    assert learner_id == "subject"
+    assert view.choice == 0
+    assert view.reward is None  # hidden
+
+
+def test_post_outcome_no_self_outcome_still_carries_social_info() -> None:
+    """Demo action/reward still reaches the social update step."""
+    trial = _make_social_post_outcome_trial(demo_action=1, demo_reward=0.0)
+    steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA))
 
     _, learner_id, view = steps[3]  # subject social update
     assert learner_id == "subject"
