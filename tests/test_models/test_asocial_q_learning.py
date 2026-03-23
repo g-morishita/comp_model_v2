@@ -57,3 +57,35 @@ def test_asocial_kernel_updates_chosen_q_value() -> None:
 
     assert updated_state.q_values[0] == 0.5
     assert updated_state.q_values[1] > 0.5
+
+
+def test_asocial_kernel_ignores_social_update_step() -> None:
+    """Ensure the asocial kernel leaves Q-values unchanged on social UPDATE steps.
+
+    When the asocial kernel is fitted to data collected under a social schema
+    (e.g. for model comparison), the replay engine emits UPDATE steps that
+    carry the demonstrator's outcome rather than the participant's own
+    choice.  These steps have ``choice=None`` and the kernel must ignore them
+    so that only the participant's own experience drives learning.
+
+    Returns
+    -------
+    None
+        This test asserts that social UPDATE steps are skipped.
+    """
+
+    kernel = AsocialQLearningKernel()
+    params = kernel.parse_params({"alpha": 0.5, "beta": 1.0})
+    state = kernel.initial_state(2, params)
+    social_view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        choice=None,  # social UPDATE: demonstrator's step, no participant choice
+        reward=None,
+        social_action=0,
+        social_reward=1.0,
+    )
+
+    updated_state = kernel.update(state, social_view, params)
+
+    assert updated_state.q_values == state.q_values
