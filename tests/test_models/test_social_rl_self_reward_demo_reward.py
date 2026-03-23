@@ -39,7 +39,7 @@ def test_social_kernel_updates_self_and_social_q_values() -> None:
         social_reward=0.0,
     )
 
-    next_state = kernel.next_state(state, view, params)
+    updated_state = kernel.update(state, view, params)
 
-    assert next_state.q_values[0] > 0.5
-    assert next_state.q_values[1] < 0.5
+    assert updated_state.q_values[0] > 0.5
+    assert updated_state.q_values[1] < 0.5

@@ -68,7 +68,7 @@ def log_likelihood_simple(
                     choice_index = view.available_actions.index(view.choice)
                     total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
                 elif event_type == EventPhase.UPDATE and learner_id == "subject":
-                    state = kernel.next_state(state, view, params)
+                    state = kernel.update(state, view, params)
 
     return total_log_likelihood
 
@@ -160,6 +160,6 @@ def log_likelihood_conditioned(
                     choice_index = view.available_actions.index(view.choice)
                     total_log_likelihood += math.log(max(probabilities[choice_index], 1e-15))
                 elif event_type == EventPhase.UPDATE and learner_id == "subject":
-                    state = kernel.next_state(state, view, condition_params)
+                    state = kernel.update(state, view, condition_params)
 
     return total_log_likelihood
