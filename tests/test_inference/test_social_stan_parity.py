@@ -182,7 +182,7 @@ def _python_social_log_likelihoods(
                     choice_index = view.choice
                     trial_log_likelihood += float(np.log(probabilities[choice_index]))
                 elif event_type == "update" and learner_id == "subject":
-                    state = kernel.next_state(state, view, params)
+                    state = kernel.update(state, view, params)
             trial_log_likelihoods.append(trial_log_likelihood)
 
     return trial_log_likelihoods

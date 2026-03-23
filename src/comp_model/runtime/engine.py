@@ -254,7 +254,7 @@ def simulate_subject(
                         )
                     )
 
-                    # Then immediately call next_state to advance the learner's
+                    # Then immediately call update to advance the learner's
                     # internal state (e.g. update Q-values). Doing this here,
                     # inside the schema loop, means the update fires at exactly
                     # the position the schema declares — crucially, a social
@@ -283,11 +283,11 @@ def simulate_subject(
                         )
 
                     if learner == "subject":
-                        states["subject"] = kernel.next_state(
+                        states["subject"] = kernel.update(
                             cast("StateT", states["subject"]), view, params
                         )
                     elif demonstrator_kernel is not None and demonstrator_params is not None:
-                        states["demonstrator"] = demonstrator_kernel.next_state(
+                        states["demonstrator"] = demonstrator_kernel.update(
                             states["demonstrator"], view, demonstrator_params
                         )
 

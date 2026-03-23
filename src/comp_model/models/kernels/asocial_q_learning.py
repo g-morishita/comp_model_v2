@@ -147,7 +147,7 @@ class AsocialQLearningKernel:
         -------
         QParams
             Parameter object with alpha and beta on their natural scales,
-            ready for use in ``action_probabilities`` and ``next_state``.
+            ready for use in ``action_probabilities`` and ``update``.
         """
 
         return QParams(
@@ -216,7 +216,7 @@ class AsocialQLearningKernel:
         logits = [params.beta * state.q_values[action] for action in view.available_actions]
         return stable_softmax(logits)
 
-    def next_state(
+    def update(
         self,
         state: QState,
         view: DecisionTrialView,

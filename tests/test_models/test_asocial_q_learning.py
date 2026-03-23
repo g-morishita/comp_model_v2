@@ -45,7 +45,7 @@ def test_asocial_kernel_updates_chosen_q_value() -> None:
         reward=1.0,
     )
 
-    next_state = kernel.next_state(state, view, params)
+    updated_state = kernel.update(state, view, params)
 
-    assert next_state.q_values[0] == 0.5
-    assert next_state.q_values[1] > 0.5
+    assert updated_state.q_values[0] == 0.5
+    assert updated_state.q_values[1] > 0.5

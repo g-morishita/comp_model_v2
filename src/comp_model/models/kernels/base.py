@@ -186,7 +186,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
     1. :meth:`initial_state` — what is the participant's starting state?
     2. :meth:`action_probabilities` — given the current state, how likely is
        each action?
-    3. :meth:`next_state` — given the outcome, what is the updated state?
+    3. :meth:`update` — given the outcome, what is the updated state?
 
     Two additional methods are needed by the fitting and simulation machinery:
 
@@ -235,7 +235,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
         ParamsT
             A typed parameter object ready to be passed to
             :meth:`initial_state`, :meth:`action_probabilities`, and
-            :meth:`next_state`.
+            :meth:`update`.
         """
 
         ...
@@ -298,7 +298,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
 
         ...
 
-    def next_state(
+    def update(
         self,
         state: StateT,
         view: DecisionTrialView,

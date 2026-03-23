@@ -228,7 +228,7 @@ class SocialRlSelfRewardDemoRewardKernel:
         logits = [params.beta * state.q_values[action] for action in view.available_actions]
         return stable_softmax(logits)
 
-    def next_state(
+    def update(
         self,
         state: SocialRlSelfRewardDemoRewardState,
         view: DecisionTrialView,
