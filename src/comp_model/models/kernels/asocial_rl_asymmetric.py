@@ -201,6 +201,10 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
         Positive prediction errors (:math:`r > Q[a]`) use ``alpha_pos``;
         negative prediction errors (:math:`r < Q[a]`) use ``alpha_neg``.
 
+        Social UPDATE steps (where ``view.choice is None``) are silently
+        skipped, allowing this kernel to be fitted against data collected
+        under a social schema for model comparison purposes.
+
         Parameters
         ----------
         state
@@ -215,6 +219,11 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
         AsocialRlAsymmetricState
             Updated latent state.
         """
+
+        # Asocial model: ignore social UPDATE steps (e.g. when fitted to social
+        # schema data for model comparison). Only self-updates carry a choice.
+        if view.choice is None:
+            return state
 
         updated_q_values = list(state.q_values)
         if view.reward is not None:

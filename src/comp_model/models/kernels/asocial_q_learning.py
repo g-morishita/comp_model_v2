@@ -238,6 +238,12 @@ class AsocialQLearningKernel(ModelKernel[QState, QParams]):
         If no reward is recorded for this trial (e.g. some task designs omit
         feedback on certain trials), the Q-values are returned unchanged.
 
+        Social UPDATE steps (where ``view.choice is None``) are silently
+        skipped. This makes the asocial kernel safe to fit against data
+        collected under a social schema — for example when comparing an
+        asocial model against a social model on the same dataset — without
+        requiring any changes to the data pipeline.
+
         Parameters
         ----------
         state
@@ -253,6 +259,11 @@ class AsocialQLearningKernel(ModelKernel[QState, QParams]):
         QState
             Updated Q-values to carry forward into the next trial.
         """
+
+        # Asocial model: ignore social UPDATE steps (e.g. when fitted to social
+        # schema data for model comparison). Only self-updates carry a choice.
+        if view.choice is None:
+            return state
 
         updated_q_values = list(state.q_values)
         if view.reward is not None:
