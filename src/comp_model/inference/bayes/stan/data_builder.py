@@ -7,6 +7,7 @@ array layout expected by the Stan programs.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from comp_model.data.extractors import DecisionTrialView, replay_trial_steps
@@ -47,7 +48,7 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     and optional social information.
     """
 
-    trials_flat: list[DecisionTrialView] = []
+    trials_flat: list[_CombinedTrialData] = []
     block_of_trial: list[int] = []
 
     for block in subject_data.blocks:
@@ -72,8 +73,6 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     has_social = [0] * total_trials
 
     for index, view in enumerate(trials_flat):
-        if view.choice is None:
-            raise ValueError("Stan export requires choice to be set on all action views")
         choice[index] = action_to_index[view.choice]
         reward[index] = float(view.reward) if view.reward is not None else 0.0
         for action in view.available_actions:
@@ -341,7 +340,26 @@ def add_state_reset_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec
     raise ValueError(f"Unknown state_reset_policy: {kernel_spec.state_reset_policy!r}")
 
 
-def _action_index_mapping(trials_flat: Iterable[DecisionTrialView]) -> dict[int, int]:
+@dataclass
+class _CombinedTrialData:
+    """Merged per-trial data for the trial-level Stan builder.
+
+    Aggregates the subject's choice, reward, and any observed social
+    information from all replay steps in one trial into a single flat record.
+    This is an internal helper used only by ``subject_to_stan_data``; it is
+    not a ``DecisionTrialView`` because it conflates information from multiple
+    distinct update events.
+    """
+
+    trial_index: int
+    available_actions: tuple[int, ...]
+    choice: int
+    reward: float | None
+    social_action: int | None
+    social_reward: float | None
+
+
+def _action_index_mapping(trials_flat: Iterable[_CombinedTrialData]) -> dict[int, int]:
     """Build a contiguous Stan action index for observed action identifiers.
 
     Parameters
@@ -369,7 +387,7 @@ def _action_index_mapping(trials_flat: Iterable[DecisionTrialView]) -> dict[int,
             if action not in seen_actions:
                 seen_actions.add(action)
                 ordered_actions.append(action)
-        if view.choice is not None and view.choice not in seen_actions:
+        if view.choice not in seen_actions:
             seen_actions.add(view.choice)
             ordered_actions.append(view.choice)
         if view.social_action is not None and view.social_action not in seen_actions:
@@ -379,16 +397,47 @@ def _action_index_mapping(trials_flat: Iterable[DecisionTrialView]) -> dict[int,
     return {action: index for index, action in enumerate(ordered_actions, start=1)}
 
 
+def _action_index_mapping_from_views(views: Iterable[DecisionTrialView]) -> dict[int, int]:
+    """Build a contiguous Stan action index from step-level decision views.
+
+    Parameters
+    ----------
+    views
+        Decision views from all replay steps (DECISION + UPDATE) for one
+        subject. Actions are collected from ``available_actions`` and
+        ``view.action`` across all steps.
+
+    Returns
+    -------
+    dict[int, int]
+        Mapping from raw action identifier to 1-based Stan index.
+    """
+
+    ordered_actions: list[int] = []
+    seen_actions: set[int] = set()
+
+    for view in views:
+        for action in view.available_actions:
+            if action not in seen_actions:
+                seen_actions.add(action)
+                ordered_actions.append(action)
+        if view.action is not None and view.action not in seen_actions:
+            seen_actions.add(view.action)
+            ordered_actions.append(view.action)
+
+    return {action: index for index, action in enumerate(ordered_actions, start=1)}
+
+
 def _combined_subject_view_for_stan(
     trial: Trial,
     schema: TrialSchema,
-) -> DecisionTrialView | None:
-    """Return a view combining choice, reward, and social info across all trial steps.
+) -> _CombinedTrialData | None:
+    """Return merged per-trial data combining choice, reward, and social info.
 
-    Collects ``choice`` and ``available_actions`` from the subject's action
-    step, ``reward`` from whichever subject update step carries it, and
-    ``social_action`` / ``social_reward`` from whichever step (action or
-    update) carries them.  This works for both PRE_CHOICE schemas (where
+    Collects ``choice`` and ``available_actions`` from the subject's DECISION
+    step, ``reward`` from the subject's self-UPDATE step, and
+    ``social_action`` / ``social_reward`` from any social-UPDATE step where
+    the learner is the subject. This works for both PRE_CHOICE schemas (where
     social info appears before the subject's action) and POST_OUTCOME schemas
     (where social info appears after the subject's outcome).
 
@@ -401,8 +450,9 @@ def _combined_subject_view_for_stan(
 
     Returns
     -------
-    DecisionTrialView | None
-        Combined view, or ``None`` if the trial has no subject decisions.
+    _CombinedTrialData | None
+        Combined per-trial record, or ``None`` if the trial has no subject
+        decisions.
     """
 
     choice: int | None = None
@@ -413,21 +463,22 @@ def _combined_subject_view_for_stan(
 
     for event_type, learner_id, view in replay_trial_steps(trial, schema):
         if event_type == EventPhase.DECISION and learner_id == "subject":
-            choice = view.choice
+            choice = view.action
             available_actions = view.available_actions
-            if view.social_action is not None:
-                social_action = view.social_action
-                social_reward = view.social_reward
         elif event_type == EventPhase.UPDATE and learner_id == "subject":
-            if view.reward is not None:
-                reward = view.reward
-            if view.social_action is not None:
-                social_action = view.social_action
-                social_reward = view.social_reward
+            if view.actor_id == view.learner_id:
+                # Self-update: capture the subject's own reward.
+                if view.reward is not None:
+                    reward = view.reward
+            else:
+                # Social update: capture the observed action and reward.
+                if view.action is not None:
+                    social_action = view.action
+                    social_reward = view.reward
 
     if choice is None:
         return None
-    return DecisionTrialView(
+    return _CombinedTrialData(
         trial_index=trial.trial_index,
         available_actions=available_actions,
         choice=choice,
@@ -488,7 +539,7 @@ def subject_to_step_data(
     if not raw_steps:
         raise ValueError("No subject steps found in subject data")
 
-    action_to_index = _action_index_mapping(v for _, _, _, v in raw_steps)
+    action_to_index = _action_index_mapping_from_views(v for _, _, _, v in raw_steps)
     n_actions = len(action_to_index)
 
     return _raw_steps_to_step_dict(
@@ -546,7 +597,7 @@ def dataset_to_step_data(
 
     action_counts_per_subject: set[int] = set()
     for subject in dataset.subjects:
-        subj_action_map = _action_index_mapping(
+        subj_action_map = _action_index_mapping_from_views(
             view
             for block in subject.blocks
             for trial in block.trials
@@ -557,7 +608,7 @@ def dataset_to_step_data(
     if len(action_counts_per_subject) > 1:
         raise ValueError("All subjects must have the same number of actions")
 
-    action_to_index = _action_index_mapping(v for _, _, _, _, v in all_raw_steps)
+    action_to_index = _action_index_mapping_from_views(v for _, _, _, _, v in all_raw_steps)
     n_actions = len(action_to_index)
 
     raw_steps_for_dict = [(b, c, et, v) for _, b, c, et, v in all_raw_steps]
@@ -627,18 +678,20 @@ def _raw_steps_to_step_dict(
         for action in view.available_actions:
             step_avail_mask[idx][action_to_index[action] - 1] = 1.0
         if event_type == EventPhase.DECISION:
-            if view.choice is not None:
-                step_choice[idx] = action_to_index[view.choice]
+            if view.action is not None:
+                step_choice[idx] = action_to_index[view.action]
                 n_decisions += 1
         elif event_type == EventPhase.UPDATE:
-            if view.reward is not None and view.choice is not None:
-                step_update_action[idx] = action_to_index[view.choice]
-                step_reward[idx] = float(view.reward)
-            if view.social_action is not None:
-                step_social_action[idx] = action_to_index[view.social_action]
-                step_social_reward[idx] = (
-                    float(view.social_reward) if view.social_reward is not None else 0.0
-                )
+            if view.actor_id == view.learner_id:
+                # Self-update: record what the subject chose and received.
+                if view.action is not None and view.reward is not None:
+                    step_update_action[idx] = action_to_index[view.action]
+                    step_reward[idx] = float(view.reward)
+            else:
+                # Social update: record the observed action and reward.
+                if view.action is not None:
+                    step_social_action[idx] = action_to_index[view.action]
+                    step_social_reward[idx] = float(view.reward) if view.reward is not None else 0.0
 
     result: dict[str, Any] = {
         "A": n_actions,

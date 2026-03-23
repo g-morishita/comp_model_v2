@@ -2,7 +2,7 @@
 
 Raw experimental data is stored as a sequence of events (see schema.py).
 Learning models, however, need a much simpler picture: for each decision
-moment, just tell me what options were available, what was chosen, and what
+moment, just tell me who acted, who is learning, what was chosen, and what
 reward was received.
 
 This module does that translation. Its main job is to walk through a trial's
@@ -16,7 +16,12 @@ step and emits two kinds of signals to the caller:
 - A **DECISION** signal: "the participant just made a choice — evaluate how
   probable that choice was under the current model."
 - An **UPDATE** signal: "a learning step should happen now — advance the
-  model's internal state using this choice and reward."
+  model's internal state using this observation."
+
+Each view carries ``actor_id`` (who acted) and ``learner_id`` (who is
+learning from it). A kernel compares these two fields to decide whether to
+apply a self-update (``actor_id == learner_id``) or a social update
+(``actor_id != learner_id``).
 
 This separation keeps the model fitting code clean: the caller just needs to
 respond to these two signals without worrying about which event in the raw
@@ -46,41 +51,52 @@ class DecisionTrialView:
     the same model code works regardless of how the task's event sequence is
     structured — the extractor takes care of the bookkeeping.
 
+    A view is always from the perspective of a specific observer
+    (``learner_id``). Two fields together answer "who did what":
+
+    - ``actor_id``: the agent who made the choice and received the reward.
+    - ``learner_id``: the agent who is learning from this observation.
+
+    When ``actor_id == learner_id`` the learner is updating from their own
+    experience (self-update). When they differ the learner is updating from
+    watching someone else (social update). Kernels use this comparison to
+    select the appropriate learning rate.
+
     Attributes
     ----------
     trial_index
         Which trial within the current block this decision came from.
     available_actions
-        The options that were available at this decision point (e.g.
-        ``(0, 1, 2)`` for a three-armed bandit).
-    choice
-        The action that was chosen (e.g. ``1``). This is ``None`` when the
-        view represents a social-observation update — i.e. the participant is
-        learning from watching a demonstrator, not from their own choice.
+        The options that were available to the *learner* at this decision
+        point (e.g. ``(0, 1, 2)`` for a three-armed bandit).
+    actor_id
+        Identifier of the agent who performed the action (e.g.
+        ``"subject"`` or ``"demonstrator"``).
+    learner_id
+        Identifier of the agent who is learning from this observation
+        (e.g. ``"subject"``).
+    action
+        The action that was taken (e.g. ``1``). For social-update steps
+        where the schema marks the actor's action as *not* observable,
+        this is ``None``.
     reward
-        The reward the participant received, if this was their own decision.
-        ``None`` for social-observation update steps.
+        The reward received for the action. ``None`` if the reward is not
+        observable to the learner (controlled by ``observable_fields`` on
+        the schema step).
     observation
-        Any additional information the participant saw alongside the options
+        Any additional information the learner saw alongside the options
         (e.g. stimulus features).
-    social_action
-        The action the demonstrator chose, if one was observed on this step.
-        ``None`` if no demonstrator was present or their action was not visible.
-    social_reward
-        The reward the demonstrator received, if it was visible to the
-        participant. This is only populated when the task schema explicitly
-        marks the demonstrator's reward as observable. ``None`` otherwise.
     metadata
         Any additional bookkeeping information attached by the extractor.
     """
 
     trial_index: int
     available_actions: tuple[int, ...]
-    choice: int | None = None
+    actor_id: str = ""
+    learner_id: str = ""
+    action: int | None = None
     reward: float | None = None
     observation: Mapping[str, Any] = field(default_factory=empty_mapping)
-    social_action: int | None = None
-    social_reward: float | None = None
     metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 
 
@@ -100,13 +116,13 @@ def replay_trial_steps(
       Only emitted for the participant's own choices, not a demonstrator's.
 
     - **UPDATE** (``EventPhase.UPDATE``): a learning step should happen now.
-      The caller should advance the model's internal state (e.g. update
-      action values) using the choice and reward provided in the view. The
-      UPDATE payload already contains both the choice that was made and the
-      reward that resulted, so there is no need to remember information from
-      earlier events.
+      The caller should advance the model's internal state using the view.
+      The view's ``actor_id`` and ``learner_id`` tell the kernel whether
+      this is a self-update or a social update. The UPDATE payload already
+      contains both the action and the reward, so there is no need to
+      remember information from earlier events.
 
-    Design note — why carry choice and reward in the UPDATE payload?
+    Design note — why carry action and reward in the UPDATE payload?
     In principle you could reconstruct them by looking back at earlier events.
     Instead, the schema pre-packages them in the UPDATE event so this function
     can emit a complete view without accumulating state across events.
@@ -161,11 +177,11 @@ def replay_trial_steps(
                     DecisionTrialView(
                         trial_index=trial.trial_index,
                         available_actions=tuple(input_event.payload["available_actions"]),
-                        choice=int(event.payload["action"]),
+                        actor_id=step.actor_id,
+                        learner_id=step.learner_id,
+                        action=int(event.payload["action"]),
                         reward=None,
                         observation=input_event.payload.get("observation", {}),
-                        social_action=None,
-                        social_reward=None,
                     ),
                 )
 
@@ -176,7 +192,7 @@ def replay_trial_steps(
         elif step.phase == EventPhase.UPDATE:
             learner = step.learner_id
             actor = step.actor_id
-            actor_choice = int(event.payload["choice"])
+            actor_action = int(event.payload["choice"])
             actor_reward = float(event.payload["reward"])
 
             learner_input = actor_inputs.get(learner)
@@ -184,24 +200,16 @@ def replay_trial_steps(
                 tuple(learner_input.payload["available_actions"]) if learner_input else ()
             )
 
-            if actor == learner:
-                view = DecisionTrialView(
-                    trial_index=trial.trial_index,
-                    available_actions=available_actions,
-                    choice=actor_choice,
-                    reward=actor_reward,
-                    social_action=None,
-                    social_reward=None,
-                )
-            else:
-                obs = step.observable_fields
-                view = DecisionTrialView(
-                    trial_index=trial.trial_index,
-                    available_actions=available_actions,
-                    choice=None,
-                    reward=None,
-                    social_action=actor_choice if "action" in obs else None,
-                    social_reward=actor_reward if "reward" in obs else None,
-                )
+            # For self-updates both fields are always visible.
+            # For social updates visibility is gated by observable_fields.
+            obs = step.observable_fields if actor != learner else frozenset({"action", "reward"})
+            view = DecisionTrialView(
+                trial_index=trial.trial_index,
+                available_actions=available_actions,
+                actor_id=actor,
+                learner_id=learner,
+                action=actor_action if "action" in obs else None,
+                reward=actor_reward if "reward" in obs else None,
+            )
 
             yield (EventPhase.UPDATE, learner, view)

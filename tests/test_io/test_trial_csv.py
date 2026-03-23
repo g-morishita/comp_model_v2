@@ -682,10 +682,10 @@ def _fitting_view_signatures(
                             block.condition,
                             last_subject_update.trial_index,
                             last_subject_update.available_actions,
-                            last_subject_update.choice,
+                            last_subject_update.actor_id,
+                            last_subject_update.learner_id,
+                            last_subject_update.action,
                             last_subject_update.reward,
-                            last_subject_update.social_action,
-                            last_subject_update.social_reward,
                         )
                     )
     return tuple(signatures)
