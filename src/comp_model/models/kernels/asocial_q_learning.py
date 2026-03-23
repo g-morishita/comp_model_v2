@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.base import InitSpec, ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
 
@@ -74,7 +74,7 @@ class QState:
     q_values: list[float]
 
 
-class AsocialQLearningKernel:
+class AsocialQLearningKernel(ModelKernel[QState, QParams]):
     """Q-learning model for a participant who learns only from their own experience.
 
     This is the standard asocial reinforcement learning model. The agent

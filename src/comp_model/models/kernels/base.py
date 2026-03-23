@@ -25,8 +25,9 @@ without touching the infrastructure.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -170,7 +171,7 @@ StateT = TypeVar("StateT")
 ParamsT = TypeVar("ParamsT")
 
 
-class ModelKernel(Protocol, Generic[StateT, ParamsT]):
+class ModelKernel(ABC, Generic[StateT, ParamsT]):
     """The interface that every computational model must implement.
 
     A ``ModelKernel`` is the heart of a computational model. It encodes two
@@ -202,6 +203,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
     """
 
     @classmethod
+    @abstractmethod
     def spec(cls) -> ModelKernelSpec:
         """Return the identity card (static metadata) for this model.
 
@@ -215,6 +217,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
 
         ...
 
+    @abstractmethod
     def parse_params(self, raw: dict[str, float]) -> ParamsT:
         """Convert raw numbers from the optimiser into this model's parameter object.
 
@@ -240,6 +243,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
 
         ...
 
+    @abstractmethod
     def initial_state(self, n_actions: int, params: ParamsT) -> StateT:
         """Create the participant's blank starting state before any learning.
 
@@ -265,6 +269,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
 
         ...
 
+    @abstractmethod
     def action_probabilities(
         self,
         state: StateT,
@@ -298,6 +303,7 @@ class ModelKernel(Protocol, Generic[StateT, ParamsT]):
 
         ...
 
+    @abstractmethod
     def update(
         self,
         state: StateT,
