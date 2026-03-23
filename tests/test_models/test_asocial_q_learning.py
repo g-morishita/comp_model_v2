@@ -63,10 +63,10 @@ def test_asocial_kernel_ignores_social_update_step() -> None:
     """Ensure the asocial kernel leaves Q-values unchanged on social UPDATE steps.
 
     When the asocial kernel is fitted to data collected under a social schema
-    (e.g. for model comparison), the replay engine emits UPDATE steps that
-    carry the demonstrator's outcome rather than the participant's own
-    choice.  These steps have ``choice=None`` and the kernel must ignore them
-    so that only the participant's own experience drives learning.
+    (e.g. for model comparison), the replay engine emits UPDATE steps where
+    ``actor_id != learner_id`` — the demonstrator acted but the subject is
+    the learner.  The asocial kernel must ignore these so only the
+    participant's own experience drives learning.
 
     Returns
     -------
@@ -80,10 +80,10 @@ def test_asocial_kernel_ignores_social_update_step() -> None:
     social_view = DecisionTrialView(
         trial_index=0,
         available_actions=(0, 1),
-        choice=None,  # social UPDATE: demonstrator's step, no participant choice
-        reward=None,
-        social_action=0,
-        social_reward=1.0,
+        actor_id="demonstrator",  # social UPDATE: demonstrator acted
+        learner_id="subject",  # subject is the learner
+        action=0,
+        reward=1.0,
     )
 
     updated_state = kernel.update(state, social_view, params)
