@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.base import InitSpec, ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
 
@@ -50,7 +50,7 @@ class AsocialRlAsymmetricState:
     q_values: list[float]
 
 
-class AsocialRlAsymmetricKernel:
+class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlAsymmetricParams]):
     """Asocial RL kernel with separate learning rates for positive and negative RPEs.
 
     The update rule is:

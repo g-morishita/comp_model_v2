@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from comp_model.models.kernels.base import ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.base import ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
 
@@ -81,7 +81,9 @@ class SocialRlSelfRewardDemoRewardState:
     q_values: list[float]
 
 
-class SocialRlSelfRewardDemoRewardKernel:
+class SocialRlSelfRewardDemoRewardKernel(
+    ModelKernel[SocialRlSelfRewardDemoRewardState, SocialRlSelfRewardDemoRewardParams]
+):
     """Q-learning model for a participant who learns from both personal and social experience.
 
     On each trial this model can update the participant's beliefs in two ways:
