@@ -207,24 +207,28 @@ def test_asocial_replay_yields_one_action_and_one_update() -> None:
     assert event_types == [EventPhase.DECISION, EventPhase.UPDATE]
 
 
-def test_asocial_action_step_has_choice_and_no_reward() -> None:
+def test_asocial_action_step_has_action_and_no_reward() -> None:
     trial = _make_asocial_trial(action=1, reward=0.5)
     _, learner_id, view = next(replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA))
 
-    assert view.choice == 1
+    assert view.action == 1
     assert view.reward is None
     assert view.available_actions == (0, 1)
     assert dict(view.observation) == {"cue": "left"}
+    assert view.actor_id == "subject"
+    assert view.learner_id == "subject"
     assert learner_id == "subject"
 
 
-def test_asocial_update_step_has_choice_and_reward() -> None:
+def test_asocial_update_step_has_action_and_reward() -> None:
     trial = _make_asocial_trial(action=1, reward=0.5)
     steps = list(replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA))
     _, learner_id, view = steps[1]
 
-    assert view.choice == 1
+    assert view.action == 1
     assert view.reward == 0.5
+    assert view.actor_id == "subject"
+    assert view.learner_id == "subject"
     assert learner_id == "subject"
 
 
@@ -246,49 +250,53 @@ def test_social_pre_choice_replay_step_order() -> None:
     ]
 
 
-def test_social_pre_choice_subject_social_update_has_no_choice_and_no_reward() -> None:
-    """Subject social update fires before choice — choice and own reward are None."""
+def test_social_pre_choice_subject_social_update_carries_demo_action_and_reward() -> None:
+    """Subject social update fires before choice — actor is demonstrator, not subject."""
     trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
 
     _, learner_id, view = steps[1]  # subject social update
     assert learner_id == "subject"
-    assert view.choice is None
-    assert view.reward is None
-    assert view.social_action == 0
-    assert view.social_reward == 1.0
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "subject"
+    assert view.action == 0
+    assert view.reward == 1.0
 
 
-def test_social_pre_choice_action_step_has_no_social_info() -> None:
-    """DECISION view has no social fields — social info is baked into state via prior UPDATE."""
+def test_social_pre_choice_action_step_is_self_observation() -> None:
+    """DECISION view has actor == learner — social info is baked into state via prior UPDATE."""
     trial = _make_social_pre_choice_trial(subject_action=1, demo_action=0, demo_reward=1.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
 
     _, learner_id, view = steps[2]  # action step
     assert learner_id == "subject"
-    assert view.choice == 1
+    assert view.actor_id == "subject"
+    assert view.learner_id == "subject"
+    assert view.action == 1
     assert view.reward is None
-    assert view.social_action is None
-    assert view.social_reward is None
 
 
-def test_social_pre_choice_self_update_has_choice_and_reward() -> None:
+def test_social_pre_choice_self_update_has_action_and_reward() -> None:
     trial = _make_social_pre_choice_trial(subject_action=1, subject_reward=0.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
 
     _, learner_id, view = steps[3]  # subject self-update
     assert learner_id == "subject"
-    assert view.choice == 1
+    assert view.actor_id == "subject"
+    assert view.learner_id == "subject"
+    assert view.action == 1
     assert view.reward == 0.0
 
 
-def test_social_pre_choice_demonstrator_update_has_demo_choice_and_reward() -> None:
+def test_social_pre_choice_demonstrator_update_has_demo_action_and_reward() -> None:
     trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA))
 
     _, learner_id, view = steps[0]  # demonstrator self-update
     assert learner_id == "demonstrator"
-    assert view.choice == 0
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "demonstrator"
+    assert view.action == 0
     assert view.reward == 1.0
 
 
@@ -297,15 +305,17 @@ def test_social_pre_choice_demonstrator_update_has_demo_choice_and_reward() -> N
 # ---------------------------------------------------------------------------
 
 
-def test_action_only_schema_excludes_social_reward_from_update() -> None:
-    """observable_fields={"action"} should produce social_reward=None."""
+def test_action_only_schema_excludes_reward_from_social_update() -> None:
+    """observable_fields={"action"} should produce reward=None on social update."""
     trial = _make_social_pre_choice_trial(demo_action=0, demo_reward=1.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA))
 
     _, learner_id, view = steps[1]  # subject social update
     assert learner_id == "subject"
-    assert view.social_action == 0
-    assert view.social_reward is None  # reward filtered out
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "subject"
+    assert view.action == 0
+    assert view.reward is None  # reward filtered out by observable_fields
 
 
 # ---------------------------------------------------------------------------
@@ -326,8 +336,8 @@ def test_social_post_outcome_replay_step_order() -> None:
     ]
 
 
-def test_social_post_outcome_subject_self_update_has_no_social_info() -> None:
-    """Subject self-update fires before seeing demonstrator — no social info yet."""
+def test_social_post_outcome_subject_self_update_is_self_observation() -> None:
+    """Subject self-update fires before seeing demonstrator — actor == learner."""
     trial = _make_social_post_outcome_trial(
         subject_action=0, subject_reward=1.0, demo_action=1, demo_reward=0.0
     )
@@ -335,20 +345,22 @@ def test_social_post_outcome_subject_self_update_has_no_social_info() -> None:
 
     _, learner_id, view = steps[1]  # subject self-update
     assert learner_id == "subject"
-    assert view.choice == 0
+    assert view.actor_id == "subject"
+    assert view.learner_id == "subject"
+    assert view.action == 0
     assert view.reward == 1.0
-    assert view.social_action is None
-    assert view.social_reward is None
 
 
-def test_social_post_outcome_social_update_has_social_info() -> None:
+def test_social_post_outcome_social_update_carries_demo_info() -> None:
     trial = _make_social_post_outcome_trial(demo_action=1, demo_reward=0.0)
     steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_SCHEMA))
 
     _, learner_id, view = steps[3]  # subject social update
     assert learner_id == "subject"
-    assert view.social_action == 1
-    assert view.social_reward == 0.0
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "subject"
+    assert view.action == 1
+    assert view.reward == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -499,9 +511,10 @@ def test_pre_choice_no_self_outcome_still_carries_social_info() -> None:
 
     _, learner_id, view = steps[1]  # subject social update
     assert learner_id == "subject"
-    assert view.social_action == 0
-    assert view.social_reward == 1.0
-    assert view.reward is None
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "subject"
+    assert view.action == 0
+    assert view.reward == 1.0
 
 
 def test_post_outcome_no_self_outcome_replay_step_order() -> None:
@@ -523,29 +536,35 @@ def test_post_outcome_no_self_outcome_still_carries_social_info() -> None:
 
     _, learner_id, view = steps[2]  # subject social update
     assert learner_id == "subject"
-    assert view.social_action == 1
-    assert view.social_reward == 0.0
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "subject"
+    assert view.action == 1
+    assert view.reward == 0.0
 
 
-def test_pre_choice_no_self_outcome_demonstrator_update_has_choice_and_reward() -> None:
-    """Demonstrator self-update carries the demo choice and reward."""
+def test_pre_choice_no_self_outcome_demonstrator_update_has_action_and_reward() -> None:
+    """Demonstrator self-update carries the demo action and reward."""
     trial = _make_social_pre_choice_no_self_outcome_trial(demo_action=0, demo_reward=1.0)
     steps = list(replay_trial_steps(trial, SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA))
 
     _, learner_id, view = steps[0]  # demonstrator self-update
     assert learner_id == "demonstrator"
-    assert view.choice == 0
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "demonstrator"
+    assert view.action == 0
     assert view.reward == 1.0
 
 
-def test_post_outcome_no_self_outcome_demonstrator_update_has_choice_and_reward() -> None:
-    """Demonstrator self-update carries the demo choice and reward."""
+def test_post_outcome_no_self_outcome_demonstrator_update_has_action_and_reward() -> None:
+    """Demonstrator self-update carries the demo action and reward."""
     trial = _make_social_post_outcome_no_self_outcome_trial(demo_action=1, demo_reward=0.0)
     steps = list(replay_trial_steps(trial, SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA))
 
     _, learner_id, view = steps[1]  # demonstrator self-update
     assert learner_id == "demonstrator"
-    assert view.choice == 1
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "demonstrator"
+    assert view.action == 1
     assert view.reward == 0.0
 
 
@@ -751,11 +770,13 @@ def test_pre_choice_demo_learns_demo_self_update() -> None:
 
     _, learner_id, view = steps[0]  # demo self-update
     assert learner_id == "demonstrator"
-    assert view.reward == 1.0  # demo's own reward
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "demonstrator"
+    assert view.reward == 1.0
 
 
 def test_pre_choice_demo_learns_demo_social_update_from_subject() -> None:
-    """Demonstrator social-UPDATE (at end) carries subject's action+reward, reward=None."""
+    """Demonstrator social-UPDATE (at end) carries subject's action+reward."""
     trial = _make_social_pre_choice_demo_learns_trial(
         subject_action=1, subject_reward=0.5, demo_action=0, demo_reward=1.0
     )
@@ -763,9 +784,10 @@ def test_pre_choice_demo_learns_demo_social_update_from_subject() -> None:
 
     _, learner_id, view = steps[4]  # demo social-update from subject
     assert learner_id == "demonstrator"
-    assert view.social_action == 1  # subject's choice
-    assert view.social_reward == 0.5  # subject's reward
-    assert view.reward is None  # own reward was already consumed in self-update
+    assert view.actor_id == "subject"
+    assert view.learner_id == "demonstrator"
+    assert view.action == 1
+    assert view.reward == 0.5
 
 
 def test_post_outcome_demo_learns_replay_step_order() -> None:
@@ -786,7 +808,7 @@ def test_post_outcome_demo_learns_replay_step_order() -> None:
 
 
 def test_post_outcome_demo_learns_subject_self_update() -> None:
-    """Subject self-UPDATE has own reward and no social info."""
+    """Subject self-UPDATE has own reward and actor == learner."""
     trial = _make_social_post_outcome_demo_learns_trial(
         subject_action=0, subject_reward=1.0, demo_action=1, demo_reward=0.0
     )
@@ -794,8 +816,9 @@ def test_post_outcome_demo_learns_subject_self_update() -> None:
 
     _, learner_id, view = steps[1]  # subject self-update
     assert learner_id == "subject"
+    assert view.actor_id == "subject"
+    assert view.learner_id == "subject"
     assert view.reward == 1.0
-    assert view.social_action is None
 
 
 def test_post_outcome_demo_learns_demo_social_update_from_subject() -> None:
@@ -807,9 +830,10 @@ def test_post_outcome_demo_learns_demo_social_update_from_subject() -> None:
 
     _, learner_id, view = steps[2]  # demo social-update
     assert learner_id == "demonstrator"
-    assert view.social_action == 0  # subject's choice
-    assert view.social_reward == 1.0  # subject's reward
-    assert view.reward is None  # demo hasn't had its own outcome yet
+    assert view.actor_id == "subject"
+    assert view.learner_id == "demonstrator"
+    assert view.action == 0
+    assert view.reward == 1.0
 
 
 def test_post_outcome_demo_learns_subject_social_update_from_demo() -> None:
@@ -821,6 +845,7 @@ def test_post_outcome_demo_learns_subject_social_update_from_demo() -> None:
 
     _, learner_id, view = steps[4]  # subject social-update
     assert learner_id == "subject"
-    assert view.social_action == 1  # demo's choice
-    assert view.social_reward == 0.0  # demo's reward
-    assert view.reward is None
+    assert view.actor_id == "demonstrator"
+    assert view.learner_id == "subject"
+    assert view.action == 1
+    assert view.reward == 0.0

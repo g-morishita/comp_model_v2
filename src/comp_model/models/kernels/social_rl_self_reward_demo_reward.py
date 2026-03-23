@@ -274,13 +274,16 @@ class SocialRlSelfRewardDemoRewardKernel(
         """
 
         updated_q_values = list(state.q_values)
-        if view.reward is not None:
-            assert view.choice is not None
-            updated_q_values[view.choice] += params.alpha_self * (
-                view.reward - updated_q_values[view.choice]
+        if view.actor_id == view.learner_id:
+            # Self-update: the learner is learning from their own experience.
+            assert view.action is not None and view.reward is not None
+            updated_q_values[view.action] += params.alpha_self * (
+                view.reward - updated_q_values[view.action]
             )
-        if view.social_action is not None and view.social_reward is not None:
-            updated_q_values[view.social_action] += params.alpha_other * (
-                view.social_reward - updated_q_values[view.social_action]
-            )
+        else:
+            # Social update: the learner is learning from observing another agent.
+            if view.action is not None and view.reward is not None:
+                updated_q_values[view.action] += params.alpha_other * (
+                    view.reward - updated_q_values[view.action]
+                )
         return SocialRlSelfRewardDemoRewardState(q_values=updated_q_values)

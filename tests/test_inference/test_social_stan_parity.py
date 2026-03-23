@@ -179,7 +179,7 @@ def _python_social_log_likelihoods(
             ):
                 if event_type == EventPhase.DECISION and learner_id == "subject":
                     probabilities = kernel.action_probabilities(state, view, params)
-                    choice_index = view.choice
+                    choice_index = view.action
                     trial_log_likelihood += float(np.log(probabilities[choice_index]))
                 elif event_type == "update" and learner_id == "subject":
                     state = kernel.update(state, view, params)

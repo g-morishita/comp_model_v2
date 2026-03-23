@@ -18,7 +18,13 @@ def test_asocial_kernel_action_probabilities_sum_to_one() -> None:
     kernel = AsocialQLearningKernel()
     params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
     state = QState(q_values=[0.25, 0.75])
-    view = DecisionTrialView(trial_index=0, available_actions=(0, 1), choice=1)
+    view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
+    )
 
     probabilities = kernel.action_probabilities(state, view, params)
 
@@ -41,7 +47,9 @@ def test_asocial_kernel_updates_chosen_q_value() -> None:
     view = DecisionTrialView(
         trial_index=0,
         available_actions=(0, 1),
-        choice=1,
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
         reward=1.0,
     )
 

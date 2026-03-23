@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 from comp_model.data import (
     Block,
     Dataset,
-    DecisionTrialView,
     Event,
     EventPhase,
     SubjectData,
@@ -561,7 +560,26 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
     return dataset
 
 
-def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView:
+@dataclass(frozen=True, slots=True)
+class _CombinedTrialView:
+    """Merged per-trial data for CSV row converters.
+
+    Aggregates the subject's choice, reward, observation, and any observed
+    social information from all replay steps in one trial. This is an internal
+    helper used only by the CSV converters; it is not a ``DecisionTrialView``
+    because it conflates information from multiple distinct update events.
+    """
+
+    trial_index: int
+    available_actions: tuple[int, ...]
+    choice: int
+    reward: float | None
+    social_action: int | None
+    social_reward: float | None
+    observation: dict[str, Any]
+
+
+def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialView:
     """Extract the sole subject decision view expected by built-in row converters.
 
     Parameters
@@ -573,8 +591,9 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView
 
     Returns
     -------
-    DecisionTrialView
-        The single extracted subject decision view.
+    _CombinedTrialView
+        Merged per-trial record combining the subject's choice, reward,
+        observation, and any observed social information.
 
     Raises
     ------
@@ -591,21 +610,25 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> DecisionTrialView
 
     for event_type, learner_id, view in replay_trial_steps(trial, schema):
         if event_type == EventPhase.DECISION and learner_id == "subject":
-            choice = view.choice
+            choice = view.action
             available_actions = view.available_actions
             observation = dict(view.observation)
         elif event_type == EventPhase.UPDATE and learner_id == "subject":
-            if view.reward is not None:
-                reward = view.reward
-            if view.social_action is not None:
-                social_action = view.social_action
-                social_reward = view.social_reward
+            if view.actor_id == view.learner_id:
+                # Self-update: capture the subject's own reward.
+                if view.reward is not None:
+                    reward = view.reward
+            else:
+                # Social update: capture the observed action and reward.
+                if view.action is not None:
+                    social_action = view.action
+                    social_reward = view.reward
 
     if choice is None:
         raise ValueError(
             f"Schema {schema.schema_id!r} expected at least one subject action step, got none"
         )
-    return DecisionTrialView(
+    return _CombinedTrialView(
         trial_index=trial.trial_index,
         available_actions=available_actions,
         choice=choice,

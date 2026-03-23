@@ -190,6 +190,8 @@ def simulate_subject(
                     view = DecisionTrialView(
                         trial_index=trial_index,
                         available_actions=available_actions,
+                        actor_id=step.actor_id,
+                        learner_id=step.learner_id,
                     )
                     # Ask the relevant agent's model for a probability over
                     # each available action, then randomly sample one action
@@ -260,27 +262,25 @@ def simulate_subject(
                     # the position the schema declares — crucially, a social
                     # update can happen *before* the subject's own decision in
                     # pre-choice schemas.
-                    if actor == learner:
-                        # The learner is updating from their *own* experience.
-                        view = DecisionTrialView(
-                            trial_index=trial_index,
-                            available_actions=available_actions,
-                            choice=choices[actor],
-                            reward=rewards[actor],
-                        )
-                    else:
-                        # The learner is updating from *someone else's* experience
-                        # (social learning). Only include the fields that the schema
-                        # says are visible to the observer.
-                        obs = step.observable_fields
-                        view = DecisionTrialView(
-                            trial_index=trial_index,
-                            available_actions=available_actions,
-                            choice=None,
-                            reward=None,
-                            social_action=choices[actor] if "action" in obs else None,
-                            social_reward=rewards[actor] if "reward" in obs else None,
-                        )
+                    #
+                    # actor_id and learner_id are always set so the kernel can
+                    # tell self-update (actor == learner) from social update
+                    # (actor != learner) without any special-cased fields.
+                    # For self-updates both action and reward are always visible;
+                    # for social updates visibility is gated by observable_fields.
+                    obs = (
+                        step.observable_fields
+                        if actor != learner
+                        else frozenset({"action", "reward"})
+                    )
+                    view = DecisionTrialView(
+                        trial_index=trial_index,
+                        available_actions=available_actions,
+                        actor_id=actor,
+                        learner_id=learner,
+                        action=choices[actor] if "action" in obs else None,
+                        reward=rewards[actor] if "reward" in obs else None,
+                    )
 
                     if learner == "subject":
                         states["subject"] = kernel.update(
