@@ -21,7 +21,13 @@ def test_asymmetric_kernel_action_probabilities_sum_to_one() -> None:
     kernel = AsocialRlAsymmetricKernel()
     params = kernel.parse_params({"alpha_pos": 0.0, "alpha_neg": 0.0, "beta": 1.0})
     state = AsocialRlAsymmetricState(q_values=[0.25, 0.75])
-    view = DecisionTrialView(trial_index=0, available_actions=(0, 1), choice=1)
+    view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
+    )
 
     probabilities = kernel.action_probabilities(state, view, params)
 
@@ -45,7 +51,9 @@ def test_asymmetric_kernel_positive_rpe_uses_alpha_pos() -> None:
     view = DecisionTrialView(
         trial_index=0,
         available_actions=(0, 1),
-        choice=1,
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
         reward=1.0,  # reward > Q[1]=0.5 → positive RPE
     )
 
@@ -71,7 +79,9 @@ def test_asymmetric_kernel_negative_rpe_uses_alpha_neg() -> None:
     view = DecisionTrialView(
         trial_index=0,
         available_actions=(0, 1),
-        choice=1,
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
         reward=0.0,  # reward < Q[1]=0.5 → negative RPE
     )
 
@@ -85,9 +95,10 @@ def test_asymmetric_kernel_ignores_social_update_step() -> None:
     """Ensure the asymmetric kernel leaves Q-values unchanged on social UPDATE steps.
 
     When fitted to data collected under a social schema for model comparison,
-    the replay engine emits social UPDATE steps with ``choice=None``.  The
-    asocial kernel must ignore these so only the participant's own experience
-    drives learning.
+    the replay engine emits social UPDATE steps where ``actor_id != learner_id``
+    — the demonstrator acted but the subject is the learner.  The asocial
+    kernel must ignore these so only the participant's own experience drives
+    learning.
 
     Returns
     -------
@@ -101,10 +112,10 @@ def test_asymmetric_kernel_ignores_social_update_step() -> None:
     social_view = DecisionTrialView(
         trial_index=0,
         available_actions=(0, 1),
-        choice=None,  # social UPDATE: demonstrator's step, no participant choice
-        reward=None,
-        social_action=0,
-        social_reward=1.0,
+        actor_id="demonstrator",  # social UPDATE: demonstrator acted
+        learner_id="subject",  # subject is the learner
+        action=0,
+        reward=1.0,
     )
 
     updated_state = kernel.update(state, social_view, params)
