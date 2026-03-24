@@ -1,4 +1,8 @@
-"""Stan adapter for the social self-reward + demo-reward RL kernel."""
+"""Stan adapter for the social self-reward + demo-reward RL kernel.
+
+Adapters isolate Stan-specific choices such as program filenames, data export,
+and which posterior variables should be read back from a completed fit.
+"""
 
 from __future__ import annotations
 
@@ -25,12 +29,45 @@ if TYPE_CHECKING:
 
 
 class SocialRlSelfRewardDemoRewardStanAdapter:
-    """Stan adapter for the social self-reward + demo-reward RL kernel."""
+    """Stan adapter for the social self-reward + demo-reward RL kernel.
+
+    Connects the ``SocialRlSelfRewardDemoRewardKernel`` to Stan programs that
+    support subject_shared, subject_block_condition_hierarchy,
+    study_subject_hierarchy, and study_subject_block_condition_hierarchy
+    variants. The kernel tracks separate learning rates for self-experienced
+    rewards (``alpha_self``) and observed demonstration rewards
+    (``alpha_other``), plus an inverse temperature (``beta``).
+    """
 
     def kernel_spec(self) -> ModelKernelSpec:
+        """Return the kernel specification served by this adapter.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Static kernel metadata for the social self-reward + demo-reward
+            RL kernel.
+        """
         return SocialRlSelfRewardDemoRewardKernel.spec()
 
     def stan_program_path(self, hierarchy: HierarchyStructure) -> str:
+        """Return the Stan program path for the requested hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure whose Stan program is requested.
+
+        Returns
+        -------
+        str
+            Absolute path to the Stan program file.
+
+        Notes
+        -----
+        Program filenames follow ``{model_id}__{hierarchy.value}.stan``
+        inside the adapter's sibling ``programs`` directory.
+        """
         programs_dir = Path(__file__).resolve().parent.parent / "programs"
         filename = f"{self.kernel_spec().model_id}__{hierarchy.value}.stan"
         return str(programs_dir / filename)
@@ -43,6 +80,34 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
         layout: SharedDeltaLayout | None = None,
         prior_specs: dict[str, PriorSpec] | None = None,
     ) -> dict[str, Any]:
+        """Build Stan data for the social self-reward + demo-reward programs.
+
+        Parameters
+        ----------
+        data
+            Subject or dataset to export.
+        schema
+            Trial schema used for replay extraction.
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+        layout
+            Optional condition-aware parameter layout.
+        prior_specs
+            Optional mapping from parameter name to prior specification.
+
+        Returns
+        -------
+        dict[str, Any]
+            Stan-ready data dictionary passed directly to CmdStanPy.
+
+        Notes
+        -----
+        Assembles step-stream data with social observations (``include_social=True``),
+        prior hyperparameters, state-reset flags, and initial value data.
+        Condition indices are added for condition-aware hierarchies
+        (SUBJECT_BLOCK_CONDITION and STUDY_SUBJECT_BLOCK_CONDITION) when
+        a layout is provided.
+        """
         kspec = self.kernel_spec()
 
         condition_map: dict[str, int] | None = None
@@ -80,9 +145,35 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
         return stan_data
 
     def subject_param_names(self) -> tuple[str, ...]:
+        """Return subject-level parameter names extracted from Stan fits.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Subject-level parameter names: ``alpha_self``, ``alpha_other``,
+            and ``beta``.
+        """
         return ("alpha_self", "alpha_other", "beta")
 
     def population_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
+        """Return population-level parameter names for the hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Population-level parameter names. Returns an empty tuple for
+            SUBJECT_SHARED fits. For SUBJECT_BLOCK_CONDITION returns shared
+            and delta z-score parameters. For STUDY_SUBJECT returns
+            group-level means, standard deviations, and population-scale
+            parameters. For STUDY_SUBJECT_BLOCK_CONDITION returns the full
+            set of study-level hyperparameters plus shared and delta
+            z-scores.
+        """
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
             return ()
         if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
