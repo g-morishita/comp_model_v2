@@ -104,6 +104,10 @@ class RecoveryStudyConfig:
         Base seed for reproducible simulation.
     max_workers
         Maximum parallel workers. ``None`` selects automatically.
+    condition_demonstrator_params
+        Per-condition demonstrator parameters mapping condition name to params.
+        When set, overrides ``demonstrator_params`` for each condition.
+        Requires ``demonstrator_kernel`` to be set.
     """
 
     n_replications: int
@@ -120,6 +124,7 @@ class RecoveryStudyConfig:
     max_workers: int | None = None
     demonstrator_kernel: ModelKernel[Any, Any] | None = None
     demonstrator_params: Any | None = None
+    condition_demonstrator_params: dict[str, Any] | None = None
 
 
 def get_true_population_params(
