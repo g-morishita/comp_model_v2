@@ -4,12 +4,45 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol
 
+from comp_model.inference.config import HierarchyStructure
+
 if TYPE_CHECKING:
     from comp_model.data.schema import Dataset, SubjectData
-    from comp_model.inference.config import HierarchyStructure, PriorSpec
+    from comp_model.inference.config import PriorSpec
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernelSpec
     from comp_model.tasks.schemas import TrialSchema
+
+_CONDITION_HIERARCHIES = (
+    HierarchyStructure.SUBJECT_BLOCK_CONDITION,
+    HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
+)
+
+
+def require_layout_for_condition_hierarchy(
+    hierarchy: HierarchyStructure,
+    layout: SharedDeltaLayout | None,
+) -> None:
+    """Raise if a condition-aware hierarchy is requested without a layout.
+
+    Parameters
+    ----------
+    hierarchy
+        Hierarchy structure targeted by the Stan program.
+    layout
+        Condition-aware parameter layout supplied by the caller.
+
+    Raises
+    ------
+    ValueError
+        If ``hierarchy`` is ``SUBJECT_BLOCK_CONDITION`` or
+        ``STUDY_SUBJECT_BLOCK_CONDITION`` and ``layout`` is ``None``.
+    """
+    if hierarchy in _CONDITION_HIERARCHIES and layout is None:
+        raise ValueError(
+            f"hierarchy={hierarchy.value!r} requires a SharedDeltaLayout "
+            "but layout=None was passed."
+        )
 
 
 class StanAdapter(Protocol):

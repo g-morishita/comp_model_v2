@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from comp_model.data.schema import Dataset, SubjectData
+from comp_model.inference.bayes.stan.adapters.base import require_layout_for_condition_hierarchy
 from comp_model.inference.bayes.stan.data_builder import (
     add_initial_value_data,
     add_prior_data,
@@ -121,6 +122,7 @@ class SocialRlSelfRewardDemoMixtureStanAdapter:
         ``v_tendency`` system is initialised to ``1 / A`` (uniform over
         actions), where ``A`` is inferred from the step data.
         """
+        require_layout_for_condition_hierarchy(hierarchy, layout)
         if kernel is None:
             kernel = SocialRlSelfRewardDemoMixtureKernel()
 

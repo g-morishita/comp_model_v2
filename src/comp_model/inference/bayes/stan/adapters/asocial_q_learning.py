@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from comp_model.data.schema import Dataset, SubjectData
+from comp_model.inference.bayes.stan.adapters.base import require_layout_for_condition_hierarchy
 from comp_model.inference.bayes.stan.data_builder import (
     add_initial_value_data,
     add_prior_data,
@@ -105,6 +106,7 @@ class AsocialQLearningStanAdapter:
         condition-aware hierarchies when a layout is provided.
         """
 
+        require_layout_for_condition_hierarchy(hierarchy, layout)
         kspec = self.kernel_spec()
 
         # Build condition map if needed
