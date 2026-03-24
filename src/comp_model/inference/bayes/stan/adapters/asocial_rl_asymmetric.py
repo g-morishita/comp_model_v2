@@ -68,7 +68,7 @@ class AsocialRlAsymmetricStanAdapter:
 
         add_prior_data(stan_data, kspec, prior_specs)
         add_state_reset_data(stan_data, kspec)
-        add_initial_value_data(stan_data, kspec)
+        add_initial_value_data(stan_data, 0.5)
 
         if layout is not None and condition_map is not None:
             stan_data["C"] = len(layout.conditions)

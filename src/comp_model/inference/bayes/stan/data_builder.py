@@ -243,15 +243,17 @@ def add_condition_data_dataset(
     stan_data["cond"] = condition_index
 
 
-def add_initial_value_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
-    """Add the initial state value to a Stan data dictionary.
+def add_initial_value_data(stan_data: dict[str, Any], initial_value: float) -> None:
+    """Add the initial Q-value to a Stan data dictionary.
 
     Parameters
     ----------
     stan_data
         Stan data dictionary to mutate.
-    kernel_spec
-        Kernel specification whose initial value should be exported.
+    initial_value
+        Starting value assigned to all Q-values before any learning occurs.
+        Each kernel's ``initial_state`` owns this value; the caller is
+        responsible for passing the correct constant here.
 
     Returns
     -------
@@ -259,7 +261,7 @@ def add_initial_value_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSp
         This function mutates ``stan_data`` in-place.
     """
 
-    stan_data["q_init"] = float(kernel_spec.initial_value)
+    stan_data["q_init"] = float(initial_value)
 
 
 def add_prior_data(

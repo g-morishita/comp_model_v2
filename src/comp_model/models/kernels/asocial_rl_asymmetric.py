@@ -162,7 +162,7 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
         """
 
         del params
-        return AsocialRlAsymmetricState(q_values=[self.spec().initial_value] * n_actions)
+        return AsocialRlAsymmetricState(q_values=[0.5] * n_actions)
 
     def action_probabilities(
         self,

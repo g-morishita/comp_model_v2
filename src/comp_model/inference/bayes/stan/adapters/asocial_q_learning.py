@@ -128,7 +128,7 @@ class AsocialQLearningStanAdapter:
         # Add prior, reset, and initial value data
         add_prior_data(stan_data, kspec, prior_specs)
         add_state_reset_data(stan_data, kspec)
-        add_initial_value_data(stan_data, kspec)
+        add_initial_value_data(stan_data, 0.5)
 
         # Add condition metadata for condition-aware hierarchies
         if layout is not None and condition_map is not None:
