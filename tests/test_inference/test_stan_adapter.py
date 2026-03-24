@@ -2,10 +2,13 @@
 
 from pathlib import Path
 
+import pytest
+
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.adapters.asocial_q_learning import (
     AsocialQLearningStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.base import require_layout_for_condition_hierarchy
 from comp_model.inference.config import HierarchyStructure
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
@@ -139,3 +142,82 @@ def test_asocial_adapter_adds_condition_data_for_subject_condition_fit() -> None
     assert stan_data["C"] == 2
     # 2 trials x 2 steps per trial per condition = 4 steps per condition
     assert stan_data["step_condition"] == [1, 1, 1, 1, 2, 2, 2, 2]
+
+
+@pytest.mark.parametrize(
+    "hierarchy",
+    [
+        HierarchyStructure.SUBJECT_BLOCK_CONDITION,
+        HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
+    ],
+)
+def test_require_layout_raises_for_condition_hierarchy_without_layout(
+    hierarchy: HierarchyStructure,
+) -> None:
+    """require_layout_for_condition_hierarchy raises ValueError when layout is None.
+
+    Parameters
+    ----------
+    hierarchy
+        Condition-aware hierarchy under test.
+
+    Returns
+    -------
+    None
+        This test asserts a ValueError is raised.
+    """
+    with pytest.raises(ValueError, match="requires a SharedDeltaLayout"):
+        require_layout_for_condition_hierarchy(hierarchy, layout=None)
+
+
+@pytest.mark.parametrize(
+    "hierarchy",
+    [
+        HierarchyStructure.SUBJECT_SHARED,
+        HierarchyStructure.STUDY_SUBJECT,
+    ],
+)
+def test_require_layout_does_not_raise_for_non_condition_hierarchy(
+    hierarchy: HierarchyStructure,
+) -> None:
+    """require_layout_for_condition_hierarchy is silent for non-condition hierarchies.
+
+    Parameters
+    ----------
+    hierarchy
+        Non-condition-aware hierarchy under test.
+
+    Returns
+    -------
+    None
+        This test asserts no exception is raised.
+    """
+    require_layout_for_condition_hierarchy(hierarchy, layout=None)  # must not raise
+
+
+def test_build_stan_data_raises_for_condition_hierarchy_without_layout() -> None:
+    """build_stan_data raises ValueError when a condition-aware hierarchy lacks a layout.
+
+    Returns
+    -------
+    None
+        This test asserts a ValueError is raised from the adapter.
+    """
+    kernel = AsocialQLearningKernel()
+    params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
+    subject = simulate_subject(
+        task=_task(),
+        env=StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params=params,
+        config=SimulationConfig(seed=42),
+        subject_id="s1",
+    )
+    adapter = AsocialQLearningStanAdapter()
+
+    with pytest.raises(ValueError, match="requires a SharedDeltaLayout"):
+        adapter.build_stan_data(
+            subject,
+            ASOCIAL_BANDIT_SCHEMA,
+            HierarchyStructure.SUBJECT_BLOCK_CONDITION,
+        )
