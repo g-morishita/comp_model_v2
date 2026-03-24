@@ -36,4 +36,4 @@ def test_model_kernel_spec_defaults_match_plan() -> None:
 
     assert spec.requires_social is False
     assert spec.n_actions is None
-    assert spec.state_reset_policy == "per_subject"
+    assert spec.state_reset_policy == "per_block"

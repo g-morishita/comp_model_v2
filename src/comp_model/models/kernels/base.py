@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -147,10 +147,12 @@ class ModelKernelSpec:
         Controls how the model's internal state (e.g. Q-values) is
         managed across task blocks:
 
-        - ``"per_subject"``: state accumulates across all blocks;
-          learning carries over from one block to the next.
-        - ``"per_block"``: state is reset to initial values at the start
-          of each new block; each block begins with a blank slate.
+        - ``"per_block"`` *(default)*: state is reset to initial values
+          at the start of each new block; each block begins with a blank
+          slate.
+        - ``"continuous"``: state accumulates across all blocks; learning
+          carries over from one block to the next (e.g. multi-condition
+          within-subject designs).
     initial_value
         The starting value assigned to each Q-value (or equivalent
         quantity) before any learning occurs. Defaults to 0.5.
@@ -162,7 +164,7 @@ class ModelKernelSpec:
     parameter_specs: tuple[ParameterSpec, ...]
     requires_social: bool = False
     n_actions: int | None = None
-    state_reset_policy: str = "per_subject"
+    state_reset_policy: Literal["per_block", "continuous"] = "per_block"
     initial_value: float = 0.5
     description: str = ""
 

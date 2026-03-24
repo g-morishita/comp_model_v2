@@ -120,7 +120,6 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
                 ),
             ),
             requires_social=False,
-            state_reset_policy="per_subject",
         )
 
     def parse_params(self, raw: dict[str, float]) -> AsocialRlAsymmetricParams:

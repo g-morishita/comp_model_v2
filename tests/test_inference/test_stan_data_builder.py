@@ -148,7 +148,7 @@ def test_condition_prior_and_reset_data_are_added() -> None:
     assert stan_data["cond"] == [1, 1, 2, 2]
     assert "alpha_prior_family" in stan_data
     assert "beta_prior_p2" in stan_data
-    assert stan_data["reset_on_block"] == 0
+    assert stan_data["reset_on_block"] == 1
 
 
 def test_add_state_reset_data_exports_per_block_policy() -> None:
