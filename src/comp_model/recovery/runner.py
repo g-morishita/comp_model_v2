@@ -342,6 +342,11 @@ def _simulate_condition_aware(
         for block_idx, block_spec in enumerate(config.task.blocks):
             condition = block_spec.condition
             env = config.env_factory()
+            demo_params = (
+                config.condition_demonstrator_params[condition]
+                if config.condition_demonstrator_params is not None
+                else config.demonstrator_params
+            )
             sub = simulate_subject(
                 task=TaskSpec(task_id="tmp", blocks=(block_spec,)),
                 env=env,
@@ -350,7 +355,7 @@ def _simulate_condition_aware(
                 config=SimulationConfig(seed=seed + i * 1000 + block_idx),
                 subject_id=sid,
                 demonstrator_kernel=config.demonstrator_kernel,
-                demonstrator_params=config.demonstrator_params,
+                demonstrator_params=demo_params,
             )
             blocks.append(
                 Block(
