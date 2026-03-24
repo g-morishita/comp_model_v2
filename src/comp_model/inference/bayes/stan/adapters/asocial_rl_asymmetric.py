@@ -33,9 +33,33 @@ class AsocialRlAsymmetricStanAdapter:
     """
 
     def kernel_spec(self) -> ModelKernelSpec:
+        """Return the kernel specification served by this adapter.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Static kernel metadata for the asocial asymmetric RL kernel.
+        """
         return AsocialRlAsymmetricKernel.spec()
 
     def stan_program_path(self, hierarchy: HierarchyStructure) -> str:
+        """Return the Stan program path for the requested hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure whose Stan program is requested.
+
+        Returns
+        -------
+        str
+            Absolute path to the Stan program file.
+
+        Notes
+        -----
+        Program filenames follow ``{model_id}__{hierarchy.value}.stan``
+        inside the adapter's sibling ``programs`` directory.
+        """
         programs_dir = Path(__file__).resolve().parent.parent / "programs"
         filename = f"{self.kernel_spec().model_id}__{hierarchy.value}.stan"
         return str(programs_dir / filename)
@@ -48,6 +72,33 @@ class AsocialRlAsymmetricStanAdapter:
         layout: SharedDeltaLayout | None = None,
         prior_specs: dict[str, PriorSpec] | None = None,
     ) -> dict[str, Any]:
+        """Build Stan data for the asocial asymmetric RL programs.
+
+        Parameters
+        ----------
+        data
+            Subject or dataset to export.
+        schema
+            Trial schema used for replay extraction.
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+        layout
+            Optional condition-aware parameter layout.
+        prior_specs
+            Optional mapping from parameter name to prior specification.
+
+        Returns
+        -------
+        dict[str, Any]
+            Stan-ready data dictionary passed directly to CmdStanPy.
+
+        Notes
+        -----
+        Assembles step-stream data, prior hyperparameters, state-reset flags,
+        and initial value data. Condition indices are added for
+        condition-aware hierarchies (SUBJECT_BLOCK_CONDITION and
+        STUDY_SUBJECT_BLOCK_CONDITION) when a layout is provided.
+        """
         kspec = self.kernel_spec()
 
         condition_map: dict[str, int] | None = None
@@ -77,9 +128,35 @@ class AsocialRlAsymmetricStanAdapter:
         return stan_data
 
     def subject_param_names(self) -> tuple[str, ...]:
+        """Return subject-level parameter names extracted from Stan fits.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Subject-level parameter names: ``alpha_pos``, ``alpha_neg``,
+            and ``beta``.
+        """
         return ("alpha_pos", "alpha_neg", "beta")
 
     def population_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
+        """Return population-level parameter names for the hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Population-level parameter names. Returns an empty tuple for
+            SUBJECT_SHARED fits. For SUBJECT_BLOCK_CONDITION returns shared
+            and delta z-score parameters. For STUDY_SUBJECT returns
+            group-level means, standard deviations, and population-scale
+            parameters. For STUDY_SUBJECT_BLOCK_CONDITION returns the full
+            set of study-level hyperparameters plus shared and delta
+            z-scores.
+        """
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
             return ()
         if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
