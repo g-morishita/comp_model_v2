@@ -21,9 +21,30 @@ class SocialRlSelfRewardDemoMixtureState:
     q_action: list[float]  # updated by demo action frequency (action tracker)
 
 
+@dataclass(frozen=True)
 class SocialRlSelfRewardDemoMixtureKernel(
     ModelKernel[SocialRlSelfRewardDemoMixtureState, SocialRlSelfRewardDemoMixtureParams]
 ):
+    """Mixture social RL kernel combining outcome- and action-based social learning.
+
+    Maintains two independent value systems that are combined at decision time:
+
+    - ``q_reward``: updated by self reward and demonstrator reward (outcome tracker)
+    - ``q_action``: updated by demonstrator action likelihood (action tracker)
+
+    Attributes
+    ----------
+    q_reward_init
+        Starting value for outcome-tracker Q-values. Defaults to 0.5,
+        representing neutral uncertainty on a 0-1 reward scale.
+    q_action_init
+        Starting value for action-tracker Q-values. Defaults to 0.0,
+        giving a uniform action distribution via softmax.
+    """
+
+    q_reward_init: float = 0.5
+    q_action_init: float = 0.0
+
     @classmethod
     def spec(cls) -> ModelKernelSpec:
         return ModelKernelSpec(

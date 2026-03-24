@@ -74,6 +74,7 @@ class QState:
     q_values: list[float]
 
 
+@dataclass(frozen=True)
 class AsocialQLearningKernel(ModelKernel[QState, QParams]):
     """Q-learning model for a participant who learns only from their own experience.
 
@@ -85,7 +86,15 @@ class AsocialQLearningKernel(ModelKernel[QState, QParams]):
     The same kernel works with any task design that produces a compatible trial
     record — it does not depend on the specifics of how a particular experiment
     was structured.
+
+    Attributes
+    ----------
+    q_init
+        Starting value assigned to all Q-values before any learning occurs.
+        Defaults to 0.5, representing neutral uncertainty on a 0-1 reward scale.
     """
+
+    q_init: float = 0.5
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
@@ -177,7 +186,7 @@ class AsocialQLearningKernel(ModelKernel[QState, QParams]):
         """
 
         del params
-        return QState(q_values=[0.5] * n_actions)
+        return QState(q_values=[self.q_init] * n_actions)
 
     def action_probabilities(
         self,
