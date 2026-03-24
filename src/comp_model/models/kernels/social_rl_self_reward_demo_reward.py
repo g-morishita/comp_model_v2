@@ -143,7 +143,6 @@ class SocialRlSelfRewardDemoRewardKernel(
                 ),
             ),
             requires_social=True,
-            state_reset_policy="per_subject",
         )
 
     def parse_params(self, raw: dict[str, float]) -> SocialRlSelfRewardDemoRewardParams:

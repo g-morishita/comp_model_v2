@@ -26,9 +26,9 @@ class SharedDeltaLayout:
     -----
     This layout only changes parameter values across conditions. It does not reset
     latent kernel state on condition changes. When a kernel uses
-    ``state_reset_policy="per_subject"``, state learned in one condition carries into
-    the next condition within the same subject unless the kernel itself uses
-    ``state_reset_policy="per_block"``.
+    ``state_reset_policy="continuous"``, state learned in one condition carries into
+    the next. Use ``state_reset_policy="per_block"`` (the default) to start each
+    block with a blank slate.
 
     Shared parameters are represented once, and each non-baseline condition gets
     an additive delta on the unconstrained scale.

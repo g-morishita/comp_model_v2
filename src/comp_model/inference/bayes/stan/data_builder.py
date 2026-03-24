@@ -331,7 +331,7 @@ def add_state_reset_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec
     program cannot inspect Python-side kernel metadata directly.
     """
 
-    if kernel_spec.state_reset_policy == "per_subject":
+    if kernel_spec.state_reset_policy == "continuous":
         stan_data["reset_on_block"] = 0
         return
     if kernel_spec.state_reset_policy == "per_block":

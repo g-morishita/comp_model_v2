@@ -135,7 +135,7 @@ def log_likelihood_conditioned(
     Notes
     -----
     Conditioned replay changes parameters by block condition, but it still follows the
-    kernel's state reset policy. With ``state_reset_policy="per_subject"``, latent
+    kernel's state reset policy. With ``state_reset_policy="continuous"``, latent
     state carries across condition boundaries within a subject.
 
     For each block, the shared-plus-delta layout reconstructs that block's
