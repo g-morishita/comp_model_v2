@@ -81,6 +81,7 @@ class SocialRlSelfRewardDemoRewardState:
     q_values: list[float]
 
 
+@dataclass(frozen=True)
 class SocialRlSelfRewardDemoRewardKernel(
     ModelKernel[SocialRlSelfRewardDemoRewardState, SocialRlSelfRewardDemoRewardParams]
 ):
@@ -107,7 +108,15 @@ class SocialRlSelfRewardDemoRewardKernel(
     choice is determined by the experimental design (the trial schema), not by
     this model. The model simply uses whatever social information is present in
     the trial record.
+
+    Attributes
+    ----------
+    q_init
+        Starting value assigned to all Q-values before any learning occurs.
+        Defaults to 0.5, representing neutral uncertainty on a 0-1 reward scale.
     """
+
+    q_init: float = 0.5
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
@@ -195,7 +204,7 @@ class SocialRlSelfRewardDemoRewardKernel(
         """
 
         del params
-        return SocialRlSelfRewardDemoRewardState(q_values=[0.5] * n_actions)
+        return SocialRlSelfRewardDemoRewardState(q_values=[self.q_init] * n_actions)
 
     def action_probabilities(
         self,

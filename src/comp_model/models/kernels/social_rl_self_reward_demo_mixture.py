@@ -1,53 +1,124 @@
+"""Social RL mixture kernel — learning from self outcomes and demonstrator actions/outcomes.
+
+This module implements a mixture model that maintains two independent value
+systems updated by different social learning signals:
+
+- ``v_outcome``: updated by self reward and demonstrator reward (outcome tracker)
+- ``v_tendency``: updated by demonstrator action frequency (action tendency tracker)
+
+At decision time the two systems are combined via a mixing weight ``w_imitation``:
+
+    combined[a] = w_imitation * v_tendency[a] + (1 - w_imitation) * v_outcome[a]
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from comp_model.models.kernels.base import ModelKernel, ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
+
+if TYPE_CHECKING:
+    from comp_model.data.extractors import DecisionTrialView
 
 
 @dataclass(frozen=True, slots=True)
 class SocialRlSelfRewardDemoMixtureParams:
+    """Free parameters for the mixture social RL kernel.
+
+    Attributes
+    ----------
+    alpha_self
+        Learning rate for self outcome updates; in (0, 1).
+    alpha_other_outcome
+        Learning rate for demonstrator outcome updates to ``v_outcome``; in (0, 1).
+    alpha_other_action
+        Learning rate for demonstrator action updates to ``v_tendency``; in (0, 1).
+    w_imitation
+        Mixing weight for imitation at decision time; in (0, 1).
+        ``w_imitation=0`` means decisions are driven purely by ``v_outcome``;
+        ``w_imitation=1`` means decisions are driven purely by ``v_tendency``.
+    beta
+        Inverse temperature for the softmax choice rule; positive.
+    """
+
     alpha_self: float
     alpha_other_outcome: float
     alpha_other_action: float
-    weight_action: float
+    w_imitation: float
     beta: float
 
 
 @dataclass(slots=True)
 class SocialRlSelfRewardDemoMixtureState:
-    q_reward: list[float]  # updated by self reward + demo reward (outcome tracker)
-    q_action: list[float]  # updated by demo action frequency (action tracker)
+    """Latent state for the mixture social RL kernel.
+
+    Attributes
+    ----------
+    v_outcome
+        Outcome-based value estimates, updated by self and demonstrator rewards.
+    v_tendency
+        Action tendency estimates, updated by demonstrator action frequency.
+    """
+
+    v_outcome: list[float]
+    v_tendency: list[float]
 
 
+@dataclass(frozen=True)
 class SocialRlSelfRewardDemoMixtureKernel(
     ModelKernel[SocialRlSelfRewardDemoMixtureState, SocialRlSelfRewardDemoMixtureParams]
 ):
+    """Mixture social RL kernel combining outcome- and action-based social learning.
+
+    Maintains two independent value systems combined at decision time:
+
+    - ``v_outcome``: updated by self reward and demonstrator reward
+    - ``v_tendency``: updated by demonstrator action frequency
+
+    Attributes
+    ----------
+    v_outcome_init
+        Starting value for outcome-tracker values. Defaults to 0.5,
+        representing neutral uncertainty on a 0-1 reward scale.
+    """
+
+    v_outcome_init: float = 0.5
+
     @classmethod
     def spec(cls) -> ModelKernelSpec:
+        """Return the kernel specification for the mixture social RL model.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Specification declaring five free parameters, their constraints,
+            and that this model requires social information.
+        """
         return ModelKernelSpec(
             model_id="social_rl_self_reward_demo_mixture",
             parameter_specs=(
                 ParameterSpec(
                     name="alpha_self",
                     transform_id="sigmoid",
-                    description="learning from self outcome",
+                    description="learning rate for self outcome",
                 ),
                 ParameterSpec(
                     name="alpha_other_outcome",
                     transform_id="sigmoid",
-                    description="learning from other outcome",
+                    description="learning rate for demonstrator outcome",
                 ),
                 ParameterSpec(
                     name="alpha_other_action",
                     transform_id="sigmoid",
-                    description="learning from other action",
+                    description="learning rate for demonstrator action tendency",
                 ),
                 ParameterSpec(
-                    name="weight_action",
+                    name="w_imitation",
                     transform_id="sigmoid",
-                    description="weight of learning from other action",
+                    description="mixing weight for imitation at decision time",
                 ),
                 ParameterSpec(
                     name="beta",
@@ -59,6 +130,18 @@ class SocialRlSelfRewardDemoMixtureKernel(
         )
 
     def parse_params(self, raw: dict[str, float]) -> SocialRlSelfRewardDemoMixtureParams:
+        """Convert raw optimiser values into interpretable model parameters.
+
+        Parameters
+        ----------
+        raw
+            Dictionary of unconstrained parameter values keyed by parameter name.
+
+        Returns
+        -------
+        SocialRlSelfRewardDemoMixtureParams
+            Parameter object with all five parameters on their natural scales.
+        """
         transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
         return SocialRlSelfRewardDemoMixtureParams(
             alpha_self=transforms["alpha_self"].forward(raw["alpha_self"]),
@@ -66,6 +149,119 @@ class SocialRlSelfRewardDemoMixtureKernel(
                 raw["alpha_other_outcome"]
             ),
             alpha_other_action=transforms["alpha_other_action"].forward(raw["alpha_other_action"]),
-            weight_action=transforms["weight_action"].forward(raw["weight_action"]),
+            w_imitation=transforms["w_imitation"].forward(raw["w_imitation"]),
             beta=transforms["beta"].forward(raw["beta"]),
+        )
+
+    def initial_state(
+        self, n_actions: int, params: SocialRlSelfRewardDemoMixtureParams
+    ) -> SocialRlSelfRewardDemoMixtureState:
+        """Create the agent's belief state at the very start of the task.
+
+        ``v_outcome`` is initialised to ``v_outcome_init`` (neutral reward
+        expectation). ``v_tendency`` is initialised to a uniform distribution
+        ``1 / n_actions`` (no prior preference for any action).
+
+        Parameters
+        ----------
+        n_actions
+            Number of available actions.
+        params
+            Parsed kernel parameters (unused for initialisation).
+
+        Returns
+        -------
+        SocialRlSelfRewardDemoMixtureState
+            Initial state with neutral outcome values and uniform action tendencies.
+        """
+        del params
+        return SocialRlSelfRewardDemoMixtureState(
+            v_outcome=[self.v_outcome_init] * n_actions,
+            v_tendency=[1.0 / n_actions] * n_actions,
+        )
+
+    def action_probabilities(
+        self,
+        state: SocialRlSelfRewardDemoMixtureState,
+        view: DecisionTrialView,
+        params: SocialRlSelfRewardDemoMixtureParams,
+    ) -> tuple[float, ...]:
+        """Compute choice probabilities by combining both value systems.
+
+        The two systems are mixed via ``w_imitation`` before applying the softmax:
+
+            combined[a] = w_imitation * v_tendency[a] + (1 - w_imitation) * v_outcome[a]
+
+        Parameters
+        ----------
+        state
+            Current latent state containing ``v_outcome`` and ``v_tendency``.
+        view
+            Trial observation including available actions.
+        params
+            Parsed kernel parameters.
+
+        Returns
+        -------
+        tuple[float, ...]
+            Probability of each action in ``view.available_actions``.
+        """
+        combined = [
+            params.w_imitation * state.v_tendency[a] + (1 - params.w_imitation) * state.v_outcome[a]
+            for a in view.available_actions
+        ]
+        return stable_softmax([params.beta * v for v in combined])
+
+    def update(
+        self,
+        state: SocialRlSelfRewardDemoMixtureState,
+        view: DecisionTrialView,
+        params: SocialRlSelfRewardDemoMixtureParams,
+    ) -> SocialRlSelfRewardDemoMixtureState:
+        """Update both value systems from the trial observation.
+
+        Self UPDATE (``actor_id == learner_id``):
+            ``v_outcome[action] += alpha_self * (reward - v_outcome[action])``
+
+        Social UPDATE (``actor_id != learner_id``):
+            ``v_outcome[action] += alpha_other_outcome * (reward - v_outcome[action])``
+            ``v_tendency[chosen]   += alpha_other_action * (1 - v_tendency[chosen])``
+            ``v_tendency[unchosen] += alpha_other_action * (0 - v_tendency[unchosen])``
+
+        Parameters
+        ----------
+        state
+            Current latent state.
+        view
+            Trial observation.
+        params
+            Parsed kernel parameters.
+
+        Returns
+        -------
+        SocialRlSelfRewardDemoMixtureState
+            Updated state with new ``v_outcome`` and ``v_tendency`` values.
+        """
+        updated_v_outcome = list(state.v_outcome)
+        updated_v_tendency = list(state.v_tendency)
+
+        if view.actor_id == view.learner_id:
+            assert view.action is not None and view.reward is not None
+            updated_v_outcome[view.action] += params.alpha_self * (
+                view.reward - updated_v_outcome[view.action]
+            )
+        else:
+            if view.action is not None and view.reward is not None:
+                updated_v_outcome[view.action] += params.alpha_other_outcome * (
+                    view.reward - updated_v_outcome[view.action]
+                )
+                for a in view.available_actions:
+                    target = 1.0 if a == view.action else 0.0
+                    updated_v_tendency[a] += params.alpha_other_action * (
+                        target - updated_v_tendency[a]
+                    )
+
+        return SocialRlSelfRewardDemoMixtureState(
+            v_outcome=updated_v_outcome,
+            v_tendency=updated_v_tendency,
         )

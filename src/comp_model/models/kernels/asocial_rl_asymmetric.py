@@ -50,6 +50,7 @@ class AsocialRlAsymmetricState:
     q_values: list[float]
 
 
+@dataclass(frozen=True)
 class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlAsymmetricParams]):
     """Asocial RL kernel with separate learning rates for positive and negative RPEs.
 
@@ -67,11 +68,19 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
     where :math:`\\delta` is the reward prediction error, and :math:`\\alpha^+`
     and :math:`\\alpha^-` are separate learning rates.
 
+    Attributes
+    ----------
+    q_init
+        Starting value assigned to all Q-values before any learning occurs.
+        Defaults to 0.5, representing neutral uncertainty on a 0-1 reward scale.
+
     Notes
     -----
     When :math:`\\alpha^+ = \\alpha^-` this model reduces to the standard
     symmetric :class:`~comp_model.models.kernels.AsocialRlKernel`.
     """
+
+    q_init: float = 0.5
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
@@ -162,7 +171,7 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
         """
 
         del params
-        return AsocialRlAsymmetricState(q_values=[0.5] * n_actions)
+        return AsocialRlAsymmetricState(q_values=[self.q_init] * n_actions)
 
     def action_probabilities(
         self,
