@@ -165,10 +165,11 @@ class SocialRlSelfRewardDemoRewardKernel(
             Parameter object with all three parameters on their natural scales.
         """
 
+        transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
         return SocialRlSelfRewardDemoRewardParams(
-            alpha_self=get_transform("sigmoid").forward(raw["alpha_self"]),
-            alpha_other=get_transform("sigmoid").forward(raw["alpha_other"]),
-            beta=get_transform("softplus").forward(raw["beta"]),
+            alpha_self=transforms["alpha_self"].forward(raw["alpha_self"]),
+            alpha_other=transforms["alpha_other"].forward(raw["alpha_other"]),
+            beta=transforms["beta"].forward(raw["beta"]),
         )
 
     def initial_state(

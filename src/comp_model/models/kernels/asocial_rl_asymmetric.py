@@ -137,10 +137,11 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
             Typed parameter object after applying the shared transform registry.
         """
 
+        transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
         return AsocialRlAsymmetricParams(
-            alpha_pos=get_transform("sigmoid").forward(raw["alpha_pos"]),
-            alpha_neg=get_transform("sigmoid").forward(raw["alpha_neg"]),
-            beta=get_transform("softplus").forward(raw["beta"]),
+            alpha_pos=transforms["alpha_pos"].forward(raw["alpha_pos"]),
+            alpha_neg=transforms["alpha_neg"].forward(raw["alpha_neg"]),
+            beta=transforms["beta"].forward(raw["beta"]),
         )
 
     def initial_state(

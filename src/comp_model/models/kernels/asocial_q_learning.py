@@ -150,9 +150,10 @@ class AsocialQLearningKernel(ModelKernel[QState, QParams]):
             ready for use in ``action_probabilities`` and ``update``.
         """
 
+        transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
         return QParams(
-            alpha=get_transform("sigmoid").forward(raw["alpha"]),
-            beta=get_transform("softplus").forward(raw["beta"]),
+            alpha=transforms["alpha"].forward(raw["alpha"]),
+            beta=transforms["beta"].forward(raw["beta"]),
         )
 
     def initial_state(self, n_actions: int, params: QParams) -> QState:
