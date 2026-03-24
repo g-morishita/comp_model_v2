@@ -6,9 +6,9 @@ systems updated by different social learning signals:
 - ``v_outcome``: updated by self reward and demonstrator reward (outcome tracker)
 - ``v_tendency``: updated by demonstrator action frequency (action tendency tracker)
 
-At decision time the two systems are combined via a mixing weight ``w``:
+At decision time the two systems are combined via a mixing weight ``w_imitation``:
 
-    combined[a] = w * v_tendency[a] + (1 - w) * v_outcome[a]
+    combined[a] = w_imitation * v_tendency[a] + (1 - w_imitation) * v_outcome[a]
 """
 
 from __future__ import annotations
@@ -36,10 +36,10 @@ class SocialRlSelfRewardDemoMixtureParams:
         Learning rate for demonstrator outcome updates to ``v_outcome``; in (0, 1).
     alpha_other_action
         Learning rate for demonstrator action updates to ``v_tendency``; in (0, 1).
-    w
-        Mixing weight for ``v_tendency`` at decision time; in (0, 1).
-        ``w=0`` means decisions are driven purely by ``v_outcome``;
-        ``w=1`` means decisions are driven purely by ``v_tendency``.
+    w_imitation
+        Mixing weight for imitation at decision time; in (0, 1).
+        ``w_imitation=0`` means decisions are driven purely by ``v_outcome``;
+        ``w_imitation=1`` means decisions are driven purely by ``v_tendency``.
     beta
         Inverse temperature for the softmax choice rule; positive.
     """
@@ -47,7 +47,7 @@ class SocialRlSelfRewardDemoMixtureParams:
     alpha_self: float
     alpha_other_outcome: float
     alpha_other_action: float
-    w: float
+    w_imitation: float
     beta: float
 
 
@@ -116,9 +116,9 @@ class SocialRlSelfRewardDemoMixtureKernel(
                     description="learning rate for demonstrator action tendency",
                 ),
                 ParameterSpec(
-                    name="w",
+                    name="w_imitation",
                     transform_id="sigmoid",
-                    description="mixing weight for action tendency at decision time",
+                    description="mixing weight for imitation at decision time",
                 ),
                 ParameterSpec(
                     name="beta",
@@ -149,7 +149,7 @@ class SocialRlSelfRewardDemoMixtureKernel(
                 raw["alpha_other_outcome"]
             ),
             alpha_other_action=transforms["alpha_other_action"].forward(raw["alpha_other_action"]),
-            w=transforms["w"].forward(raw["w"]),
+            w_imitation=transforms["w_imitation"].forward(raw["w_imitation"]),
             beta=transforms["beta"].forward(raw["beta"]),
         )
 
@@ -188,9 +188,9 @@ class SocialRlSelfRewardDemoMixtureKernel(
     ) -> tuple[float, ...]:
         """Compute choice probabilities by combining both value systems.
 
-        The two systems are mixed via ``w`` before applying the softmax:
+        The two systems are mixed via ``w_imitation`` before applying the softmax:
 
-            combined[a] = w * v_tendency[a] + (1 - w) * v_outcome[a]
+            combined[a] = w_imitation * v_tendency[a] + (1 - w_imitation) * v_outcome[a]
 
         Parameters
         ----------
@@ -207,7 +207,7 @@ class SocialRlSelfRewardDemoMixtureKernel(
             Probability of each action in ``view.available_actions``.
         """
         combined = [
-            params.w * state.v_tendency[a] + (1 - params.w) * state.v_outcome[a]
+            params.w_imitation * state.v_tendency[a] + (1 - params.w_imitation) * state.v_outcome[a]
             for a in view.available_actions
         ]
         return stable_softmax([params.beta * v for v in combined])
