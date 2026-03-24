@@ -195,7 +195,7 @@ class SocialRlSelfRewardDemoRewardKernel(
         """
 
         del params
-        return SocialRlSelfRewardDemoRewardState(q_values=[self.spec().initial_value] * n_actions)
+        return SocialRlSelfRewardDemoRewardState(q_values=[0.5] * n_actions)
 
     def action_probabilities(
         self,

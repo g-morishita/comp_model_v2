@@ -153,9 +153,6 @@ class ModelKernelSpec:
         - ``"continuous"``: state accumulates across all blocks; learning
           carries over from one block to the next (e.g. multi-condition
           within-subject designs).
-    initial_value
-        The starting value assigned to each Q-value (or equivalent
-        quantity) before any learning occurs. Defaults to 0.5.
     description
         A plain-English summary of the model, used in reports and logs.
     """
@@ -165,7 +162,6 @@ class ModelKernelSpec:
     requires_social: bool = False
     n_actions: int | None = None
     state_reset_policy: Literal["per_block", "continuous"] = "per_block"
-    initial_value: float = 0.5
     description: str = ""
 
 
