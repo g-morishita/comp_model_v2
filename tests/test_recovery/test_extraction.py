@@ -314,8 +314,8 @@ class TestExtractPopulationRecords:
         assert records[0].estimated_value == pytest.approx(float(np.mean(posterior["alpha_pop"])))
         assert records[0].posterior_draws is not None
 
-    def test_unconstrained_keys(self) -> None:
-        """Unconstrained-scale mu/sd keys are extracted."""
+    def test_unconstrained_keys_are_skipped(self) -> None:
+        """Unconstrained-scale mu/sd keys are not reported."""
         rng = np.random.default_rng(11)
         n_draws = 100
         posterior = {
@@ -328,9 +328,7 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop)
 
-        assert len(records) == 2
-        names = {r.param_name for r in records}
-        assert names == {"mu_alpha_z", "sd_alpha_z"}
+        assert len(records) == 0
 
     def test_missing_true_pop_skipped(self) -> None:
         """Keys present in posterior but missing from true_pop are skipped."""
@@ -347,8 +345,8 @@ class TestExtractPopulationRecords:
 
         assert len(records) == 0
 
-    def test_condition_aware_keys(self) -> None:
-        """Condition-aware scalar population keys are extracted."""
+    def test_condition_aware_keys_only_keep_constrained_scale(self) -> None:
+        """Condition-aware population extraction keeps only constrained means."""
         rng = np.random.default_rng(13)
         n_draws = 100
         posterior = {
@@ -365,12 +363,12 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop)
 
-        assert len(records) == 3
+        assert len(records) == 1
         names = {r.param_name for r in records}
-        assert names == {"alpha_shared_pop", "mu_alpha_shared_z", "sd_alpha_shared_z"}
+        assert names == {"alpha_shared_pop"}
 
-    def test_condition_aware_vector_delta_keys(self) -> None:
-        """Vector-valued delta population keys are split by condition."""
+    def test_condition_aware_vector_delta_keys_are_skipped(self) -> None:
+        """Vector-valued unconstrained delta keys are not reported."""
         from comp_model.models.condition.shared_delta import SharedDeltaLayout
         from comp_model.models.kernels import AsocialQLearningKernel
 
@@ -396,33 +394,4 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop, layout=layout)
 
-        keyed = {(record.param_name, record.condition): record for record in records}
-        assert set(keyed) == {
-            ("mu_alpha_delta_z", "social"),
-            ("mu_alpha_delta_z", "transfer"),
-            ("sd_alpha_delta_z", "social"),
-            ("sd_alpha_delta_z", "transfer"),
-        }
-        assert keyed[("mu_alpha_delta_z", "social")].posterior_draws is not None
-        np.testing.assert_array_equal(
-            keyed[("mu_alpha_delta_z", "social")].posterior_draws,
-            posterior["mu_alpha_delta_z"][:, 0],
-        )
-        np.testing.assert_array_equal(
-            keyed[("mu_alpha_delta_z", "transfer")].posterior_draws,
-            posterior["mu_alpha_delta_z"][:, 1],
-        )
-
-    def test_vector_population_keys_require_layout(self) -> None:
-        """Vector-valued population keys require a condition-aware layout."""
-        posterior = {
-            "mu_alpha_delta_z": np.ones((10, 2)),
-        }
-        result = _make_bayes_result(
-            posterior,
-            HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
-        )
-        true_pop = {"mu_alpha_delta_z": 0.0}
-
-        with pytest.raises(ValueError, match="must be scalar or condition-indexed"):
-            extract_population_records(result, true_pop)
+        assert records == ()
