@@ -380,3 +380,14 @@ class TestCsvSchemaIdRoundTrip:
         loaded = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
         assert len(loaded.subjects) == 1
         assert loaded.subjects[0].blocks[0].schema_id == ASOCIAL_BANDIT_SCHEMA.schema_id
+
+    def test_export_rejects_block_with_wrong_schema_id(self, tmp_path: Path) -> None:
+        """save_dataset_to_csv rejects blocks stamped with a different schema_id."""
+        from comp_model.io.trial_csv import save_dataset_to_csv
+
+        # Block stamped with wrong schema_id but containing valid asocial trials.
+        dataset = Dataset(subjects=(_subject("wrong_schema", "sub_00"),))
+        csv_path = tmp_path / "bad_export.csv"
+
+        with pytest.raises(ValueError, match="schema_id mismatch"):
+            save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)

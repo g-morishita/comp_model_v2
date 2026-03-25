@@ -461,6 +461,12 @@ def save_dataset_to_csv(dataset: Dataset, *, schema: TrialSchema, path: str | Pa
         writer.writeheader()
         for subject in dataset.subjects:
             for block in subject.blocks:
+                if block.schema_id != schema.schema_id:
+                    raise ValueError(
+                        f"Subject {subject.subject_id!r}, block {block.block_index}: "
+                        f"schema_id mismatch — block has {block.schema_id!r} but "
+                        f"export schema is {schema.schema_id!r}"
+                    )
                 for trial in block.trials:
                     schema.validate_trial(trial)
                     writer.writerow(
