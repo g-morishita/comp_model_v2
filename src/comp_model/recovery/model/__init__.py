@@ -1,17 +1,19 @@
 """Model-level recovery analysis utilities."""
 
-from comp_model.recovery.model.analysis import confusion_matrix, recovery_rates
+from comp_model.recovery.model.analysis import compute_confusion_matrix, compute_recovery_rates
 from comp_model.recovery.model.config import (
     CandidateModelSpec,
     GeneratingModelSpec,
     ModelRecoveryConfig,
 )
-from comp_model.recovery.model.display import confusion_matrix_table, recovery_rate_table
-from comp_model.recovery.model.runner import (
-    ModelRecoveryResult,
-    ReplicationResult,
-    run_model_recovery,
+from comp_model.recovery.model.display import (
+    model_recovery_confusion_table,
+    model_recovery_rate_table,
 )
+from comp_model.recovery.model.io import save_confusion_matrix_csv, save_replication_csv
+from comp_model.recovery.model.plotting import plot_confusion_matrix, plot_recovery_rates
+from comp_model.recovery.model.result import ModelRecoveryResult, ReplicationResult
+from comp_model.recovery.model.runner import run_model_recovery
 
 __all__ = [
     "CandidateModelSpec",
@@ -19,9 +21,13 @@ __all__ = [
     "ModelRecoveryConfig",
     "ModelRecoveryResult",
     "ReplicationResult",
-    "confusion_matrix",
-    "confusion_matrix_table",
-    "recovery_rate_table",
-    "recovery_rates",
+    "compute_confusion_matrix",
+    "compute_recovery_rates",
+    "model_recovery_confusion_table",
+    "model_recovery_rate_table",
+    "plot_confusion_matrix",
+    "plot_recovery_rates",
     "run_model_recovery",
+    "save_confusion_matrix_csv",
+    "save_replication_csv",
 ]
