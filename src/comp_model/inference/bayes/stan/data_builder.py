@@ -48,6 +48,10 @@ def subject_to_stan_data(subject_data: SubjectData, schema: TrialSchema) -> dict
     and optional social information.
     """
 
+    from comp_model.data.validation import validate_subject
+
+    validate_subject(subject_data, schema)
+
     trials_flat: list[_CombinedTrialData] = []
     block_of_trial: list[int] = []
 
@@ -118,6 +122,10 @@ def dataset_to_stan_data(dataset: Dataset, schema: TrialSchema) -> dict[str, Any
     with :func:`subject_to_stan_data`, then concatenating those subject chunks in
     subject-major order while adding a 1-based ``subj`` index.
     """
+
+    from comp_model.data.validation import validate_dataset as _validate_dataset
+
+    _validate_dataset(dataset, schema)
 
     subject_chunks = [subject_to_stan_data(subject, schema) for subject in dataset.subjects]
     action_counts = {chunk["A"] for chunk in subject_chunks}
