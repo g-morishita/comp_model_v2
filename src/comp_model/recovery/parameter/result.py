@@ -47,6 +47,9 @@ class PopulationRecord:
     ----------
     param_name
         Population parameter name (e.g. ``alpha_pop``, ``mu_alpha_z``).
+    condition
+        Condition label for condition-specific population parameters, or
+        ``None`` for non-condition-aware population parameters.
     true_value
         Ground-truth population parameter value.
     estimated_value
@@ -56,6 +59,7 @@ class PopulationRecord:
     """
 
     param_name: str
+    condition: str | None
     true_value: float
     estimated_value: float
     posterior_draws: np.ndarray | None

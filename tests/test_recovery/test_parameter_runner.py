@@ -193,10 +193,10 @@ class TestRunParameterRecovery:
                 "sd_alpha_shared_z": np.full(n_draws, 0.2),
                 "mu_beta_shared_z": np.full(n_draws, 1.0),
                 "sd_beta_shared_z": np.full(n_draws, 0.3),
-                "mu_alpha_delta_z": np.full(n_draws, -0.4),
-                "sd_alpha_delta_z": np.full(n_draws, 0.1),
-                "mu_beta_delta_z": np.full(n_draws, 0.5),
-                "sd_beta_delta_z": np.full(n_draws, 0.2),
+                "mu_alpha_delta_z": np.full((n_draws, 1), -0.4),
+                "sd_alpha_delta_z": np.full((n_draws, 1), 0.1),
+                "mu_beta_delta_z": np.full((n_draws, 1), 0.5),
+                "sd_beta_delta_z": np.full((n_draws, 1), 0.2),
             }
             return BayesFitResult(
                 model_id="asocial_q_learning",
@@ -217,26 +217,12 @@ class TestRunParameterRecovery:
         population_level = result.replications[0].population_level
         assert population_level is not None
 
-        records = {record.param_name: record for record in population_level.records}
-        assert set(records) == {
-            "alpha_shared_pop",
-            "beta_shared_pop",
-            "mu_alpha_shared_z",
-            "sd_alpha_shared_z",
-            "mu_beta_shared_z",
-            "sd_beta_shared_z",
-            "mu_alpha_delta_z",
-            "sd_alpha_delta_z",
-            "mu_beta_delta_z",
-            "sd_beta_delta_z",
+        records = {
+            (record.param_name, record.condition): record for record in population_level.records
         }
-        assert records["alpha_shared_pop"].true_value == pytest.approx(0.45)
-        assert records["beta_shared_pop"].true_value == pytest.approx(1.25)
-        assert records["mu_alpha_shared_z"].true_value == pytest.approx(0.1)
-        assert records["sd_alpha_shared_z"].true_value == pytest.approx(0.2)
-        assert records["mu_beta_shared_z"].true_value == pytest.approx(1.0)
-        assert records["sd_beta_shared_z"].true_value == pytest.approx(0.3)
-        assert records["mu_alpha_delta_z"].true_value == pytest.approx(-0.4)
-        assert records["sd_alpha_delta_z"].true_value == pytest.approx(0.1)
-        assert records["mu_beta_delta_z"].true_value == pytest.approx(0.5)
-        assert records["sd_beta_delta_z"].true_value == pytest.approx(0.2)
+        assert set(records) == {
+            ("alpha_shared_pop", None),
+            ("beta_shared_pop", None),
+        }
+        assert records[("alpha_shared_pop", None)].true_value == pytest.approx(0.45)
+        assert records[("beta_shared_pop", None)].true_value == pytest.approx(1.25)
