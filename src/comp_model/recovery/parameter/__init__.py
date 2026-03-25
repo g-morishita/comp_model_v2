@@ -15,6 +15,7 @@ from comp_model.recovery.parameter.extraction import (
     extract_mle_subject_records,
     extract_population_records,
 )
+from comp_model.recovery.parameter.io import save_population_csv, save_subject_csv
 from comp_model.recovery.parameter.metrics import (
     ParameterRecoveryMetrics,
     ParameterRecoveryMetricsTable,
@@ -50,4 +51,6 @@ __all__ = [
     "parameter_recovery_table",
     "run_parameter_recovery",
     "sample_true_params",
+    "save_population_csv",
+    "save_subject_csv",
 ]

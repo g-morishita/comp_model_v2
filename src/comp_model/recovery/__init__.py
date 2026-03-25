@@ -31,6 +31,8 @@ from comp_model.recovery.parameter import (
     parameter_recovery_table,
     run_parameter_recovery,
     sample_true_params,
+    save_population_csv,
+    save_subject_csv,
 )
 
 __all__ = [
@@ -62,4 +64,6 @@ __all__ = [
     "run_model_recovery",
     "run_parameter_recovery",
     "sample_true_params",
+    "save_population_csv",
+    "save_subject_csv",
 ]
