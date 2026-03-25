@@ -12,12 +12,12 @@ from tqdm import tqdm
 
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
-from comp_model.recovery.config import sample_true_params
 from comp_model.recovery.model.criteria import (
     score_candidate_bayes,
     score_candidate_mle,
     select_winner,
 )
+from comp_model.recovery.parameter.config import sample_true_params
 from comp_model.runtime import SimulationConfig
 from comp_model.runtime.engine import simulate_dataset
 

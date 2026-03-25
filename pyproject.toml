@@ -12,6 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 stan = ["cmdstanpy>=1.2", "arviz>=0.16"]
+plot = ["matplotlib>=3.6"]
 
 [dependency-groups]
 dev = [
