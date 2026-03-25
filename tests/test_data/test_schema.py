@@ -35,8 +35,8 @@ def test_subject_trial_helpers_flatten_in_order() -> None:
     subject = SubjectData(
         subject_id="s1",
         blocks=(
-            Block(block_index=0, condition="a", trials=(trial_0,)),
-            Block(block_index=1, condition="b", trials=(trial_1,)),
+            Block(block_index=0, condition="a", schema_id="test", trials=(trial_0,)),
+            Block(block_index=1, condition="b", schema_id="test", trials=(trial_1,)),
         ),
     )
 
@@ -66,7 +66,7 @@ def test_dataset_flattening_helpers_collect_blocks_and_trials() -> None:
             ),
         ),
     )
-    block = Block(block_index=0, condition="a", trials=(trial,))
+    block = Block(block_index=0, condition="a", schema_id="test", trials=(trial,))
     dataset = Dataset(subjects=(SubjectData(subject_id="s1", blocks=(block,)),))
 
     assert dataset.blocks == (block,)

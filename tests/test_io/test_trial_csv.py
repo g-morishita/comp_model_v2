@@ -396,6 +396,7 @@ def _make_asocial_dataset() -> Dataset:
                     Block(
                         block_index=0,
                         condition="A",
+                        schema_id="asocial_bandit",
                         trials=(
                             Trial(
                                 trial_index=0,
@@ -482,6 +483,7 @@ def _make_social_pre_choice_dataset() -> Dataset:
                     Block(
                         block_index=0,
                         condition="social_pre",
+                        schema_id="social_pre_choice",
                         trials=(
                             Trial(
                                 trial_index=0,
@@ -574,6 +576,7 @@ def _make_social_post_outcome_dataset() -> Dataset:
                     Block(
                         block_index=0,
                         condition="social_post",
+                        schema_id="social_post_outcome",
                         trials=(
                             Trial(
                                 trial_index=0,

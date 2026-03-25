@@ -115,6 +115,7 @@ def _social_subject() -> SubjectData:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="social_pre_choice",
                 trials=(
                     _social_trial(0, action=0, reward=1.0, social_action=1, social_reward=0.0),
                     _social_trial(1, action=1, reward=0.0, social_action=0, social_reward=1.0),
@@ -188,6 +189,7 @@ def test_social_adapter_adds_condition_data() -> None:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="social_pre_choice",
                 trials=(
                     _social_trial(0, action=0, reward=1.0, social_action=1, social_reward=0.0),
                 ),
@@ -195,6 +197,7 @@ def test_social_adapter_adds_condition_data() -> None:
             Block(
                 block_index=1,
                 condition="social",
+                schema_id="social_pre_choice",
                 trials=(
                     _social_trial(0, action=1, reward=0.0, social_action=0, social_reward=1.0),
                 ),

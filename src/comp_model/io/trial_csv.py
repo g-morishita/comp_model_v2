@@ -540,6 +540,7 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
                     Block(
                         block_index=block_index,
                         condition=block.condition,
+                        schema_id=schema.schema_id,
                         trials=tuple(
                             trial
                             for _, trial in sorted(block.trials.items(), key=lambda item: item[0])

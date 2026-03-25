@@ -88,7 +88,7 @@ def test_validate_block_rejects_non_contiguous_trial_indices() -> None:
         trial_index=2,
         events=_valid_trial().events,
     )
-    block = Block(block_index=0, condition="test", trials=(bad_trial,))
+    block = Block(block_index=0, condition="test", schema_id="test", trials=(bad_trial,))
 
     with pytest.raises(ValueError, match="contiguous"):
         validate_block(block)
@@ -118,7 +118,7 @@ def test_validate_dataset_rejects_duplicate_subject_ids() -> None:
         This test raises on duplicate IDs.
     """
 
-    block = Block(block_index=0, condition="a", trials=(_valid_trial(),))
+    block = Block(block_index=0, condition="a", schema_id="test", trials=(_valid_trial(),))
     subject = SubjectData(subject_id="dup", blocks=(block,))
     dataset = Dataset(subjects=(subject, subject))
 

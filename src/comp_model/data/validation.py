@@ -16,11 +16,21 @@ from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectDat
 class _TrialSchemaProtocol(Protocol):
     """Structural protocol for schema-based trial validation.
 
+    Attributes
+    ----------
+    schema_id
+        Stable identifier for the schema, used for provenance checks.
+
     Methods
     -------
     validate_trial(trial)
         Validate a trial against an external schema implementation.
     """
+
+    @property
+    def schema_id(self) -> str:
+        """Stable identifier for the schema."""
+        ...
 
     def validate_trial(self, trial: Trial) -> None:
         """Validate a trial against the schema.
@@ -185,6 +195,12 @@ def validate_block(block: Block, schema: _TrialSchemaProtocol | None = None) -> 
 
     if not block.condition or not block.condition.strip():
         raise ValueError(f"Block {block.block_index}: condition must be non-empty")
+    if schema is not None and block.schema_id != schema.schema_id:
+        raise ValueError(
+            f"Block {block.block_index} (condition={block.condition!r}): "
+            f"schema_id mismatch — block has {block.schema_id!r} but expected "
+            f"{schema.schema_id!r}"
+        )
     expected_indices = list(range(len(block.trials)))
     actual_indices = [trial.trial_index for trial in block.trials]
     if actual_indices != expected_indices:

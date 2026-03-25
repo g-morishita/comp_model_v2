@@ -354,6 +354,7 @@ def _simulate_condition_aware(
                 Block(
                     block_index=block_idx,
                     condition=sub.blocks[0].condition,
+                    schema_id=sub.blocks[0].schema_id,
                     trials=sub.blocks[0].trials,
                 )
             )

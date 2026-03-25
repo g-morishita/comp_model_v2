@@ -297,6 +297,7 @@ def simulate_subject(
             Block(
                 block_index=block_index,
                 condition=block_spec.condition,
+                schema_id=block_spec.schema.schema_id,
                 trials=tuple(trials),
                 metadata=block_spec.metadata,
             )

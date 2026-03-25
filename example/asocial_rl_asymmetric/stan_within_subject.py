@@ -93,6 +93,7 @@ for i in range(N_SUBJECTS):
             Block(
                 block_index=block_idx,
                 condition=sub.blocks[0].condition,
+                schema_id=sub.blocks[0].schema_id,
                 trials=sub.blocks[0].trials,
             )
         )
