@@ -216,9 +216,28 @@ class TestRunParameterRecovery:
         records = {
             (record.param_name, record.condition): record for record in population_level.records
         }
-        assert set(records) == {
-            ("alpha_shared_pop", None),
-            ("beta_shared_pop", None),
-        }
+        # Constrained-scale shared population means
+        assert ("alpha_shared_pop", None) in records
+        assert ("beta_shared_pop", None) in records
         assert records[("alpha_shared_pop", None)].true_value == pytest.approx(0.45)
         assert records[("beta_shared_pop", None)].true_value == pytest.approx(1.25)
+
+        # Unconstrained-scale shared mu/sd
+        assert ("mu_alpha_shared_z", None) in records
+        assert ("sd_alpha_shared_z", None) in records
+        assert ("mu_beta_shared_z", None) in records
+        assert ("sd_beta_shared_z", None) in records
+
+        # Unconstrained-scale delta mu/sd (split per non-baseline condition)
+        assert ("mu_alpha_delta_z", "social") in records
+        assert ("sd_alpha_delta_z", "social") in records
+        assert ("mu_beta_delta_z", "social") in records
+        assert ("sd_beta_delta_z", "social") in records
+
+        # True values for unconstrained-scale shared params come from ParamDist
+        assert records[("mu_alpha_shared_z", None)].true_value == pytest.approx(0.1)
+        assert records[("sd_alpha_shared_z", None)].true_value == pytest.approx(0.2)
+
+        # True values for unconstrained-scale delta params come from ParamDist
+        assert records[("mu_alpha_delta_z", "social")].true_value == pytest.approx(-0.4)
+        assert records[("sd_alpha_delta_z", "social")].true_value == pytest.approx(0.1)

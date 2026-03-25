@@ -314,8 +314,8 @@ class TestExtractPopulationRecords:
         assert records[0].estimated_value == pytest.approx(float(np.mean(posterior["alpha_pop"])))
         assert records[0].posterior_draws is not None
 
-    def test_unconstrained_keys_are_skipped(self) -> None:
-        """Unconstrained-scale mu/sd keys are not reported."""
+    def test_unconstrained_keys_are_extracted(self) -> None:
+        """Unconstrained-scale mu/sd keys are extracted as population records."""
         rng = np.random.default_rng(11)
         n_draws = 100
         posterior = {
@@ -328,7 +328,9 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop)
 
-        assert len(records) == 0
+        assert len(records) == 2
+        names = {r.param_name for r in records}
+        assert names == {"mu_alpha_z", "sd_alpha_z"}
 
     def test_missing_true_pop_skipped(self) -> None:
         """Keys present in posterior but missing from true_pop are skipped."""
@@ -345,8 +347,8 @@ class TestExtractPopulationRecords:
 
         assert len(records) == 0
 
-    def test_condition_aware_keys_only_keep_constrained_scale(self) -> None:
-        """Condition-aware population extraction keeps only constrained means."""
+    def test_condition_aware_extracts_all_population_keys(self) -> None:
+        """Condition-aware population extraction keeps constrained and unconstrained keys."""
         rng = np.random.default_rng(13)
         n_draws = 100
         posterior = {
@@ -363,12 +365,12 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop)
 
-        assert len(records) == 1
+        assert len(records) == 3
         names = {r.param_name for r in records}
-        assert names == {"alpha_shared_pop"}
+        assert names == {"alpha_shared_pop", "mu_alpha_shared_z", "sd_alpha_shared_z"}
 
-    def test_condition_aware_vector_delta_keys_are_skipped(self) -> None:
-        """Vector-valued unconstrained delta keys are not reported."""
+    def test_condition_aware_vector_delta_keys_are_split_per_condition(self) -> None:
+        """Vector-valued unconstrained delta keys are split per non-baseline condition."""
         from comp_model.models.condition.shared_delta import SharedDeltaLayout
         from comp_model.models.kernels import AsocialQLearningKernel
 
@@ -394,4 +396,11 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop, layout=layout)
 
-        assert records == ()
+        assert len(records) == 4  # 2 keys * 2 non-baseline conditions
+        record_keys = {(r.param_name, r.condition) for r in records}
+        assert record_keys == {
+            ("mu_alpha_delta_z", "social"),
+            ("mu_alpha_delta_z", "transfer"),
+            ("sd_alpha_delta_z", "social"),
+            ("sd_alpha_delta_z", "transfer"),
+        }

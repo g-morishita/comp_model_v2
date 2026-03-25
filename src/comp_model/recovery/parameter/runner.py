@@ -12,7 +12,7 @@ from tqdm import tqdm
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
-from comp_model.recovery.parameter.config import sample_true_params
+from comp_model.recovery.parameter.config import get_true_population_params, sample_true_params
 from comp_model.recovery.parameter.extraction import (
     extract_bayes_subject_records,
     extract_mle_subject_records,
@@ -62,7 +62,10 @@ def _build_true_population_values(
     true_table: dict[str, dict[str, float]],
     param_names: tuple[str, ...],
 ) -> dict[str, float]:
-    """Build constrained-scale population truths for recovery summaries.
+    """Build true population values for recovery summaries.
+
+    Produces both constrained-scale population means and unconstrained-scale
+    mu/sd values so that all population-level Stan outputs can be scored.
 
     Parameters
     ----------
@@ -76,35 +79,50 @@ def _build_true_population_values(
     Returns
     -------
     dict[str, float]
-        True constrained-scale population values keyed to the constrained
-        population outputs emitted by Stan.
-
-    Notes
-    -----
-    Population-level recovery reports only constrained-scale means:
-
-    - ``{name}_pop`` for simple hierarchies
-    - ``{name}_shared_pop`` for condition-aware hierarchies
+        True population values keyed to the population outputs emitted by
+        Stan.  For simple hierarchies these include ``{name}_pop``,
+        ``mu_{name}_z``, and ``sd_{name}_z``.  For condition-aware
+        hierarchies these include ``{name}_shared_pop``,
+        ``mu_{name}_shared_z``, ``sd_{name}_shared_z``,
+        ``mu_{name}_delta_z``, and ``sd_{name}_delta_z``.
     """
 
+    true_pop: dict[str, float] = {}
+
     if config.layout is None:
-        true_pop: dict[str, float] = {}
+        # Constrained-scale population means
         for name in param_names:
             vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
             if vals:
                 true_pop[f"{name}_pop"] = float(np.mean(vals))
+        # Unconstrained-scale mu/sd from the ParamDist distributions
+        true_pop.update(get_true_population_params(config.param_dists, config.kernel))
         return true_pop
 
-    true_pop = {}
+    # Condition-aware hierarchy
     baseline_condition = config.layout.baseline_condition
 
     for name in param_names:
+        # Constrained-scale shared population mean (baseline condition mean)
         baseline_key = f"{name}__{baseline_condition}"
         vals = [
             true_table[sid][baseline_key] for sid in true_table if baseline_key in true_table[sid]
         ]
         if vals:
             true_pop[f"{name}_shared_pop"] = float(np.mean(vals))
+
+    # Unconstrained-scale mu/sd for shared and delta params
+    dist_by_name = {d.name: d for d in config.param_dists}
+    for name in param_names:
+        shared_dist = dist_by_name.get(name)
+        if shared_dist is not None and shared_dist.scale == "unconstrained":
+            true_pop[f"mu_{name}_shared_z"] = float(shared_dist.dist.mean())
+            true_pop[f"sd_{name}_shared_z"] = float(shared_dist.dist.std())
+
+        delta_dist = dist_by_name.get(f"{name}__delta")
+        if delta_dist is not None and delta_dist.scale == "unconstrained":
+            true_pop[f"mu_{name}_delta_z"] = float(delta_dist.dist.mean())
+            true_pop[f"sd_{name}_delta_z"] = float(delta_dist.dist.std())
 
     return true_pop
 
