@@ -159,12 +159,13 @@ if __name__ == "__main__":
 
     result = run_model_recovery(config)
 
-    model_names = [spec.name for spec in config.generating_models]
+    gen_names = [spec.name for spec in config.generating_models]
+    cand_names = [spec.name for spec in config.candidate_models]
     matrix = compute_confusion_matrix(result)
     rates = compute_recovery_rates(result)
 
     print("Confusion Matrix (rows = generating model, cols = selected model):")
-    print(model_recovery_confusion_table(matrix, model_names))
+    print(model_recovery_confusion_table(matrix, gen_names, cand_names))
     print()
     print("Recovery Rates:")
     print(model_recovery_rate_table(rates, result))
@@ -174,7 +175,10 @@ if __name__ == "__main__":
     save_confusion_matrix_csv(result, OUTPUT_DIR / "confusion_matrix.csv")
     print(f"\nCSV saved to {OUTPUT_DIR}/")
 
-    # --- Plots ---
-    plot_confusion_matrix(result, save_path=OUTPUT_DIR / "confusion_matrix.png")
-    plot_recovery_rates(result, save_path=OUTPUT_DIR / "recovery_rates.png")
-    print(f"Plots saved to {OUTPUT_DIR}/")
+    # --- Plots (requires optional 'plot' extra) ---
+    try:
+        plot_confusion_matrix(result, save_path=OUTPUT_DIR / "confusion_matrix.png")
+        plot_recovery_rates(result, save_path=OUTPUT_DIR / "recovery_rates.png")
+        print(f"Plots saved to {OUTPUT_DIR}/")
+    except ImportError:
+        print("Skipping plots (install the 'plot' extra for matplotlib support)")

@@ -10,38 +10,46 @@ if TYPE_CHECKING:
 
 def model_recovery_confusion_table(
     matrix: dict[str, dict[str, int]],
-    model_names: list[str],
+    generating_names: list[str],
+    candidate_names: list[str] | None = None,
 ) -> str:
     """Format a model recovery confusion matrix as a human-readable table.
 
     Rows represent the generating model; columns represent the selected
-    (winning) model.  Diagonal cells indicate correct recovery.
+    (winning) candidate model.
 
     Parameters
     ----------
     matrix
         Nested counts from :func:`~comp_model.recovery.model.analysis.compute_confusion_matrix`.
-    model_names
-        Ordered list of model names used for both row and column headers.
+    generating_names
+        Ordered list of generating model names used for row headers.
+    candidate_names
+        Ordered list of candidate model names used for column headers.
+        When ``None``, defaults to *generating_names* (the common case where
+        both sets are identical).
 
     Returns
     -------
     str
         Formatted table string suitable for printing.
     """
+    if candidate_names is None:
+        candidate_names = generating_names
 
-    col_width = max(len(name) for name in model_names) + 2
+    all_names = generating_names + candidate_names
+    col_width = max(len(name) for name in all_names) + 2
     label_width = col_width
 
     gen_label = "Generating \\ Selected"
     header = f"{gen_label:<{label_width}}"
-    for name in model_names:
+    for name in candidate_names:
         header += f"{name:>{col_width}}"
     lines = [header, "-" * len(header)]
 
-    for gen in model_names:
+    for gen in generating_names:
         row = f"{gen:<{label_width}}"
-        for sel in model_names:
+        for sel in candidate_names:
             count = matrix.get(gen, {}).get(sel, 0)
             row += f"{count:>{col_width}}"
         lines.append(row)
