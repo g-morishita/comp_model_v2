@@ -73,6 +73,10 @@ def run_parameter_recovery(config: ParameterRecoveryConfig) -> ParameterRecovery
 
     _check_schema_consistency(config.task, config.schema)
 
+    from comp_model.data.compatibility import check_kernel_schema_compatibility
+
+    check_kernel_schema_compatibility(config.kernel, config.schema)
+
     if config.inference_config.backend == "stan":
         return _run_stan_recovery(config)
     return _run_mle_recovery(config)

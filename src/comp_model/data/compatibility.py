@@ -9,7 +9,7 @@ when the kernel needs demonstrator rewards.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from comp_model.models.kernels.base import ModelKernel
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def check_kernel_schema_compatibility(
-    kernel: ModelKernel[object, object],
+    kernel: ModelKernel[Any, Any],
     schema: TrialSchema,
 ) -> None:
     """Raise ``ValueError`` if *kernel* is incompatible with *schema*.

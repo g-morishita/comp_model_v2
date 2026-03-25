@@ -128,6 +128,11 @@ def simulate_subject(
     decides, that ordering is respected exactly.
     """
 
+    from comp_model.data.compatibility import check_kernel_schema_compatibility
+
+    for block_spec in task.blocks:
+        check_kernel_schema_compatibility(kernel, block_spec.schema)
+
     rng = np.random.default_rng(config.seed)
     blocks: list[Block] = []
 
