@@ -4,6 +4,8 @@ These tests verify that validation functions and inference entrypoints reject
 data whose ``schema_id`` does not match the expected trial schema.
 """
 
+from pathlib import Path
+
 import pytest
 
 from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectData, Trial
@@ -340,3 +342,41 @@ class TestRecoveryRunnerPreflightCheck:
             ),
         )
         _check_schema_consistency(task, ASOCIAL_BANDIT_SCHEMA)
+
+
+# ---------------------------------------------------------------------------
+# CSV round-trip: schema_id persisted and validated
+# ---------------------------------------------------------------------------
+
+
+class TestCsvSchemaIdRoundTrip:
+    """CSV export persists schema_id; load rejects mismatched schemas."""
+
+    def test_load_rejects_csv_with_wrong_schema(self, tmp_path: Path) -> None:
+        """A CSV exported under one schema cannot be loaded with a different one."""
+        from comp_model.io.trial_csv import load_dataset_from_csv
+
+        # Hand-craft a CSV stamped with social_pre_choice schema_id.
+        csv_path = tmp_path / "social.csv"
+        header = (
+            "subject_id,block_index,condition,schema_id,"
+            "trial_index,available_actions,choice,reward,"
+            "demonstrator_action,demonstrator_reward"
+        )
+        row = "sub_00,0,default,social_pre_choice,0,0|1,1,1.0,0,0.5"
+        csv_path.write_text(f"{header}\n{row}\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="schema_id mismatch"):
+            load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA)
+
+    def test_round_trip_with_matching_schema_passes(self, tmp_path: Path) -> None:
+        """A CSV exported and loaded with the same schema succeeds."""
+        from comp_model.io.trial_csv import load_dataset_from_csv, save_dataset_to_csv
+
+        dataset = Dataset(subjects=(_subject(ASOCIAL_BANDIT_SCHEMA.schema_id, "sub_00"),))
+        csv_path = tmp_path / "asocial.csv"
+        save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=csv_path)
+
+        loaded = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+        assert len(loaded.subjects) == 1
+        assert loaded.subjects[0].blocks[0].schema_id == ASOCIAL_BANDIT_SCHEMA.schema_id

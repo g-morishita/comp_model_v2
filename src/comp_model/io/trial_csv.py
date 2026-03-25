@@ -40,6 +40,7 @@ _COMMON_FIELDNAMES = (
     "subject_id",
     "block_index",
     "condition",
+    "schema_id",
     "trial_index",
     "available_actions",
     "choice",
@@ -89,6 +90,7 @@ class TrialCsvConverter(Protocol):
         subject_id: str,
         block_index: int,
         condition: str,
+        schema_id: str,
         trial: Trial,
     ) -> dict[str, str]:
         """Flatten one canonical trial into one CSV row.
@@ -101,6 +103,8 @@ class TrialCsvConverter(Protocol):
             Block index for the containing block.
         condition
             Condition label for the containing block.
+        schema_id
+            Schema identifier for the containing block.
         trial
             Canonical trial to flatten.
 
@@ -184,6 +188,7 @@ class _AsocialBanditTrialCsvConverter:
         subject_id: str,
         block_index: int,
         condition: str,
+        schema_id: str,
         trial: Trial,
     ) -> dict[str, str]:
         """Flatten one asocial trial into one CSV row.
@@ -196,6 +201,8 @@ class _AsocialBanditTrialCsvConverter:
             Block index for the containing block.
         condition
             Condition label for the containing block.
+        schema_id
+            Schema identifier for the containing block.
         trial
             Canonical trial to flatten.
 
@@ -210,6 +217,7 @@ class _AsocialBanditTrialCsvConverter:
             subject_id=subject_id,
             block_index=block_index,
             condition=condition,
+            schema_id=schema_id,
             trial_index=trial.trial_index,
             available_actions=view.available_actions,
             choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
@@ -280,6 +288,7 @@ class _SocialTrialCsvConverter:
         subject_id: str,
         block_index: int,
         condition: str,
+        schema_id: str,
         trial: Trial,
     ) -> dict[str, str]:
         """Flatten one social trial into one CSV row.
@@ -292,6 +301,8 @@ class _SocialTrialCsvConverter:
             Block index for the containing block.
         condition
             Condition label for the containing block.
+        schema_id
+            Schema identifier for the containing block.
         trial
             Canonical trial to flatten.
 
@@ -307,6 +318,7 @@ class _SocialTrialCsvConverter:
                 subject_id=subject_id,
                 block_index=block_index,
                 condition=condition,
+                schema_id=schema_id,
                 trial_index=trial.trial_index,
                 available_actions=view.available_actions,
                 choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
@@ -457,6 +469,7 @@ def save_dataset_to_csv(dataset: Dataset, *, schema: TrialSchema, path: str | Pa
                                 subject_id=subject.subject_id,
                                 block_index=block.block_index,
                                 condition=block.condition,
+                                schema_id=block.schema_id,
                                 trial=trial,
                             ),
                             expected_fields=converter.fieldnames,
@@ -503,6 +516,12 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
             subject_id = row["subject_id"]
             block_index = _parse_non_negative_int(row["block_index"], field_name="block_index")
             condition = row["condition"]
+            row_schema_id = row["schema_id"]
+            if row_schema_id != schema.schema_id:
+                raise ValueError(
+                    f"Row {row_number}: schema_id mismatch — row has "
+                    f"{row_schema_id!r} but expected {schema.schema_id!r}"
+                )
             trial_index = _parse_non_negative_int(row["trial_index"], field_name="trial_index")
             trial_key = (subject_id, block_index, trial_index)
             if trial_key in seen_trial_keys:
@@ -645,6 +664,7 @@ def _build_common_row(
     subject_id: str,
     block_index: int,
     condition: str,
+    schema_id: str,
     trial_index: int,
     available_actions: tuple[int, ...],
     choice: int,
@@ -660,6 +680,8 @@ def _build_common_row(
         Block index for the containing block.
     condition
         Condition label for the containing block.
+    schema_id
+        Schema identifier for the containing block.
     trial_index
         Trial index within the block.
     available_actions
@@ -679,6 +701,7 @@ def _build_common_row(
         "subject_id": subject_id,
         "block_index": str(block_index),
         "condition": condition,
+        "schema_id": schema_id,
         "trial_index": str(trial_index),
         "available_actions": _format_available_actions(available_actions),
         "choice": str(choice),

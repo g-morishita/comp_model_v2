@@ -48,6 +48,7 @@ def test_get_trial_csv_converter_returns_registered_builtin() -> None:
         "subject_id",
         "block_index",
         "condition",
+        "schema_id",
         "trial_index",
         "available_actions",
         "choice",
@@ -162,9 +163,9 @@ def test_load_dataset_from_csv_rejects_duplicate_trial_keys(tmp_path: Path) -> N
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
-                "s1,0,A,0,0|1,1,1.0",
-                "s1,0,A,0,0|1,0,0.0",
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s1,0,A,asocial_bandit,0,0|1,1,1.0",
+                "s1,0,A,asocial_bandit,0,0|1,0,0.0",
             ]
         )
         + "\n",
@@ -195,9 +196,9 @@ def test_load_dataset_from_csv_rejects_inconsistent_block_conditions(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
-                "s1,0,A,0,0|1,1,1.0",
-                "s1,0,B,1,0|1,0,0.0",
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s1,0,A,asocial_bandit,0,0|1,1,1.0",
+                "s1,0,B,asocial_bandit,1,0|1,0,0.0",
             ]
         )
         + "\n",
@@ -228,8 +229,8 @@ def test_load_dataset_from_csv_rejects_missing_required_columns(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,choice,reward",
-                "s1,0,A,0,1,1.0",
+                "subject_id,block_index,condition,schema_id,trial_index,choice,reward",
+                "s1,0,A,asocial_bandit,0,1,1.0",
             ]
         )
         + "\n",
@@ -260,8 +261,8 @@ def test_load_dataset_from_csv_rejects_invalid_available_actions(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
-                "s1,0,A,0,0||1,1,1.0",
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s1,0,A,asocial_bandit,0,0||1,1,1.0",
             ]
         )
         + "\n",
@@ -332,8 +333,8 @@ def test_load_dataset_from_csv_rejects_duplicate_available_actions(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
-                "s1,0,A,0,1|0|1,1,1.0",
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s1,0,A,asocial_bandit,0,1|0|1,1,1.0",
             ]
         )
         + "\n",
@@ -364,10 +365,10 @@ def test_load_dataset_from_csv_subjects_ordered_by_subject_id(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
-                "s3,0,A,0,0|1,1,1.0",
-                "s1,0,A,0,0|1,0,0.0",
-                "s2,0,A,0,0|1,1,1.0",
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s3,0,A,asocial_bandit,0,0|1,1,1.0",
+                "s1,0,A,asocial_bandit,0,0|1,0,0.0",
+                "s2,0,A,asocial_bandit,0,0|1,1,1.0",
             ]
         )
         + "\n",
