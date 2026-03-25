@@ -73,6 +73,11 @@ class TestRequiredSocialFields:
                 frozenset({"action", "reward"}),
                 id="social_demo_mixture",
             ),
+            pytest.param(
+                "SocialRlSelfRewardDemoActionMixtureKernel",
+                frozenset({"action"}),
+                id="social_self_reward_demo_action_mixture",
+            ),
         ],
     )
     def test_required_social_fields(self, kernel_cls: str, expected: frozenset[str]) -> None:
@@ -89,6 +94,7 @@ class TestRequiredSocialFields:
             "SocialRlSelfRewardDemoRewardKernel",
             "SocialRlSelfRewardDemoMixtureKernel",
             "SocialRlDemoMixtureKernel",
+            "SocialRlSelfRewardDemoActionMixtureKernel",
         ],
     )
     def test_social_kernels_set_requires_social(self, kernel_cls: str) -> None:

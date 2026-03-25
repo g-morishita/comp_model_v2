@@ -32,6 +32,12 @@ When `demo_action` is present, the mechanism must be specified as a suffix on `d
 | `_bias` | **Decision bias**: demo action transiently biases action selection; Q-values unchanged | Najar et al. (2020) |
 | `_shaping` | **Value shaping**: demo action treated as pseudo-reward, directly updates Q-values | Najar et al. (2020) |
 
+When `demo_action` is present without `demo_reward` but with `self_reward`, a mixture mechanism is also available:
+
+| Token | Meaning | Reference |
+|-------|---------|-----------|
+| `demo_action_mixture` | **Mixture**: two parallel systems — (1) outcome-based tracking via `self_reward`, (2) action likelihood tracking via `demo_action` | Adapted from Kang et al. (2021) |
+
 When `demo_action` and `demo_reward` are both present, an additional mechanism is available:
 
 | Token | Meaning | Reference |
@@ -52,6 +58,7 @@ Note: when `demo_mixture` is used, `demo_action` and `demo_reward` are not writt
 | 3 | ✓ | | ✓ | `social_rl_self_reward_demo_reward` | `SocialRlSelfRewardDemoRewardKernel` |
 | 4a | ✓ | ✓ (bias) | | `social_rl_self_reward_demo_action_bias` | `SocialRlSelfRewardDemoActionBiasKernel` |
 | 4b | ✓ | ✓ (shaping) | | `social_rl_self_reward_demo_action_shaping` | `SocialRlSelfRewardDemoActionShapingKernel` |
+| 4c | ✓ | ✓ (mixture) | | `social_rl_self_reward_demo_action_mixture` | `SocialRlSelfRewardDemoActionMixtureKernel` |
 | 5 | | | ✓ | `social_rl_demo_reward` | `SocialRlDemoRewardKernel` |
 | 6a | | ✓ (bias) | ✓ | `social_rl_demo_action_bias_demo_reward` | `SocialRlDemoActionBiasDemoRewardKernel` |
 | 6b | | ✓ (shaping) | ✓ | `social_rl_demo_action_shaping_demo_reward` | `SocialRlDemoActionShapingDemoRewardKernel` |
@@ -60,7 +67,7 @@ Note: when `demo_mixture` is used, `demo_action` and `demo_reward` are not writt
 | 7b | ✓ | ✓ (shaping) | ✓ | `social_rl_self_reward_demo_action_shaping_demo_reward` | `SocialRlSelfRewardDemoActionShapingDemoRewardKernel` |
 | 7c | ✓ | ✓ + ✓ | ✓ | `social_rl_self_reward_demo_mixture` | `SocialRlSelfRewardDemoMixtureKernel` |
 
-Each model also has a `_sticky` variant (e.g. `asocial_rl_sticky`, `social_rl_self_reward_demo_reward_sticky`), giving **26 models** in total.
+Each model also has a `_sticky` variant (e.g. `asocial_rl_sticky`, `social_rl_self_reward_demo_reward_sticky`), giving **28 models** in total.
 
 ### Asocial variants
 
