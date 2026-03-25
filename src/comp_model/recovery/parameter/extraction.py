@@ -193,13 +193,14 @@ def extract_bayes_subject_records(
 def extract_population_records(
     result: BayesFitResult,
     true_pop: dict[str, float],
-    layout: SharedDeltaLayout | None = None,
 ) -> tuple[PopulationRecord, ...]:
-    """Extract constrained-scale population records from a hierarchical Bayes fit.
+    """Extract population records from a hierarchical Bayes fit.
 
-    Iterates over the constrained-scale keys in *true_pop* and extracts a
-    record for every key that also exists in the posterior samples. Only
-    population mean outputs whose names end with ``"_pop"`` are reported.
+    Iterates over the keys in *true_pop* and extracts a record for every
+    key that also exists in the posterior samples.  This approach is
+    naming-convention agnostic and works for both simple hierarchies
+    (``alpha_pop``, ``mu_alpha_z``) and condition-aware hierarchies
+    (``alpha_shared_pop``, ``mu_alpha_shared_z``, ``sd_alpha_delta_z``).
 
     Parameters
     ----------
@@ -207,83 +208,25 @@ def extract_population_records(
         Bayesian fit result with posterior samples.
     true_pop
         True population parameter values keyed by the same names that appear
-        in the posterior (e.g. ``alpha_pop``, ``alpha_shared_pop``).
-    layout
-        Optional condition-aware layout used to split vector-valued
-        population delta parameters into one record per non-baseline
-        condition.
+        in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``,
+        ``mu_alpha_shared_z``).
 
     Returns
     -------
     tuple[PopulationRecord, ...]
         One record per population parameter found in both *true_pop* and
         the posterior.
-
-    Raises
-    ------
-    ValueError
-        If a posterior population parameter is not scalar and no
-        condition-aware layout is available to interpret it.
     """
     records: list[PopulationRecord] = []
-    nonbaseline_conditions = ()
-    if layout is not None:
-        nonbaseline_conditions = tuple(
-            condition for condition in layout.conditions if condition != layout.baseline_condition
-        )
-
     for key, true_val in true_pop.items():
-        if not key.endswith("_pop"):
-            continue
         if key in result.posterior_samples:
-            draws = np.asarray(result.posterior_samples[key])
-            if draws.ndim == 0:
-                scalar_draws = draws.reshape(1)
-                records.append(
-                    PopulationRecord(
-                        param_name=key,
-                        condition=None,
-                        true_value=true_val,
-                        estimated_value=float(np.mean(scalar_draws)),
-                        posterior_draws=scalar_draws,
-                    )
+            draws = result.posterior_samples[key]
+            records.append(
+                PopulationRecord(
+                    param_name=key,
+                    true_value=true_val,
+                    estimated_value=float(np.mean(draws)),
+                    posterior_draws=draws,
                 )
-                continue
-
-            if draws.ndim == 1:
-                records.append(
-                    PopulationRecord(
-                        param_name=key,
-                        condition=None,
-                        true_value=true_val,
-                        estimated_value=float(np.mean(draws)),
-                        posterior_draws=draws,
-                    )
-                )
-                continue
-
-            if draws.ndim == 2 and layout is not None:
-                if draws.shape[1] != len(nonbaseline_conditions):
-                    raise ValueError(
-                        f"Population posterior {key!r} has shape {draws.shape}, "
-                        f"but layout expects {len(nonbaseline_conditions)} "
-                        "non-baseline conditions"
-                    )
-                for c_idx, condition in enumerate(nonbaseline_conditions):
-                    condition_draws = draws[:, c_idx]
-                    records.append(
-                        PopulationRecord(
-                            param_name=key,
-                            condition=condition,
-                            true_value=true_val,
-                            estimated_value=float(np.mean(condition_draws)),
-                            posterior_draws=condition_draws,
-                        )
-                    )
-                continue
-
-            raise ValueError(
-                f"Population posterior {key!r} must be scalar or condition-indexed; "
-                f"got shape {draws.shape}"
             )
     return tuple(records)

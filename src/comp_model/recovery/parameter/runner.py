@@ -12,7 +12,7 @@ from tqdm import tqdm
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
-from comp_model.recovery.parameter.config import sample_true_params
+from comp_model.recovery.parameter.config import get_true_population_params, sample_true_params
 from comp_model.recovery.parameter.extraction import (
     extract_bayes_subject_records,
     extract_mle_subject_records,
@@ -62,7 +62,7 @@ def _build_true_population_values(
     true_table: dict[str, dict[str, float]],
     param_names: tuple[str, ...],
 ) -> dict[str, float]:
-    """Build constrained-scale population truths for recovery summaries.
+    """Build true population values aligned with Stan posterior naming.
 
     Parameters
     ----------
@@ -76,15 +76,25 @@ def _build_true_population_values(
     Returns
     -------
     dict[str, float]
-        True constrained-scale population values keyed to the constrained
-        population outputs emitted by Stan.
+        True population values keyed to the names emitted by the Stan
+        adapter for the configured hierarchy.
 
     Notes
     -----
-    Population-level recovery reports only constrained-scale means:
+    For simple hierarchies this returns the empirical constrained-scale
+    population means (``{name}_pop``) plus any unconstrained-scale
+    ``mu_{name}_z`` / ``sd_{name}_z`` values available from
+    ``ParamDist(scale="unconstrained")``.
 
-    - ``{name}_pop`` for simple hierarchies
-    - ``{name}_shared_pop`` for condition-aware hierarchies
+    For condition-aware hierarchies this returns:
+
+    - empirical baseline-condition constrained means as
+      ``{name}_shared_pop``, and
+    - unconstrained-scale shared and delta distribution moments as
+      ``mu_{name}_shared_z``, ``sd_{name}_shared_z``,
+      ``mu_{name}_delta_z``, and ``sd_{name}_delta_z`` when the
+      corresponding ``ParamDist`` entries were specified on the
+      unconstrained scale.
     """
 
     if config.layout is None:
@@ -93,10 +103,12 @@ def _build_true_population_values(
             vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
             if vals:
                 true_pop[f"{name}_pop"] = float(np.mean(vals))
+        true_pop.update(get_true_population_params(config.param_dists, config.kernel))
         return true_pop
 
     true_pop = {}
     baseline_condition = config.layout.baseline_condition
+    dist_by_name = {dist.name: dist for dist in config.param_dists}
 
     for name in param_names:
         baseline_key = f"{name}__{baseline_condition}"
@@ -105,6 +117,16 @@ def _build_true_population_values(
         ]
         if vals:
             true_pop[f"{name}_shared_pop"] = float(np.mean(vals))
+
+        shared_dist = dist_by_name.get(name)
+        if shared_dist is not None and shared_dist.scale == "unconstrained":
+            true_pop[f"mu_{name}_shared_z"] = float(shared_dist.dist.mean())
+            true_pop[f"sd_{name}_shared_z"] = float(shared_dist.dist.std())
+
+        delta_dist = dist_by_name.get(f"{name}__delta")
+        if delta_dist is not None and delta_dist.scale == "unconstrained":
+            true_pop[f"mu_{name}_delta_z"] = float(delta_dist.dist.mean())
+            true_pop[f"sd_{name}_delta_z"] = float(delta_dist.dist.std())
 
     return true_pop
 
@@ -285,7 +307,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
             config.layout,  # type: ignore[arg-type]
         )
         true_pop = _build_true_population_values(config, true_table, param_names)
-        pop_records = extract_population_records(result, true_pop, config.layout)
+        pop_records = extract_population_records(result, true_pop)
 
         return ReplicationResult(
             replication_index=r,

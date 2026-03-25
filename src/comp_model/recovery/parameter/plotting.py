@@ -129,8 +129,8 @@ def plot_population_scatter(
 ) -> Any:
     """Plot true vs estimated scatter for population-level recovery.
 
-    One subplot per population parameter or condition-specific population
-    parameter. Each point represents one replication.
+    One subplot per population parameter.  Each point represents one
+    replication.
 
     Parameters
     ----------
@@ -153,15 +153,10 @@ def plot_population_scatter(
         if replication.population_level is None:
             continue
         for record in replication.population_level.records:
-            key = (
-                f"{record.param_name}__{record.condition}"
-                if record.condition
-                else record.param_name
-            )
-            if params is not None and key not in params:
+            if params is not None and record.param_name not in params:
                 continue
-            pairs[key][0].append(record.true_value)
-            pairs[key][1].append(record.estimated_value)
+            pairs[record.param_name][0].append(record.true_value)
+            pairs[record.param_name][1].append(record.estimated_value)
 
     param_keys = list(pairs)
     n_params = len(param_keys)
