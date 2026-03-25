@@ -184,6 +184,7 @@ def test_subject_to_stan_data_remaps_noncontiguous_actions() -> None:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="asocial_bandit",
                 trials=(
                     Trial(
                         trial_index=0,
@@ -363,6 +364,7 @@ def test_step_data_remaps_noncontiguous_actions() -> None:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="asocial_bandit",
                 trials=(
                     Trial(
                         trial_index=0,
@@ -425,6 +427,7 @@ def test_step_data_includes_social_fields_when_requested() -> None:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="social_pre_choice",
                 trials=(
                     Trial(
                         trial_index=0,

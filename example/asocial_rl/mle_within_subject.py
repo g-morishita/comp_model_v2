@@ -101,6 +101,7 @@ for i in range(N_SUBJECTS):
             Block(
                 block_index=block_idx,
                 condition=original_block.condition,
+                schema_id=original_block.schema_id,
                 trials=original_block.trials,
             )
         )

@@ -177,11 +177,13 @@ def _two_block_manual_subject() -> SubjectData:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="asocial_bandit",
                 trials=(_trial(trial_index=0, action=0, reward=1.0),),
             ),
             Block(
                 block_index=1,
                 condition="baseline",
+                schema_id="asocial_bandit",
                 trials=(_trial(trial_index=0, action=1, reward=0.0),),
             ),
         ),

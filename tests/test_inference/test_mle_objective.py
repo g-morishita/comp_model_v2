@@ -23,6 +23,7 @@ def _subject_data() -> SubjectData:
             Block(
                 block_index=0,
                 condition="baseline",
+                schema_id="asocial_bandit",
                 trials=(
                     Trial(
                         trial_index=0,

@@ -157,6 +157,11 @@ class Block:
     condition
         A label describing the experimental condition for this block
         (e.g. ``"high_volatility"`` or ``"social"``).
+    schema_id
+        The ``TrialSchema.schema_id`` of the within-trial schema used to
+        generate or import every trial in this block.  Used as a
+        provenance check to ensure simulation and fitting use the same
+        schema.
     trials
         The trials that make up this block, in order.
     metadata
@@ -165,6 +170,7 @@ class Block:
 
     block_index: int
     condition: str
+    schema_id: str
     trials: tuple[Trial, ...]
     metadata: Mapping[str, Any] = field(default_factory=empty_mapping)
 

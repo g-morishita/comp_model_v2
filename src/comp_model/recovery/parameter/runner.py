@@ -29,6 +29,32 @@ from comp_model.runtime import SimulationConfig, simulate_subject
 if TYPE_CHECKING:
     from comp_model.inference.mle.optimize import MleFitResult
     from comp_model.recovery.parameter.config import ParameterRecoveryConfig
+    from comp_model.tasks.schemas import TrialSchema
+    from comp_model.tasks.spec import TaskSpec
+
+
+def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
+    """Verify that every block in *task* uses the expected trial schema.
+
+    Parameters
+    ----------
+    task
+        Task specification whose blocks are inspected.
+    schema
+        The trial schema that the recovery study expects.
+
+    Raises
+    ------
+    ValueError
+        If any block's schema id does not match *schema*.
+    """
+    for idx, block_spec in enumerate(task.blocks):
+        if block_spec.schema.schema_id != schema.schema_id:
+            raise ValueError(
+                f"TaskSpec block {idx} (condition={block_spec.condition!r}) uses "
+                f"schema {block_spec.schema.schema_id!r}, but the recovery study "
+                f"expects {schema.schema_id!r}"
+            )
 
 
 def run_parameter_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResult:
@@ -44,6 +70,8 @@ def run_parameter_recovery(config: ParameterRecoveryConfig) -> ParameterRecovery
     ParameterRecoveryResult
         Results from all replications.
     """
+
+    _check_schema_consistency(config.task, config.schema)
 
     if config.inference_config.backend == "stan":
         return _run_stan_recovery(config)
@@ -354,6 +382,7 @@ def _simulate_condition_aware(
                 Block(
                     block_index=block_idx,
                     condition=sub.blocks[0].condition,
+                    schema_id=sub.blocks[0].schema_id,
                     trials=sub.blocks[0].trials,
                 )
             )

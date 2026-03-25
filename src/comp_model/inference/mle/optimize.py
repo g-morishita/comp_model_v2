@@ -152,6 +152,10 @@ def fit_mle_simple(
     parameter space before reporting AIC and BIC.
     """
 
+    from comp_model.data.validation import validate_subject
+
+    validate_subject(subject_data, schema)
+
     scipy_optimize = cast("Any", importlib.import_module("scipy.optimize"))
     scipy_minimize = scipy_optimize.minimize
 
@@ -297,6 +301,10 @@ def fit_mle_conditioned(
     order. After optimization, the winning vector is reconstructed separately
     for each condition and transformed into constrained parameter values.
     """
+
+    from comp_model.data.validation import validate_subject
+
+    validate_subject(subject_data, schema)
 
     scipy_optimize = cast("Any", importlib.import_module("scipy.optimize"))
     scipy_minimize = scipy_optimize.minimize
