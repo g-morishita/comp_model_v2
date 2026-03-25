@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
@@ -61,46 +61,44 @@ class ParameterRecoveryMetricsTable:
     per_parameter: dict[str, ParameterRecoveryMetrics]
 
 
-def compute_parameter_recovery_metrics(
+def _collect_pairs(
     result: ParameterRecoveryResult,
-    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
-) -> ParameterRecoveryMetricsTable:
-    """Compute recovery metrics from a completed study.
+    level: Literal["subject", "population", "all"],
+) -> tuple[dict[str, list[tuple[float, float]]], dict[str, list[tuple[float, np.ndarray]]]]:
+    """Collect true/estimated pairs and coverage data from recovery results.
 
     Parameters
     ----------
     result
         Completed recovery study result.
-    transforms
-        Optional mapping from parameter name to a transform applied to both
-        true and estimated values before computing metrics.  For example,
-        ``{"beta": np.log}`` computes all metrics on the log scale.
+    level
+        Which level of records to collect.
 
     Returns
     -------
-    ParameterRecoveryMetricsTable
-        Per-parameter recovery metrics pooled across replications.
+    pairs
+        True/estimated value pairs keyed by parameter name.
+    coverage_data
+        True value / posterior draws pairs keyed by parameter name.
     """
-
     pairs: dict[str, list[tuple[float, float]]] = {}
     coverage_data: dict[str, list[tuple[float, np.ndarray]]] = {}
 
     for replication in result.replications:
-        # Subject-level pairs
-        for record in replication.subject_level.records:
-            key = (
-                f"{record.param_name}__{record.condition}"
-                if record.condition
-                else record.param_name
-            )
-            pairs.setdefault(key, []).append((record.true_value, record.estimated_value))
-            if record.posterior_draws is not None:
-                coverage_data.setdefault(key, []).append(
-                    (record.true_value, record.posterior_draws)
+        if level in ("subject", "all"):
+            for record in replication.subject_level.records:
+                key = (
+                    f"{record.param_name}__{record.condition}"
+                    if record.condition
+                    else record.param_name
                 )
+                pairs.setdefault(key, []).append((record.true_value, record.estimated_value))
+                if record.posterior_draws is not None:
+                    coverage_data.setdefault(key, []).append(
+                        (record.true_value, record.posterior_draws)
+                    )
 
-        # Population-level pairs
-        if replication.population_level is not None:
+        if level in ("population", "all") and replication.population_level is not None:
             for record in replication.population_level.records:
                 key = (
                     f"{record.param_name}__{record.condition}"
@@ -113,6 +111,31 @@ def compute_parameter_recovery_metrics(
                         (record.true_value, record.posterior_draws)
                     )
 
+    return pairs, coverage_data
+
+
+def _build_metrics_table(
+    pairs: dict[str, list[tuple[float, float]]],
+    coverage_data: dict[str, list[tuple[float, np.ndarray]]],
+    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
+) -> ParameterRecoveryMetricsTable:
+    """Build a metrics table from collected pairs.
+
+    Parameters
+    ----------
+    pairs
+        True/estimated value pairs keyed by parameter name.
+    coverage_data
+        True value / posterior draws pairs keyed by parameter name.
+    transforms
+        Optional mapping from parameter name to a transform applied to both
+        true and estimated values before computing metrics.
+
+    Returns
+    -------
+    ParameterRecoveryMetricsTable
+        Per-parameter recovery metrics.
+    """
     metrics: dict[str, ParameterRecoveryMetrics] = {}
     for param_name, param_pairs in pairs.items():
         true_arr = np.array([p[0] for p in param_pairs])
@@ -152,6 +175,76 @@ def compute_parameter_recovery_metrics(
         )
 
     return ParameterRecoveryMetricsTable(per_parameter=metrics)
+
+
+def compute_subject_metrics(
+    result: ParameterRecoveryResult,
+    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
+) -> ParameterRecoveryMetricsTable:
+    """Compute subject-level recovery metrics from a completed study.
+
+    Parameters
+    ----------
+    result
+        Completed recovery study result.
+    transforms
+        Optional mapping from parameter name to a transform applied to both
+        true and estimated values before computing metrics.
+
+    Returns
+    -------
+    ParameterRecoveryMetricsTable
+        Per-parameter subject-level recovery metrics pooled across replications.
+    """
+    pairs, coverage_data = _collect_pairs(result, "subject")
+    return _build_metrics_table(pairs, coverage_data, transforms)
+
+
+def compute_population_metrics(
+    result: ParameterRecoveryResult,
+    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
+) -> ParameterRecoveryMetricsTable:
+    """Compute population-level recovery metrics from a completed study.
+
+    Parameters
+    ----------
+    result
+        Completed recovery study result.
+    transforms
+        Optional mapping from parameter name to a transform applied to both
+        true and estimated values before computing metrics.
+
+    Returns
+    -------
+    ParameterRecoveryMetricsTable
+        Per-parameter population-level recovery metrics pooled across replications.
+    """
+    pairs, coverage_data = _collect_pairs(result, "population")
+    return _build_metrics_table(pairs, coverage_data, transforms)
+
+
+def compute_parameter_recovery_metrics(
+    result: ParameterRecoveryResult,
+    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
+) -> ParameterRecoveryMetricsTable:
+    """Compute recovery metrics from a completed study, pooling all levels.
+
+    Parameters
+    ----------
+    result
+        Completed recovery study result.
+    transforms
+        Optional mapping from parameter name to a transform applied to both
+        true and estimated values before computing metrics.  For example,
+        ``{"beta": np.log}`` computes all metrics on the log scale.
+
+    Returns
+    -------
+    ParameterRecoveryMetricsTable
+        Per-parameter recovery metrics pooled across replications.
+    """
+    pairs, coverage_data = _collect_pairs(result, "all")
+    return _build_metrics_table(pairs, coverage_data, transforms)
 
 
 def _compute_coverage(

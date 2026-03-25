@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np  # noqa: TC002
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from comp_model.recovery.parameter.metrics import ParameterRecoveryMetricsTable
     from comp_model.recovery.parameter.result import ParameterRecoveryResult
 
@@ -43,6 +47,48 @@ def parameter_recovery_table(metrics: ParameterRecoveryMetricsTable) -> str:
         lines.append(line)
 
     return "\n".join(lines)
+
+
+def parameter_recovery_tables(
+    result: ParameterRecoveryResult,
+    transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
+) -> str:
+    """Format subject-level and population-level recovery metrics as separate tables.
+
+    Parameters
+    ----------
+    result
+        Completed recovery study result.
+    transforms
+        Optional mapping from parameter name to a transform applied to both
+        true and estimated values before computing metrics.
+
+    Returns
+    -------
+    str
+        Formatted string with labeled subject-level and population-level
+        sections.  The population section is omitted when no population
+        records exist.
+    """
+    from comp_model.recovery.parameter.metrics import (
+        compute_population_metrics,
+        compute_subject_metrics,
+    )
+
+    sections: list[str] = []
+
+    subject_metrics = compute_subject_metrics(result, transforms)
+    if subject_metrics.per_parameter:
+        sections.append("Subject-level metrics")
+        sections.append(parameter_recovery_table(subject_metrics))
+
+    population_metrics = compute_population_metrics(result, transforms)
+    if population_metrics.per_parameter:
+        sections.append("")
+        sections.append("Population-level metrics")
+        sections.append(parameter_recovery_table(population_metrics))
+
+    return "\n".join(sections)
 
 
 def parameter_recovery_summary(result: ParameterRecoveryResult) -> str:
