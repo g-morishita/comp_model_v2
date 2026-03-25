@@ -248,7 +248,7 @@ class SocialRlDemoMixtureKernel(ModelKernel[SocialRlDemoMixtureState, SocialRlDe
             updated_v_outcome[view.action] += params.alpha_other_outcome * (
                 view.reward - updated_v_outcome[view.action]
             )
-            for a in view.available_actions:
+            for a in range(len(updated_v_tendency)):
                 target = 1.0 if a == view.action else 0.0
                 updated_v_tendency[a] += params.alpha_other_action * (
                     target - updated_v_tendency[a]
