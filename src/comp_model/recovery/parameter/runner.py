@@ -57,6 +57,80 @@ def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
             )
 
 
+def _build_true_population_values(
+    config: ParameterRecoveryConfig,
+    true_table: dict[str, dict[str, float]],
+    param_names: tuple[str, ...],
+) -> dict[str, float]:
+    """Build true population values aligned with Stan posterior naming.
+
+    Parameters
+    ----------
+    config
+        Recovery study configuration.
+    true_table
+        Ground-truth constrained subject parameters keyed by subject id.
+    param_names
+        Subject-level parameter names from the fitted kernel.
+
+    Returns
+    -------
+    dict[str, float]
+        True population values keyed to the names emitted by the Stan
+        adapter for the configured hierarchy.
+
+    Notes
+    -----
+    For simple hierarchies this returns the empirical constrained-scale
+    population means (``{name}_pop``) plus any unconstrained-scale
+    ``mu_{name}_z`` / ``sd_{name}_z`` values available from
+    ``ParamDist(scale="unconstrained")``.
+
+    For condition-aware hierarchies this returns:
+
+    - empirical baseline-condition constrained means as
+      ``{name}_shared_pop``, and
+    - unconstrained-scale shared and delta distribution moments as
+      ``mu_{name}_shared_z``, ``sd_{name}_shared_z``,
+      ``mu_{name}_delta_z``, and ``sd_{name}_delta_z`` when the
+      corresponding ``ParamDist`` entries were specified on the
+      unconstrained scale.
+    """
+
+    if config.layout is None:
+        true_pop: dict[str, float] = {}
+        for name in param_names:
+            vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
+            if vals:
+                true_pop[f"{name}_pop"] = float(np.mean(vals))
+        true_pop.update(get_true_population_params(config.param_dists, config.kernel))
+        return true_pop
+
+    true_pop = {}
+    baseline_condition = config.layout.baseline_condition
+    dist_by_name = {dist.name: dist for dist in config.param_dists}
+
+    for name in param_names:
+        baseline_key = f"{name}__{baseline_condition}"
+        vals = [
+            true_table[sid][baseline_key] for sid in true_table if baseline_key in true_table[sid]
+        ]
+        if vals:
+            true_pop[f"{name}_shared_pop"] = float(np.mean(vals))
+
+        shared_dist = dist_by_name.get(name)
+        if shared_dist is not None and shared_dist.scale == "unconstrained":
+            true_pop[f"mu_{name}_shared_z"] = float(shared_dist.dist.mean())
+            true_pop[f"sd_{name}_shared_z"] = float(shared_dist.dist.std())
+
+        delta_dist = dist_by_name.get(f"{name}__delta")
+        if delta_dist is not None and delta_dist.scale == "unconstrained":
+            true_pop[f"mu_{name}_delta_z"] = float(delta_dist.dist.mean())
+            true_pop[f"sd_{name}_delta_z"] = float(delta_dist.dist.std())
+
+    return true_pop
+
+
 def run_parameter_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResult:
     """Run the full parameter recovery pipeline.
 
@@ -232,19 +306,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
             true_table,
             config.layout,  # type: ignore[arg-type]
         )
-
-        # Empirical constrained-scale population mean from this replication's
-        # true parameters.
-        true_pop: dict[str, float] = {}
-        for name in param_names:
-            vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
-            if vals:
-                true_pop[f"{name}_pop"] = float(np.mean(vals))
-
-        # Also include unconstrained-scale true mu/sd when ParamDist was
-        # specified with scale="unconstrained" (true values are then constants).
-        true_pop.update(get_true_population_params(config.param_dists, config.kernel))
-
+        true_pop = _build_true_population_values(config, true_table, param_names)
         pop_records = extract_population_records(result, true_pop)
 
         return ReplicationResult(
