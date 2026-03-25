@@ -195,13 +195,11 @@ def extract_population_records(
     true_pop: dict[str, float],
     layout: SharedDeltaLayout | None = None,
 ) -> tuple[PopulationRecord, ...]:
-    """Extract population records from a hierarchical Bayes fit.
+    """Extract constrained-scale population records from a hierarchical Bayes fit.
 
-    Iterates over the keys in *true_pop* and extracts a record for every
-    key that also exists in the posterior samples.  This approach is
-    naming-convention agnostic and works for both simple hierarchies
-    (``alpha_pop``, ``mu_alpha_z``) and condition-aware hierarchies
-    (``alpha_shared_pop``, ``mu_alpha_shared_z``, ``sd_alpha_delta_z``).
+    Iterates over the constrained-scale keys in *true_pop* and extracts a
+    record for every key that also exists in the posterior samples. Only
+    population mean outputs whose names end with ``"_pop"`` are reported.
 
     Parameters
     ----------
@@ -209,8 +207,7 @@ def extract_population_records(
         Bayesian fit result with posterior samples.
     true_pop
         True population parameter values keyed by the same names that appear
-        in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``,
-        ``mu_alpha_shared_z``).
+        in the posterior (e.g. ``alpha_pop``, ``alpha_shared_pop``).
     layout
         Optional condition-aware layout used to split vector-valued
         population delta parameters into one record per non-baseline
@@ -236,6 +233,8 @@ def extract_population_records(
         )
 
     for key, true_val in true_pop.items():
+        if not key.endswith("_pop"):
+            continue
         if key in result.posterior_samples:
             draws = np.asarray(result.posterior_samples[key])
             if draws.ndim == 0:

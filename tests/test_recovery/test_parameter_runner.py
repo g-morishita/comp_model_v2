@@ -223,22 +223,6 @@ class TestRunParameterRecovery:
         assert set(records) == {
             ("alpha_shared_pop", None),
             ("beta_shared_pop", None),
-            ("mu_alpha_shared_z", None),
-            ("sd_alpha_shared_z", None),
-            ("mu_beta_shared_z", None),
-            ("sd_beta_shared_z", None),
-            ("mu_alpha_delta_z", "social"),
-            ("sd_alpha_delta_z", "social"),
-            ("mu_beta_delta_z", "social"),
-            ("sd_beta_delta_z", "social"),
         }
         assert records[("alpha_shared_pop", None)].true_value == pytest.approx(0.45)
         assert records[("beta_shared_pop", None)].true_value == pytest.approx(1.25)
-        assert records[("mu_alpha_shared_z", None)].true_value == pytest.approx(0.1)
-        assert records[("sd_alpha_shared_z", None)].true_value == pytest.approx(0.2)
-        assert records[("mu_beta_shared_z", None)].true_value == pytest.approx(1.0)
-        assert records[("sd_beta_shared_z", None)].true_value == pytest.approx(0.3)
-        assert records[("mu_alpha_delta_z", "social")].true_value == pytest.approx(-0.4)
-        assert records[("sd_alpha_delta_z", "social")].true_value == pytest.approx(0.1)
-        assert records[("mu_beta_delta_z", "social")].true_value == pytest.approx(0.5)
-        assert records[("sd_beta_delta_z", "social")].true_value == pytest.approx(0.2)
