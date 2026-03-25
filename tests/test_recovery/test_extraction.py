@@ -8,7 +8,7 @@ import pytest
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.config import HierarchyStructure
 from comp_model.inference.mle.optimize import MleFitResult
-from comp_model.recovery.extraction import extract_bayes_estimates, extract_mle_estimates
+from comp_model.recovery.parameter.extraction import extract_bayes_estimates, extract_mle_estimates
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from comp_model.recovery.metrics import RecoveryMetrics
-    from comp_model.recovery.runner import RecoveryResult
+    from comp_model.recovery.parameter.metrics import RecoveryMetrics
+    from comp_model.recovery.parameter.runner import RecoveryResult
 
 
 def recovery_table(metrics: RecoveryMetrics) -> str:

@@ -11,7 +11,7 @@ import numpy as np
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from comp_model.recovery.runner import RecoveryResult
+    from comp_model.recovery.parameter.runner import RecoveryResult
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from comp_model.environments.base import Environment
     from comp_model.inference.config import InferenceConfig
     from comp_model.models.kernels.base import ModelKernel
-    from comp_model.recovery.config import ParamDist
+    from comp_model.recovery.parameter.config import ParamDist
     from comp_model.tasks.schemas import TrialSchema
     from comp_model.tasks.spec import TaskSpec
 

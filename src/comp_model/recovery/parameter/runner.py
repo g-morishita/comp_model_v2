@@ -13,8 +13,8 @@ from tqdm import tqdm
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
-from comp_model.recovery.config import get_true_population_params, sample_true_params
-from comp_model.recovery.extraction import (
+from comp_model.recovery.parameter.config import get_true_population_params, sample_true_params
+from comp_model.recovery.parameter.extraction import (
     ReplicationEstimates,
     extract_bayes_estimates,
     extract_mle_estimates,
@@ -24,7 +24,7 @@ from comp_model.runtime import SimulationConfig, simulate_subject
 
 if TYPE_CHECKING:
     from comp_model.inference.mle.optimize import MleFitResult
-    from comp_model.recovery.config import RecoveryStudyConfig
+    from comp_model.recovery.parameter.config import RecoveryStudyConfig
 
 
 @dataclass(frozen=True, slots=True)
