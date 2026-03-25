@@ -152,6 +152,7 @@ class SocialRlSelfRewardDemoRewardKernel(
                 ),
             ),
             requires_social=True,
+            required_social_fields=frozenset({"action", "reward"}),
         )
 
     def parse_params(self, raw: dict[str, float]) -> SocialRlSelfRewardDemoRewardParams:
