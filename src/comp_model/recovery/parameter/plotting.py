@@ -17,6 +17,23 @@ if TYPE_CHECKING:
     from comp_model.recovery.parameter.result import ParameterRecoveryResult
 
 
+def _save_fig(fig: Any, save_path: Path | None) -> None:
+    """Save *fig* to *save_path* if provided, creating parent dirs as needed."""
+    if save_path is not None:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+
+def _empty_figure(message: str) -> Any:
+    """Return a 1x1 figure with a centred text *message*."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+    ax.text(0.5, 0.5, message, ha="center", va="center", transform=ax.transAxes)
+    ax.set_axis_off()
+    return fig
+
+
 def plot_subject_scatter(
     result: ParameterRecoveryResult,
     params: list[str] | None = None,
@@ -59,8 +76,14 @@ def plot_subject_scatter(
 
     param_keys = list(pairs)
     n_params = len(param_keys)
+
+    if n_params == 0:
+        fig = _empty_figure("No subject-level data")
+        _save_fig(fig, save_path)
+        return fig
+
     n_cols = min(n_params, 3)
-    n_rows = math.ceil(n_params / n_cols) if n_cols else 1
+    n_rows = math.ceil(n_params / n_cols)
 
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False)
 
@@ -95,9 +118,7 @@ def plot_subject_scatter(
         axes[idx // n_cols][idx % n_cols].set_visible(False)
 
     fig.tight_layout()
-    if save_path is not None:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    _save_fig(fig, save_path)
     return fig
 
 
@@ -140,8 +161,8 @@ def plot_population_scatter(
     param_keys = list(pairs)
     n_params = len(param_keys)
     if n_params == 0:
-        fig, ax = plt.subplots(1, 1, figsize=(4, 4))
-        ax.text(0.5, 0.5, "No population-level data", ha="center", va="center")
+        fig = _empty_figure("No population-level data")
+        _save_fig(fig, save_path)
         return fig
 
     n_cols = min(n_params, 3)
@@ -176,9 +197,7 @@ def plot_population_scatter(
         axes[idx // n_cols][idx % n_cols].set_visible(False)
 
     fig.tight_layout()
-    if save_path is not None:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    _save_fig(fig, save_path)
     return fig
 
 
@@ -220,8 +239,8 @@ def plot_coverage(
             cov95_vals.append(m.coverage_95)
 
     if not param_names:
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-        ax.text(0.5, 0.5, "No coverage data (MLE?)", ha="center", va="center")
+        fig = _empty_figure("No coverage data (MLE?)")
+        _save_fig(fig, save_path)
         return fig
 
     x = np.arange(len(param_names))
@@ -242,7 +261,5 @@ def plot_coverage(
     ax.legend()
 
     fig.tight_layout()
-    if save_path is not None:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    _save_fig(fig, save_path)
     return fig
