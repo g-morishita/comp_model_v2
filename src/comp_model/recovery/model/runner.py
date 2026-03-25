@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from comp_model.data.schema import Dataset
     from comp_model.inference.mle.optimize import MleFitResult
     from comp_model.recovery.model.config import CandidateModelSpec, ModelRecoveryConfig
+    from comp_model.tasks.schemas import TrialSchema
+    from comp_model.tasks.spec import TaskSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +77,30 @@ class ModelRecoveryResult:
     replications: tuple[ReplicationResult, ...]
 
 
+def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
+    """Verify that every block in *task* uses the expected trial schema.
+
+    Parameters
+    ----------
+    task
+        Task specification whose blocks are inspected.
+    schema
+        The trial schema that the recovery study expects.
+
+    Raises
+    ------
+    ValueError
+        If any block's schema id does not match *schema*.
+    """
+    for idx, block_spec in enumerate(task.blocks):
+        if block_spec.schema.schema_id != schema.schema_id:
+            raise ValueError(
+                f"TaskSpec block {idx} (condition={block_spec.condition!r}) uses "
+                f"schema {block_spec.schema.schema_id!r}, but the recovery study "
+                f"expects {schema.schema_id!r}"
+            )
+
+
 def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
     """Run the full model recovery pipeline with parallel fitting.
 
@@ -104,6 +130,8 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
     ModelRecoveryResult
         Results from all replications across all generating models.
     """
+
+    _check_schema_consistency(config.task, config.schema)
 
     # ------------------------------------------------------------------
     # Phase 1: simulate all datasets (sequential — env_factory may not pickle)
