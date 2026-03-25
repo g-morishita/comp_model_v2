@@ -248,7 +248,7 @@ class SocialRlSelfRewardDemoActionMixtureKernel(
             )
         else:
             if view.action is not None:
-                for a in view.available_actions:
+                for a in range(len(updated_v_tendency)):
                     target = 1.0 if a == view.action else 0.0
                     updated_v_tendency[a] += params.alpha_other_action * (
                         target - updated_v_tendency[a]
