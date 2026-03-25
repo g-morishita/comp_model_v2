@@ -102,14 +102,11 @@ def compute_parameter_recovery_metrics(
         # Population-level pairs
         if replication.population_level is not None:
             for record in replication.population_level.records:
-                key = (
-                    f"{record.param_name}__{record.condition}"
-                    if record.condition
-                    else record.param_name
+                pairs.setdefault(record.param_name, []).append(
+                    (record.true_value, record.estimated_value)
                 )
-                pairs.setdefault(key, []).append((record.true_value, record.estimated_value))
                 if record.posterior_draws is not None:
-                    coverage_data.setdefault(key, []).append(
+                    coverage_data.setdefault(record.param_name, []).append(
                         (record.true_value, record.posterior_draws)
                     )
 
@@ -175,7 +172,7 @@ def _compute_coverage(
 def _hdi(draws: np.ndarray, prob: float) -> tuple[float, float]:
     """Compute highest density interval via shortest-interval method."""
 
-    sorted_draws = np.sort(np.ravel(draws))
+    sorted_draws = np.sort(draws)
     n = len(sorted_draws)
     interval_size = max(1, math.ceil(prob * n))
     if interval_size >= n:
