@@ -307,7 +307,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
             config.layout,  # type: ignore[arg-type]
         )
         true_pop = _build_true_population_values(config, true_table, param_names)
-        pop_records = extract_population_records(result, true_pop)
+        pop_records = extract_population_records(result, true_pop, config.layout)
 
         return ReplicationResult(
             replication_index=r,
