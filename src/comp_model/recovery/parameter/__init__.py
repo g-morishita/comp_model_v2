@@ -21,6 +21,11 @@ from comp_model.recovery.parameter.metrics import (
     ParameterRecoveryMetricsTable,
     compute_parameter_recovery_metrics,
 )
+from comp_model.recovery.parameter.plotting import (
+    plot_coverage,
+    plot_population_scatter,
+    plot_subject_scatter,
+)
 from comp_model.recovery.parameter.result import (
     ParameterRecoveryResult,
     PopulationLevelResult,
@@ -49,6 +54,9 @@ __all__ = [
     "get_true_population_params",
     "parameter_recovery_summary",
     "parameter_recovery_table",
+    "plot_coverage",
+    "plot_population_scatter",
+    "plot_subject_scatter",
     "run_parameter_recovery",
     "sample_true_params",
     "save_population_csv",
