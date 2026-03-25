@@ -226,64 +226,70 @@ def extract_population_records(
         condition-aware layout is available to interpret it.
     """
     records: list[PopulationRecord] = []
-    nonbaseline_conditions = ()
+    nonbaseline_conditions: tuple[str, ...] = ()
     if layout is not None:
         nonbaseline_conditions = tuple(
-            condition for condition in layout.conditions if condition != layout.baseline_condition
+            condition
+            for condition in layout.conditions
+            if condition != layout.baseline_condition
         )
 
     for key, true_val in true_pop.items():
         if not key.endswith("_pop"):
             continue
-        if key in result.posterior_samples:
-            draws = np.asarray(result.posterior_samples[key])
-            if draws.ndim == 0:
-                scalar_draws = draws.reshape(1)
-                records.append(
-                    PopulationRecord(
-                        param_name=key,
-                        condition=None,
-                        true_value=true_val,
-                        estimated_value=float(np.mean(scalar_draws)),
-                        posterior_draws=scalar_draws,
-                    )
+        if key not in result.posterior_samples:
+            continue
+
+        draws = np.asarray(result.posterior_samples[key])
+
+        if draws.ndim == 0:
+            scalar_draws = draws.reshape(1)
+            records.append(
+                PopulationRecord(
+                    param_name=key,
+                    condition=None,
+                    true_value=true_val,
+                    estimated_value=float(np.mean(scalar_draws)),
+                    posterior_draws=scalar_draws,
                 )
-                continue
-
-            if draws.ndim == 1:
-                records.append(
-                    PopulationRecord(
-                        param_name=key,
-                        condition=None,
-                        true_value=true_val,
-                        estimated_value=float(np.mean(draws)),
-                        posterior_draws=draws,
-                    )
-                )
-                continue
-
-            if draws.ndim == 2 and layout is not None:
-                if draws.shape[1] != len(nonbaseline_conditions):
-                    raise ValueError(
-                        f"Population posterior {key!r} has shape {draws.shape}, "
-                        f"but layout expects {len(nonbaseline_conditions)} "
-                        "non-baseline conditions"
-                    )
-                for c_idx, condition in enumerate(nonbaseline_conditions):
-                    condition_draws = draws[:, c_idx]
-                    records.append(
-                        PopulationRecord(
-                            param_name=key,
-                            condition=condition,
-                            true_value=true_val,
-                            estimated_value=float(np.mean(condition_draws)),
-                            posterior_draws=condition_draws,
-                        )
-                    )
-                continue
-
-            raise ValueError(
-                f"Population posterior {key!r} must be scalar or condition-indexed; "
-                f"got shape {draws.shape}"
             )
+            continue
+
+        if draws.ndim == 1:
+            records.append(
+                PopulationRecord(
+                    param_name=key,
+                    condition=None,
+                    true_value=true_val,
+                    estimated_value=float(np.mean(draws)),
+                    posterior_draws=draws,
+                )
+            )
+            continue
+
+        if draws.ndim == 2 and layout is not None:
+            if draws.shape[1] != len(nonbaseline_conditions):
+                raise ValueError(
+                    f"Population posterior {key!r} has shape {draws.shape}, "
+                    f"but layout expects {len(nonbaseline_conditions)} "
+                    "non-baseline conditions"
+                )
+            for c_idx, condition in enumerate(nonbaseline_conditions):
+                condition_draws = draws[:, c_idx]
+                records.append(
+                    PopulationRecord(
+                        param_name=key,
+                        condition=condition,
+                        true_value=true_val,
+                        estimated_value=float(np.mean(condition_draws)),
+                        posterior_draws=condition_draws,
+                    )
+                )
+            continue
+
+        raise ValueError(
+            f"Population posterior {key!r} must be scalar or condition-indexed; "
+            f"got shape {draws.shape}"
+        )
+
     return tuple(records)

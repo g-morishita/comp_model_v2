@@ -137,8 +137,6 @@ class TestRunParameterRecovery:
             tuple[dict[str, dict[str, float]], dict[str, object]]
                 Fixed true-table and dummy parsed parameters.
             """
-
-            del args, kwargs
             return true_table, {}
 
         def _fake_simulate_dataset(
@@ -162,7 +160,6 @@ class TestRunParameterRecovery:
             Dataset
                 Empty dataset placeholder for the mocked fit.
             """
-
             del cfg, params_per_subject, seed
             return Dataset(subjects=())
 
@@ -181,7 +178,6 @@ class TestRunParameterRecovery:
             BayesFitResult
                 Mock posterior samples with condition-aware population keys.
             """
-
             del args, kwargs
             n_draws = 8
             posterior = {
