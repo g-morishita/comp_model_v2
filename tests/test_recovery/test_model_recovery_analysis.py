@@ -8,14 +8,17 @@ import pytest
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.config import HierarchyStructure
 from comp_model.inference.mle.optimize import MleFitResult
-from comp_model.recovery.model.analysis import confusion_matrix, recovery_rates
+from comp_model.recovery.model.analysis import compute_confusion_matrix, compute_recovery_rates
 from comp_model.recovery.model.criteria import (
     _waic_score,
     score_candidate_bayes,
     score_candidate_mle,
     select_winner,
 )
-from comp_model.recovery.model.display import confusion_matrix_table, recovery_rate_table
+from comp_model.recovery.model.display import (
+    model_recovery_confusion_table,
+    model_recovery_rate_table,
+)
 from comp_model.recovery.model.runner import ModelRecoveryResult, ReplicationResult
 
 # ---------------------------------------------------------------------------
@@ -185,7 +188,7 @@ class TestConfusionMatrix:
             _make_replication(1, "ModelB", "ModelA"),
         ]
         result = self._make_result(reps)
-        matrix = confusion_matrix(result)
+        matrix = compute_confusion_matrix(result)
 
         assert matrix["ModelA"]["ModelA"] == 2
         assert matrix["ModelA"]["ModelB"] == 0
@@ -194,7 +197,7 @@ class TestConfusionMatrix:
 
     def test_zero_filled_for_all_pairs(self) -> None:
         result = self._make_result([_make_replication(0, "ModelA", "ModelA")])
-        matrix = confusion_matrix(result)
+        matrix = compute_confusion_matrix(result)
         assert "ModelA" in matrix
         assert "ModelB" in matrix
         assert matrix["ModelB"]["ModelA"] == 0
@@ -226,7 +229,7 @@ class TestRecoveryRates:
             _make_replication(i, "ModelB", "ModelB") for i in range(5)
         ]
         result = self._make_result(reps)
-        rates = recovery_rates(result)
+        rates = compute_recovery_rates(result)
         assert rates["ModelA"] == pytest.approx(1.0)
         assert rates["ModelB"] == pytest.approx(1.0)
 
@@ -238,13 +241,13 @@ class TestRecoveryRates:
             _make_replication(1, "ModelB", "ModelA"),
         ]
         result = self._make_result(reps)
-        rates = recovery_rates(result)
+        rates = compute_recovery_rates(result)
         assert rates["ModelA"] == pytest.approx(0.5)
         assert rates["ModelB"] == pytest.approx(0.0)
 
     def test_nan_for_zero_reps(self) -> None:
         result = self._make_result([_make_replication(0, "ModelA", "ModelA")])
-        rates = recovery_rates(result)
+        rates = compute_recovery_rates(result)
         assert rates["ModelA"] == pytest.approx(1.0)
         assert rates["ModelB"] != rates["ModelB"]  # nan check
 
@@ -263,7 +266,7 @@ class TestDisplay:
 
     def test_confusion_matrix_table_contains_counts(self) -> None:
         matrix = self._make_matrix()
-        table = confusion_matrix_table(matrix, ["ModelA", "ModelB"])
+        table = model_recovery_confusion_table(matrix, ["ModelA", "ModelB"])
         assert "8" in table
         assert "7" in table
         assert "ModelA" in table
@@ -271,7 +274,7 @@ class TestDisplay:
 
     def test_confusion_matrix_table_has_header_and_separator(self) -> None:
         matrix = self._make_matrix()
-        table = confusion_matrix_table(matrix, ["ModelA", "ModelB"])
+        table = model_recovery_confusion_table(matrix, ["ModelA", "ModelB"])
         lines = table.split("\n")
         assert len(lines) >= 3
 
@@ -293,7 +296,7 @@ class TestDisplay:
         ]
         result = ModelRecoveryResult(config=config, replications=tuple(reps))
         rates = {"ModelA": 0.5, "ModelB": 1.0}
-        table = recovery_rate_table(rates, result)
+        table = model_recovery_rate_table(rates, result)
         assert "ModelA" in table
         assert "ModelB" in table
         assert "0.500" in table

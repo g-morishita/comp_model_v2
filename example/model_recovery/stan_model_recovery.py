@@ -27,10 +27,10 @@ from comp_model.recovery.model import (
     CandidateModelSpec,
     GeneratingModelSpec,
     ModelRecoveryConfig,
-    confusion_matrix,
-    confusion_matrix_table,
-    recovery_rate_table,
-    recovery_rates,
+    compute_confusion_matrix,
+    compute_recovery_rates,
+    model_recovery_confusion_table,
+    model_recovery_rate_table,
     run_model_recovery,
 )
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
@@ -143,11 +143,11 @@ if __name__ == "__main__":
     result = run_model_recovery(config)
 
     model_names = [spec.name for spec in config.generating_models]
-    matrix = confusion_matrix(result)
-    rates = recovery_rates(result)
+    matrix = compute_confusion_matrix(result)
+    rates = compute_recovery_rates(result)
 
     print("Confusion Matrix (rows = generating model, cols = selected model):")
-    print(confusion_matrix_table(matrix, model_names))
+    print(model_recovery_confusion_table(matrix, model_names))
     print()
     print("Recovery Rates:")
-    print(recovery_rate_table(rates, result))
+    print(model_recovery_rate_table(rates, result))

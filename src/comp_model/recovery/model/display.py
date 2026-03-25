@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from comp_model.recovery.model.runner import ModelRecoveryResult
 
 
-def confusion_matrix_table(
+def model_recovery_confusion_table(
     matrix: dict[str, dict[str, int]],
     model_names: list[str],
 ) -> str:
@@ -20,7 +20,7 @@ def confusion_matrix_table(
     Parameters
     ----------
     matrix
-        Nested counts from :func:`~comp_model.recovery.model.analysis.confusion_matrix`.
+        Nested counts from :func:`~comp_model.recovery.model.analysis.compute_confusion_matrix`.
     model_names
         Ordered list of model names used for both row and column headers.
 
@@ -49,7 +49,7 @@ def confusion_matrix_table(
     return "\n".join(lines)
 
 
-def recovery_rate_table(
+def model_recovery_rate_table(
     rates: dict[str, float],
     result: ModelRecoveryResult,
 ) -> str:
@@ -58,7 +58,7 @@ def recovery_rate_table(
     Parameters
     ----------
     rates
-        Recovery rates from :func:`~comp_model.recovery.model.analysis.recovery_rates`.
+        Recovery rates from :func:`~comp_model.recovery.model.analysis.compute_recovery_rates`.
     result
         The completed model recovery result (used to count replications).
 

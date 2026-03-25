@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from comp_model.recovery.model.runner import ModelRecoveryResult
 
 
-def confusion_matrix(result: ModelRecoveryResult) -> dict[str, dict[str, int]]:
+def compute_confusion_matrix(result: ModelRecoveryResult) -> dict[str, dict[str, int]]:
     """Build a confusion matrix from model recovery results.
 
     Parameters
@@ -38,7 +38,7 @@ def confusion_matrix(result: ModelRecoveryResult) -> dict[str, dict[str, int]]:
     return matrix
 
 
-def recovery_rates(result: ModelRecoveryResult) -> dict[str, float]:
+def compute_recovery_rates(result: ModelRecoveryResult) -> dict[str, float]:
     """Compute per-generating-model recovery rates.
 
     Parameters
