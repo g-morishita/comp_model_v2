@@ -11,6 +11,8 @@ from comp_model.recovery.model import (
     model_recovery_confusion_table,
     model_recovery_rate_table,
     run_model_recovery,
+    save_confusion_matrix_csv,
+    save_replication_csv,
 )
 from comp_model.recovery.parameter import (
     ParamDist,
@@ -70,6 +72,8 @@ __all__ = [
     "run_model_recovery",
     "run_parameter_recovery",
     "sample_true_params",
+    "save_confusion_matrix_csv",
     "save_population_csv",
+    "save_replication_csv",
     "save_subject_csv",
 ]

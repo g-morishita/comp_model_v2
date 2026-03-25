@@ -10,6 +10,7 @@ from comp_model.recovery.model.display import (
     model_recovery_confusion_table,
     model_recovery_rate_table,
 )
+from comp_model.recovery.model.io import save_confusion_matrix_csv, save_replication_csv
 from comp_model.recovery.model.result import ModelRecoveryResult, ReplicationResult
 from comp_model.recovery.model.runner import run_model_recovery
 
@@ -24,4 +25,6 @@ __all__ = [
     "model_recovery_confusion_table",
     "model_recovery_rate_table",
     "run_model_recovery",
+    "save_confusion_matrix_csv",
+    "save_replication_csv",
 ]
