@@ -60,8 +60,8 @@ def save_subject_csv(result: ParameterRecoveryResult, path: Path) -> None:
 def save_population_csv(result: ParameterRecoveryResult, path: Path) -> None:
     """Write population-level recovery data to a CSV file.
 
-    Each row contains one (replication, parameter) data point with the
-    true and estimated population-level values.
+    Each row contains one (replication, parameter, condition) data point
+    with the true and estimated population-level values.
 
     Parameters
     ----------
@@ -72,9 +72,10 @@ def save_population_csv(result: ParameterRecoveryResult, path: Path) -> None:
 
     Notes
     -----
-    Columns: ``replication``, ``param_name``, ``true_value``,
-    ``estimated_value``.  Only replications with population-level results
-    are included.
+    Columns: ``replication``, ``param_name``, ``condition``,
+    ``true_value``, ``estimated_value``.  The ``condition`` column is
+    empty for non-condition-aware population parameters. Only replications
+    with population-level results are included.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
@@ -83,6 +84,7 @@ def save_population_csv(result: ParameterRecoveryResult, path: Path) -> None:
             [
                 "replication",
                 "param_name",
+                "condition",
                 "true_value",
                 "estimated_value",
             ]
@@ -95,6 +97,7 @@ def save_population_csv(result: ParameterRecoveryResult, path: Path) -> None:
                     [
                         replication.replication_index,
                         record.param_name,
+                        record.condition or "",
                         f"{record.true_value:.6f}",
                         f"{record.estimated_value:.6f}",
                     ]
