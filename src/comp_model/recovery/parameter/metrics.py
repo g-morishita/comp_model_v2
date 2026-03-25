@@ -11,7 +11,7 @@ import numpy as np
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from comp_model.recovery.parameter.runner import ParameterRecoveryResult
+    from comp_model.recovery.parameter.result import ParameterRecoveryResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,35 +86,29 @@ def compute_parameter_recovery_metrics(
     coverage_data: dict[str, list[tuple[float, np.ndarray]]] = {}
 
     for replication in result.replications:
-        for subject_est in replication.subject_estimates:
-            sid = subject_est.subject_id
-            true_params = replication.true_params[sid]
-            for param_name, true_val in true_params.items():
-                if param_name not in subject_est.point_estimates:
-                    continue
-                est_val = subject_est.point_estimates[param_name]
-                pairs.setdefault(param_name, []).append((true_val, est_val))
+        # Subject-level pairs
+        for record in replication.subject_level.records:
+            key = (
+                f"{record.param_name}__{record.condition}"
+                if record.condition
+                else record.param_name
+            )
+            pairs.setdefault(key, []).append((record.true_value, record.estimated_value))
+            if record.posterior_draws is not None:
+                coverage_data.setdefault(key, []).append(
+                    (record.true_value, record.posterior_draws)
+                )
 
-                if (
-                    subject_est.posterior_samples is not None
-                    and param_name in subject_est.posterior_samples
-                ):
-                    draws = subject_est.posterior_samples[param_name]
-                    coverage_data.setdefault(param_name, []).append((true_val, draws))
-
-        # Population-level: one observation per replication
-        if replication.population_true_params and replication.population_estimates:
-            for key, true_val in replication.population_true_params.items():
-                if key not in replication.population_estimates:
-                    continue
-                est_val = replication.population_estimates[key]
-                pairs.setdefault(key, []).append((true_val, est_val))
-                if (
-                    replication.population_posterior_samples is not None
-                    and key in replication.population_posterior_samples
-                ):
-                    draws = replication.population_posterior_samples[key]
-                    coverage_data.setdefault(key, []).append((true_val, draws))
+        # Population-level pairs
+        if replication.population_level is not None:
+            for record in replication.population_level.records:
+                pairs.setdefault(record.param_name, []).append(
+                    (record.true_value, record.estimated_value)
+                )
+                if record.posterior_draws is not None:
+                    coverage_data.setdefault(record.param_name, []).append(
+                        (record.true_value, record.posterior_draws)
+                    )
 
     metrics: dict[str, ParameterRecoveryMetrics] = {}
     for param_name, param_pairs in pairs.items():

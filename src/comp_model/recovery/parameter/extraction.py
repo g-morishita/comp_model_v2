@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+
+from comp_model.recovery.parameter.result import PopulationRecord, SubjectRecord
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -15,162 +16,73 @@ if TYPE_CHECKING:
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
 
 
-@dataclass(frozen=True, slots=True)
-class SubjectEstimates:
-    """Recovered estimates for one subject.
-
-    Attributes
-    ----------
-    subject_id
-        Subject identifier.
-    point_estimates
-        Point estimates keyed by parameter name.
-    posterior_samples
-        Full posterior draws per parameter, or ``None`` for MLE.
-    converged
-        MLE convergence flag, or ``None`` for Bayes.
-    """
-
-    subject_id: str
-    point_estimates: dict[str, float]
-    posterior_samples: dict[str, np.ndarray] | None
-    converged: bool | None
-
-
-@dataclass(frozen=True, slots=True)
-class ReplicationResult:
-    """All estimates from one simulate-fit cycle.
-
-    Attributes
-    ----------
-    replication_index
-        Index of this replication.
-    true_params
-        Ground-truth constrained parameters per subject.
-    subject_estimates
-        Recovered estimates per subject.
-    population_true_params
-        True population-level parameters (mu/sd on unconstrained scale).
-        Populated only for hierarchical Bayes fits with unconstrained-scale
-        ``ParamDist`` entries. Keys follow the pattern ``mu_{param}_z`` and
-        ``sd_{param}_z``.
-    population_estimates
-        Posterior means of population-level parameters. Same key convention
-        as ``population_true_params``.
-    population_posterior_samples
-        Full posterior draws for population-level parameters, used to compute
-        credible-interval coverage.
-    """
-
-    replication_index: int
-    true_params: dict[str, dict[str, float]]
-    subject_estimates: tuple[SubjectEstimates, ...]
-    population_true_params: dict[str, float] | None = None
-    population_estimates: dict[str, float] | None = None
-    population_posterior_samples: dict[str, np.ndarray] | None = None
-
-
-def extract_population_estimates(
-    result: BayesFitResult,
-    param_names: Sequence[str],
-) -> tuple[dict[str, float], dict[str, np.ndarray]]:
-    """Extract population-level estimates from a hierarchical Bayes fit.
-
-    Looks for two kinds of population parameters in the posterior:
-
-    1. **Constrained-scale population mean** — ``{param}_pop`` scalars emitted
-       by Stan's ``generated quantities`` block (e.g. ``alpha_pos_pop =
-       inv_logit(mu_alpha_pos_z)``).  These are on the same scale as the
-       per-subject parameters and can be compared to the empirical mean of the
-       true constrained parameters across subjects.
-
-    2. **Unconstrained-scale mu / sd** — ``mu_{param}_z`` and ``sd_{param}_z``
-       parameters directly sampled by Stan.  These are only meaningful when the
-       ``ParamDist`` was specified with ``scale="unconstrained"`` so that the
-       true distribution mean and SD are known.
-
-    Parameters
-    ----------
-    result
-        Bayesian fit result with posterior samples.
-    param_names
-        Subject-level parameter names (e.g. ``["alpha_pos", "beta"]``).
-
-    Returns
-    -------
-    point_estimates
-        Posterior means keyed by ``{param}_pop``, ``mu_{param}_z``, or
-        ``sd_{param}_z`` depending on what the Stan program exposes.
-    posterior_samples
-        Full draw arrays for the same keys (used for coverage computation).
-    """
-
-    point: dict[str, float] = {}
-    samples: dict[str, np.ndarray] = {}
-    for name in param_names:
-        # Constrained-scale population mean from generated quantities
-        pop_key = f"{name}_pop"
-        if pop_key in result.posterior_samples:
-            draws = result.posterior_samples[pop_key]
-            point[pop_key] = float(np.mean(draws))
-            samples[pop_key] = draws
-
-        # Unconstrained-scale population mean and SD (used when scale="unconstrained")
-        for prefix in ("mu", "sd"):
-            key = f"{prefix}_{name}_z"
-            if key in result.posterior_samples:
-                draws = result.posterior_samples[key]
-                point[key] = float(np.mean(draws))
-                samples[key] = draws
-    return point, samples
-
-
-def extract_mle_estimates(
+def extract_mle_subject_records(
     results: Sequence[MleFitResult],
+    true_params: dict[str, dict[str, float]],
     layout: SharedDeltaLayout | None = None,
-) -> tuple[SubjectEstimates, ...]:
-    """Extract point estimates from per-subject MLE results.
+) -> tuple[SubjectRecord, ...]:
+    """Extract subject records from per-subject MLE results.
 
     Parameters
     ----------
     results
         MLE fit results, one per subject.
+    true_params
+        Ground-truth constrained parameters keyed by subject id, then by
+        parameter name.  Keys may use the ``{name}__{condition}`` convention
+        for condition-aware fits.
     layout
         Optional condition-aware layout for extracting per-condition params.
 
     Returns
     -------
-    tuple[SubjectEstimates, ...]
-        Extracted estimates with ``posterior_samples=None``.
+    tuple[SubjectRecord, ...]
+        One record per (subject, parameter[, condition]) combination.
     """
-
-    estimates: list[SubjectEstimates] = []
+    records: list[SubjectRecord] = []
     for result in results:
+        sid = result.subject_id
+        true_p = true_params[sid]
+
         if layout is not None and result.params_by_condition is not None:
-            point: dict[str, float] = {}
             for condition, params in result.params_by_condition.items():
-                for name, value in params.items():
-                    point[f"{name}__{condition}"] = value
+                for name, est_val in params.items():
+                    true_key = f"{name}__{condition}"
+                    true_val = true_p[true_key]
+                    records.append(
+                        SubjectRecord(
+                            subject_id=sid,
+                            param_name=name,
+                            condition=condition,
+                            true_value=true_val,
+                            estimated_value=est_val,
+                            posterior_draws=None,
+                        )
+                    )
         else:
-            point = dict(result.constrained_params)
-        estimates.append(
-            SubjectEstimates(
-                subject_id=result.subject_id,
-                point_estimates=point,
-                posterior_samples=None,
-                converged=result.converged,
-            )
-        )
-    return tuple(estimates)
+            for name, est_val in result.constrained_params.items():
+                true_val = true_p[name]
+                records.append(
+                    SubjectRecord(
+                        subject_id=sid,
+                        param_name=name,
+                        condition=None,
+                        true_value=true_val,
+                        estimated_value=est_val,
+                        posterior_draws=None,
+                    )
+                )
+    return tuple(records)
 
 
-def extract_bayes_estimates(
+def extract_bayes_subject_records(
     result: BayesFitResult,
     subject_ids: Sequence[str],
     param_names: Sequence[str],
+    true_params: dict[str, dict[str, float]],
     layout: SharedDeltaLayout | None = None,
-) -> tuple[SubjectEstimates, ...]:
-    """Extract posterior means and draws from hierarchical Bayes results.
+) -> tuple[SubjectRecord, ...]:
+    """Extract subject records from hierarchical Bayes results.
 
     Parameters
     ----------
@@ -180,49 +92,140 @@ def extract_bayes_estimates(
         Subject identifiers in dataset order.
     param_names
         Subject-level parameter names in the Stan model.
+    true_params
+        Ground-truth constrained parameters keyed by subject id, then by
+        parameter name.
     layout
         Optional condition-aware layout.
 
     Returns
     -------
-    tuple[SubjectEstimates, ...]
-        Extracted estimates with full posterior draws.
+    tuple[SubjectRecord, ...]
+        One record per (subject, parameter[, condition]) combination with
+        full posterior draws.
     """
-
-    estimates: list[SubjectEstimates] = []
+    records: list[SubjectRecord] = []
     for i, sid in enumerate(subject_ids):
-        point: dict[str, float] = {}
-        draws: dict[str, np.ndarray] = {}
+        true_p = true_params[sid]
 
         for name in param_names:
             samples = result.posterior_samples[name]
             if samples.ndim == 1:
-                # Shape: (n_draws,) — shared across subjects (e.g. SUBJECT_SHARED)
-                point[name] = float(np.mean(samples))
-                draws[name] = samples
+                # Shape: (n_draws,) — shared across subjects
+                est = float(np.mean(samples))
+                true_val = true_p[name]
+                records.append(
+                    SubjectRecord(
+                        subject_id=sid,
+                        param_name=name,
+                        condition=None,
+                        true_value=true_val,
+                        estimated_value=est,
+                        posterior_draws=samples,
+                    )
+                )
             elif samples.ndim == 2:
                 # Shape: (n_draws, n_subjects)
                 subject_draws = samples[:, i]
-                point[name] = float(np.mean(subject_draws))
-                draws[name] = subject_draws
+                est = float(np.mean(subject_draws))
+                true_val = true_p[name]
+                records.append(
+                    SubjectRecord(
+                        subject_id=sid,
+                        param_name=name,
+                        condition=None,
+                        true_value=true_val,
+                        estimated_value=est,
+                        posterior_draws=subject_draws,
+                    )
+                )
             elif samples.ndim == 3 and layout is not None:
                 # Shape: (n_draws, n_subjects, n_conditions)
                 for c_idx, condition in enumerate(layout.conditions):
-                    key = f"{name}__{condition}"
                     subject_draws = samples[:, i, c_idx]
-                    point[key] = float(np.mean(subject_draws))
-                    draws[key] = subject_draws
+                    est = float(np.mean(subject_draws))
+                    true_key = f"{name}__{condition}"
+                    true_val = true_p[true_key]
+                    records.append(
+                        SubjectRecord(
+                            subject_id=sid,
+                            param_name=name,
+                            condition=condition,
+                            true_value=true_val,
+                            estimated_value=est,
+                            posterior_draws=subject_draws,
+                        )
+                    )
             else:
                 subject_draws = samples[:, i]
-                point[name] = float(np.mean(subject_draws))
-                draws[name] = subject_draws
+                est = float(np.mean(subject_draws))
+                true_val = true_p[name]
+                records.append(
+                    SubjectRecord(
+                        subject_id=sid,
+                        param_name=name,
+                        condition=None,
+                        true_value=true_val,
+                        estimated_value=est,
+                        posterior_draws=subject_draws,
+                    )
+                )
+    return tuple(records)
 
-        estimates.append(
-            SubjectEstimates(
-                subject_id=sid,
-                point_estimates=point,
-                posterior_samples=draws,
-                converged=None,
+
+def extract_population_records(
+    result: BayesFitResult,
+    param_names: Sequence[str],
+    true_pop: dict[str, float],
+) -> tuple[PopulationRecord, ...]:
+    """Extract population records from a hierarchical Bayes fit.
+
+    Looks for population parameters in the posterior:
+
+    1. Constrained-scale population mean (``{param}_pop``)
+    2. Unconstrained-scale mu / sd (``mu_{param}_z``, ``sd_{param}_z``)
+
+    Parameters
+    ----------
+    result
+        Bayesian fit result with posterior samples.
+    param_names
+        Subject-level parameter names (e.g. ``["alpha_pos", "beta"]``).
+    true_pop
+        True population parameter values keyed by the same names that appear
+        in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``).
+
+    Returns
+    -------
+    tuple[PopulationRecord, ...]
+        One record per population parameter found in the posterior.
+    """
+    records: list[PopulationRecord] = []
+    for name in param_names:
+        # Constrained-scale population mean from generated quantities
+        pop_key = f"{name}_pop"
+        if pop_key in result.posterior_samples and pop_key in true_pop:
+            draws = result.posterior_samples[pop_key]
+            records.append(
+                PopulationRecord(
+                    param_name=pop_key,
+                    true_value=true_pop[pop_key],
+                    estimated_value=float(np.mean(draws)),
+                    posterior_draws=draws,
+                )
             )
-        )
-    return tuple(estimates)
+
+        # Unconstrained-scale population mean and SD
+        for prefix in ("mu", "sd"):
+            key = f"{prefix}_{name}_z"
+            if key in result.posterior_samples and key in true_pop:
+                draws = result.posterior_samples[key]
+                records.append(
+                    PopulationRecord(
+                        param_name=key,
+                        true_value=true_pop[key],
+                        estimated_value=float(np.mean(draws)),
+                        posterior_draws=draws,
+                    )
+                )
+    return tuple(records)

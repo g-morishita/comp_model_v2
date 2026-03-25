@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -15,32 +14,21 @@ from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
 from comp_model.recovery.parameter.config import get_true_population_params, sample_true_params
 from comp_model.recovery.parameter.extraction import (
+    extract_bayes_subject_records,
+    extract_mle_subject_records,
+    extract_population_records,
+)
+from comp_model.recovery.parameter.result import (
+    ParameterRecoveryResult,
+    PopulationLevelResult,
     ReplicationResult,
-    extract_bayes_estimates,
-    extract_mle_estimates,
-    extract_population_estimates,
+    SubjectLevelResult,
 )
 from comp_model.runtime import SimulationConfig, simulate_subject
 
 if TYPE_CHECKING:
     from comp_model.inference.mle.optimize import MleFitResult
     from comp_model.recovery.parameter.config import ParameterRecoveryConfig
-
-
-@dataclass(frozen=True, slots=True)
-class ParameterRecoveryResult:
-    """Complete results from a recovery study.
-
-    Attributes
-    ----------
-    config
-        Study configuration used.
-    replications
-        Estimates from each replication.
-    """
-
-    config: ParameterRecoveryConfig
-    replications: tuple[ReplicationResult, ...]
 
 
 def run_parameter_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResult:
@@ -122,12 +110,12 @@ def _run_mle_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResul
                     )
                     pbar.update(1)
 
-            estimates = extract_mle_estimates(results, config.layout)
+            subject_records = extract_mle_subject_records(results, true_table, config.layout)
             replications.append(
                 ReplicationResult(
                     replication_index=r,
-                    true_params=true_table,
-                    subject_estimates=estimates,
+                    subject_level=SubjectLevelResult(records=subject_records),
+                    population_level=None,
                 )
             )
 
@@ -204,17 +192,17 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
         )
         if not isinstance(result, BayesFitResult):
             raise TypeError("Stan recovery requires BayesFitResult from inference dispatch")
-        estimates = extract_bayes_estimates(
+
+        subject_records = extract_bayes_subject_records(
             result,
             subject_ids,
             param_names,
+            true_table,
             config.layout,  # type: ignore[arg-type]
         )
-        pop_point, pop_samples = extract_population_estimates(result, param_names)
 
         # Empirical constrained-scale population mean from this replication's
-        # true parameters.  Computed from true_table so it is valid for any
-        # ParamDist.scale and varies across replications (enabling correlation).
+        # true parameters.
         true_pop: dict[str, float] = {}
         for name in param_names:
             vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
@@ -225,13 +213,12 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
         # specified with scale="unconstrained" (true values are then constants).
         true_pop.update(get_true_population_params(config.param_dists, config.kernel))
 
+        pop_records = extract_population_records(result, param_names, true_pop)
+
         return ReplicationResult(
             replication_index=r,
-            true_params=true_table,
-            subject_estimates=estimates,
-            population_true_params=true_pop or None,
-            population_estimates=pop_point or None,
-            population_posterior_samples=pop_samples or None,
+            subject_level=SubjectLevelResult(records=subject_records),
+            population_level=PopulationLevelResult(records=pop_records) if pop_records else None,
         )
 
     with tqdm(total=config.n_replications, desc="Recovery (Stan)", unit="rep") as pbar:
@@ -268,6 +255,8 @@ def _simulate_dataset(
         Recovery study configuration.
     params_per_subject
         Parsed parameters keyed by subject, optionally nested by condition.
+    seed
+        Random seed for the simulation.
 
     Returns
     -------
@@ -294,6 +283,8 @@ def _simulate_simple(
         Recovery study configuration.
     params_per_subject
         Parsed parameters keyed by subject identifier.
+    seed
+        Random seed for the simulation.
 
     Returns
     -------
@@ -327,6 +318,8 @@ def _simulate_condition_aware(
         Recovery study configuration.
     params_per_subject
         Parsed parameters keyed by subject, then by condition.
+    seed
+        Random seed for the simulation.
 
     Returns
     -------

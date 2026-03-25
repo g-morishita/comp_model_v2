@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from comp_model.recovery.parameter.metrics import ParameterRecoveryMetricsTable
-    from comp_model.recovery.parameter.runner import ParameterRecoveryResult
+    from comp_model.recovery.parameter.result import ParameterRecoveryResult
 
 
 def parameter_recovery_table(metrics: ParameterRecoveryMetricsTable) -> str:
@@ -63,13 +63,20 @@ def parameter_recovery_summary(result: ParameterRecoveryResult) -> str:
         return "No replications to summarize."
 
     first = result.replications[0]
-    if not first.subject_estimates:
+    if not first.subject_level.records:
         return "No subject estimates."
 
-    param_names = sorted(first.true_params[first.subject_estimates[0].subject_id])
+    # Derive display keys from the first replication's records
+    seen_keys: list[str] = []
+    seen_set: set[str] = set()
+    for record in first.subject_level.records:
+        key = f"{record.param_name}__{record.condition}" if record.condition else record.param_name
+        if key not in seen_set:
+            seen_keys.append(key)
+            seen_set.add(key)
 
     header_parts = [f"{'Rep':>4}", f"{'Subject':<10}"]
-    for name in param_names:
+    for name in sorted(seen_keys):
         header_parts.append(f"{'True ' + name:>15}")
         header_parts.append(f"{'Est ' + name:>15}")
     header = " ".join(header_parts)
@@ -77,13 +84,23 @@ def parameter_recovery_summary(result: ParameterRecoveryResult) -> str:
     lines = [header, "-" * len(header)]
 
     for replication in result.replications:
-        for subject_est in replication.subject_estimates:
-            sid = subject_est.subject_id
-            true_p = replication.true_params[sid]
+        # Group records by subject
+        subject_records: dict[str, dict[str, tuple[float, float]]] = {}
+        for record in replication.subject_level.records:
+            key = (
+                f"{record.param_name}__{record.condition}"
+                if record.condition
+                else record.param_name
+            )
+            subject_records.setdefault(record.subject_id, {})[key] = (
+                record.true_value,
+                record.estimated_value,
+            )
+
+        for sid, param_map in subject_records.items():
             parts = [f"{replication.replication_index:>4}", f"{sid:<10}"]
-            for name in param_names:
-                true_val = true_p.get(name, float("nan"))
-                est_val = subject_est.point_estimates.get(name, float("nan"))
+            for name in sorted(seen_keys):
+                true_val, est_val = param_map.get(name, (float("nan"), float("nan")))
                 parts.append(f"{true_val:>15.4f}")
                 parts.append(f"{est_val:>15.4f}")
             lines.append(" ".join(parts))
