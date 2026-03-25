@@ -8,10 +8,14 @@ Two blocks per condition, 60 trials per block, 64 subjects.
 Parameters are sampled uniformly on the unconstrained scale.
 Each condition is fit independently with STUDY_SUBJECT hierarchy.
 
+Results are saved as CSV files and scatter plots under ``output/``.
+
 Usage:
     uv run python \
         example/social_rl_self_reward_demo_mixture/stan_hierarchical_within_subject_recovery.py
 """
+
+from pathlib import Path
 
 from scipy import stats
 
@@ -32,7 +36,12 @@ from comp_model.recovery import (
     compute_parameter_recovery_metrics,
     parameter_recovery_summary,
     parameter_recovery_table,
+    plot_coverage,
+    plot_population_scatter,
+    plot_subject_scatter,
     run_parameter_recovery,
+    save_population_csv,
+    save_subject_csv,
 )
 from comp_model.tasks import SOCIAL_PRE_CHOICE_SCHEMA, BlockSpec, TaskSpec
 
@@ -58,6 +67,9 @@ STAN_CONFIG = InferenceConfig(
     backend="stan",
     stan_config=StanFitConfig(n_warmup=500, n_samples=500, n_chains=4, seed=42),
 )
+
+
+OUTPUT_DIR = Path("output/mixture_within_subject_recovery")
 
 
 def main() -> None:
@@ -111,6 +123,18 @@ def main() -> None:
         metrics = compute_parameter_recovery_metrics(result)
         print("\nRecovery metrics:")
         print(parameter_recovery_table(metrics))
+
+        # --- CSV export ---
+        cond_dir = OUTPUT_DIR / condition
+        save_subject_csv(result, cond_dir / "subject_recovery.csv")
+        save_population_csv(result, cond_dir / "population_recovery.csv")
+        print(f"\nCSV saved to {cond_dir}/")
+
+        # --- Scatter plots ---
+        plot_subject_scatter(result, save_path=cond_dir / "subject_scatter.png")
+        plot_population_scatter(result, save_path=cond_dir / "population_scatter.png")
+        plot_coverage(result, save_path=cond_dir / "coverage.png")
+        print(f"Plots saved to {cond_dir}/")
 
     print("\nDone.")
 
