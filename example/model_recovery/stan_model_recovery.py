@@ -12,6 +12,8 @@ Usage
     uv run python example/model_recovery/stan_model_recovery.py
 """
 
+from pathlib import Path
+
 from scipy import stats
 
 from comp_model.environments import StationaryBanditEnvironment
@@ -31,7 +33,11 @@ from comp_model.recovery.model import (
     compute_recovery_rates,
     model_recovery_confusion_table,
     model_recovery_rate_table,
+    plot_confusion_matrix,
+    plot_recovery_rates,
     run_model_recovery,
+    save_confusion_matrix_csv,
+    save_replication_csv,
 )
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
@@ -128,6 +134,8 @@ config = ModelRecoveryConfig(
     simulation_base_seed=42,
 )
 
+OUTPUT_DIR = Path("output/stan_model_recovery")
+
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
@@ -151,3 +159,13 @@ if __name__ == "__main__":
     print()
     print("Recovery Rates:")
     print(model_recovery_rate_table(rates, result))
+
+    # --- CSV export ---
+    save_replication_csv(result, OUTPUT_DIR / "replications.csv")
+    save_confusion_matrix_csv(result, OUTPUT_DIR / "confusion_matrix.csv")
+    print(f"\nCSV saved to {OUTPUT_DIR}/")
+
+    # --- Plots ---
+    plot_confusion_matrix(result, save_path=OUTPUT_DIR / "confusion_matrix.png")
+    plot_recovery_rates(result, save_path=OUTPUT_DIR / "recovery_rates.png")
+    print(f"Plots saved to {OUTPUT_DIR}/")
