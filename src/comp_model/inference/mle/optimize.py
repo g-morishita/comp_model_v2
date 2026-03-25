@@ -152,8 +152,10 @@ def fit_mle_simple(
     parameter space before reporting AIC and BIC.
     """
 
+    from comp_model.data.compatibility import check_kernel_schema_compatibility
     from comp_model.data.validation import validate_subject
 
+    check_kernel_schema_compatibility(kernel, schema)
     validate_subject(subject_data, schema)
 
     scipy_optimize = cast("Any", importlib.import_module("scipy.optimize"))
@@ -302,8 +304,10 @@ def fit_mle_conditioned(
     for each condition and transformed into constrained parameter values.
     """
 
+    from comp_model.data.compatibility import check_kernel_schema_compatibility
     from comp_model.data.validation import validate_subject
 
+    check_kernel_schema_compatibility(kernel, schema)
     validate_subject(subject_data, schema)
 
     scipy_optimize = cast("Any", importlib.import_module("scipy.optimize"))

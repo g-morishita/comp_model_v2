@@ -98,6 +98,10 @@ def fit_stan(
     exact data dictionary to pass into sampling.
     """
 
+    from comp_model.data.compatibility import check_spec_schema_compatibility
+
+    check_spec_schema_compatibility(adapter.kernel_spec(), schema)
+
     resolved_config = config if config is not None else DEFAULT_STAN_FIT_CONFIG
     cmdstanpy = cast("Any", importlib.import_module("cmdstanpy"))
     stan_file = adapter.stan_program_path(hierarchy)

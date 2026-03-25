@@ -2,7 +2,11 @@
 
 import pytest
 
-from comp_model.data.compatibility import check_kernel_schema_compatibility
+from comp_model.data.compatibility import (
+    check_kernel_schema_compatibility,
+    check_spec_schema_compatibility,
+)
+from comp_model.data.schema import EventPhase
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     AsocialRlAsymmetricKernel,
@@ -141,3 +145,95 @@ class TestSocialKernelOnFullObservationSchema:
     def test_demo_mixture_kernel_on_full_observation_passes(self, schema) -> None:
         """SocialRlSelfRewardDemoMixtureKernel is compatible with full-observation schemas."""
         check_kernel_schema_compatibility(SocialRlSelfRewardDemoMixtureKernel(), schema)
+
+
+# ---------------------------------------------------------------------------
+# Per-step validation — split fields across steps must still be rejected
+# ---------------------------------------------------------------------------
+
+
+class TestPerStepFieldValidation:
+    """Verify that per-step checking catches split observable fields."""
+
+    def test_split_fields_across_steps_rejected(self) -> None:
+        """A schema where one step provides action and another provides reward must be rejected.
+
+        The union would be {action, reward} (passing), but neither step
+        individually provides both. The per-step check catches this.
+        """
+        from comp_model.tasks.schemas import TrialSchema, TrialSchemaStep
+
+        split_schema = TrialSchema(
+            schema_id="split_fields_test",
+            steps=(
+                TrialSchemaStep(
+                    phase=EventPhase.INPUT,
+                    node_id="main",
+                    actor_id="subject",
+                ),
+                TrialSchemaStep(
+                    phase=EventPhase.DECISION,
+                    node_id="demo",
+                    actor_id="demonstrator",
+                ),
+                TrialSchemaStep(
+                    phase=EventPhase.OUTCOME,
+                    node_id="demo",
+                    actor_id="demonstrator",
+                ),
+                # Social UPDATE step 1: only action observable
+                TrialSchemaStep(
+                    phase=EventPhase.UPDATE,
+                    node_id="demo",
+                    actor_id="demonstrator",
+                    learner_id="subject",
+                    observable_fields=frozenset({"action"}),
+                ),
+                # Social UPDATE step 2: only reward observable
+                TrialSchemaStep(
+                    phase=EventPhase.UPDATE,
+                    node_id="demo_reward",
+                    actor_id="demonstrator",
+                    learner_id="subject",
+                    observable_fields=frozenset({"reward"}),
+                ),
+                TrialSchemaStep(
+                    phase=EventPhase.DECISION,
+                    node_id="main",
+                    actor_id="subject",
+                ),
+                TrialSchemaStep(
+                    phase=EventPhase.OUTCOME,
+                    node_id="main",
+                    actor_id="subject",
+                ),
+                TrialSchemaStep(
+                    phase=EventPhase.UPDATE,
+                    node_id="main",
+                    actor_id="subject",
+                    learner_id="subject",
+                ),
+            ),
+        )
+        with pytest.raises(ValueError, match=r"Missing.*reward"):
+            check_kernel_schema_compatibility(SocialRlSelfRewardDemoRewardKernel(), split_schema)
+
+
+# ---------------------------------------------------------------------------
+# check_spec_schema_compatibility — direct spec-based check
+# ---------------------------------------------------------------------------
+
+
+class TestSpecSchemaCompatibility:
+    """Verify that the spec-based check works identically to the kernel-based one."""
+
+    def test_spec_rejects_social_on_asocial(self) -> None:
+        """Passing a spec directly to check_spec_schema_compatibility works."""
+        spec = SocialRlSelfRewardDemoRewardKernel().spec()
+        with pytest.raises(ValueError, match="requires social information"):
+            check_spec_schema_compatibility(spec, ASOCIAL_BANDIT_SCHEMA)
+
+    def test_spec_accepts_compatible(self) -> None:
+        """Spec-based check passes for compatible combinations."""
+        spec = SocialRlSelfRewardDemoRewardKernel().spec()
+        check_spec_schema_compatibility(spec, SOCIAL_PRE_CHOICE_SCHEMA)
