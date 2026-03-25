@@ -10,6 +10,7 @@ from comp_model.data.schema import EventPhase
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     AsocialRlAsymmetricKernel,
+    SocialRlDemoMixtureKernel,
     SocialRlSelfRewardDemoActionMixtureKernel,
     SocialRlSelfRewardDemoMixtureKernel,
     SocialRlSelfRewardDemoRewardKernel,
@@ -85,6 +86,14 @@ class TestSocialKernelOnAsocialSchema:
                 ASOCIAL_BANDIT_SCHEMA,
             )
 
+    def test_demo_mixture_no_self_reward_on_asocial_raises(self) -> None:
+        """SocialRlDemoMixtureKernel fails on asocial schema."""
+        with pytest.raises(ValueError, match="requires social information"):
+            check_kernel_schema_compatibility(
+                SocialRlDemoMixtureKernel(),
+                ASOCIAL_BANDIT_SCHEMA,
+            )
+
     def test_self_reward_demo_action_mixture_on_asocial_raises(self) -> None:
         """SocialRlSelfRewardDemoActionMixtureKernel fails on asocial schema."""
         with pytest.raises(ValueError, match="requires social information"):
@@ -128,6 +137,19 @@ class TestSocialKernelOnActionOnlySchema:
         with pytest.raises(ValueError, match=r"Missing.*reward"):
             check_kernel_schema_compatibility(SocialRlSelfRewardDemoMixtureKernel(), schema)
 
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+        ],
+        ids=["pre_choice_action_only", "post_outcome_action_only"],
+    )
+    def test_demo_mixture_no_self_reward_on_action_only_raises(self, schema) -> None:
+        """SocialRlDemoMixtureKernel needs reward, action-only lacks it."""
+        with pytest.raises(ValueError, match=r"Missing.*reward"):
+            check_kernel_schema_compatibility(SocialRlDemoMixtureKernel(), schema)
+
 
 # ---------------------------------------------------------------------------
 # Social kernel + full-observation schema — must pass
@@ -154,6 +176,15 @@ class TestSocialKernelOnFullObservationSchema:
     def test_demo_mixture_kernel_on_full_observation_passes(self, schema) -> None:
         """SocialRlSelfRewardDemoMixtureKernel is compatible with full-observation schemas."""
         check_kernel_schema_compatibility(SocialRlSelfRewardDemoMixtureKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
+        [SOCIAL_PRE_CHOICE_SCHEMA, SOCIAL_POST_OUTCOME_SCHEMA],
+        ids=["pre_choice", "post_outcome"],
+    )
+    def test_demo_mixture_no_self_reward_on_full_observation_passes(self, schema) -> None:
+        """SocialRlDemoMixtureKernel is compatible with full-observation schemas."""
+        check_kernel_schema_compatibility(SocialRlDemoMixtureKernel(), schema)
 
 
 # ---------------------------------------------------------------------------

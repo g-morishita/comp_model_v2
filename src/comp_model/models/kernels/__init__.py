@@ -12,6 +12,11 @@ from comp_model.models.kernels.base import (
     ModelKernelSpec,
     ParameterSpec,
 )
+from comp_model.models.kernels.social_rl_demo_mixture import (
+    SocialRlDemoMixtureKernel,
+    SocialRlDemoMixtureParams,
+    SocialRlDemoMixtureState,
+)
 from comp_model.models.kernels.social_rl_self_reward_demo_action_mixture import (
     SocialRlSelfRewardDemoActionMixtureKernel,
     SocialRlSelfRewardDemoActionMixtureParams,
@@ -41,6 +46,9 @@ __all__ = [
     "ParameterSpec",
     "QParams",
     "QState",
+    "SocialRlDemoMixtureKernel",
+    "SocialRlDemoMixtureParams",
+    "SocialRlDemoMixtureState",
     "SocialRlSelfRewardDemoActionMixtureKernel",
     "SocialRlSelfRewardDemoActionMixtureParams",
     "SocialRlSelfRewardDemoActionMixtureState",

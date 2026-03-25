@@ -69,6 +69,11 @@ class TestRequiredSocialFields:
                 id="social_self_reward_demo_mixture",
             ),
             pytest.param(
+                "SocialRlDemoMixtureKernel",
+                frozenset({"action", "reward"}),
+                id="social_demo_mixture",
+            ),
+            pytest.param(
                 "SocialRlSelfRewardDemoActionMixtureKernel",
                 frozenset({"action"}),
                 id="social_self_reward_demo_action_mixture",
@@ -88,6 +93,7 @@ class TestRequiredSocialFields:
         [
             "SocialRlSelfRewardDemoRewardKernel",
             "SocialRlSelfRewardDemoMixtureKernel",
+            "SocialRlDemoMixtureKernel",
             "SocialRlSelfRewardDemoActionMixtureKernel",
         ],
     )
