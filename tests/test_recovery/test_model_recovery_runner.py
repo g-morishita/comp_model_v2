@@ -14,8 +14,8 @@ from comp_model.recovery.model import (
     CandidateModelSpec,
     GeneratingModelSpec,
     ModelRecoveryConfig,
-    confusion_matrix,
-    recovery_rates,
+    compute_confusion_matrix,
+    compute_recovery_rates,
     run_model_recovery,
 )
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
@@ -191,8 +191,8 @@ class TestRunModelRecovery:
         )
 
         result = run_model_recovery(config)
-        matrix = confusion_matrix(result)
-        rates = recovery_rates(result)
+        matrix = compute_confusion_matrix(result)
+        rates = compute_recovery_rates(result)
 
         assert "Q" in matrix
         assert "Q" in matrix["Q"]

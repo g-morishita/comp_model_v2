@@ -21,6 +21,8 @@ Usage
     uv run python example/model_recovery/mle_model_recovery.py
 """
 
+from pathlib import Path
+
 from scipy import stats
 
 from comp_model.environments import StationaryBanditEnvironment
@@ -32,11 +34,15 @@ from comp_model.recovery.model import (
     CandidateModelSpec,
     GeneratingModelSpec,
     ModelRecoveryConfig,
-    confusion_matrix,
-    confusion_matrix_table,
-    recovery_rate_table,
-    recovery_rates,
+    compute_confusion_matrix,
+    compute_recovery_rates,
+    model_recovery_confusion_table,
+    model_recovery_rate_table,
+    plot_confusion_matrix,
+    plot_recovery_rates,
     run_model_recovery,
+    save_confusion_matrix_csv,
+    save_replication_csv,
 )
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
@@ -141,6 +147,8 @@ config = ModelRecoveryConfig(
 # Run
 # ---------------------------------------------------------------------------
 
+OUTPUT_DIR = Path("output/mle_model_recovery")
+
 if __name__ == "__main__":
     print(
         f"Running model recovery: {len(config.generating_models)} generating models x "
@@ -151,12 +159,26 @@ if __name__ == "__main__":
 
     result = run_model_recovery(config)
 
-    model_names = [spec.name for spec in config.generating_models]
-    matrix = confusion_matrix(result)
-    rates = recovery_rates(result)
+    gen_names = [spec.name for spec in config.generating_models]
+    cand_names = [spec.name for spec in config.candidate_models]
+    matrix = compute_confusion_matrix(result)
+    rates = compute_recovery_rates(result)
 
     print("Confusion Matrix (rows = generating model, cols = selected model):")
-    print(confusion_matrix_table(matrix, model_names))
+    print(model_recovery_confusion_table(matrix, gen_names, cand_names))
     print()
     print("Recovery Rates:")
-    print(recovery_rate_table(rates, result))
+    print(model_recovery_rate_table(rates, result))
+
+    # --- CSV export ---
+    save_replication_csv(result, OUTPUT_DIR / "replications.csv")
+    save_confusion_matrix_csv(result, OUTPUT_DIR / "confusion_matrix.csv")
+    print(f"\nCSV saved to {OUTPUT_DIR}/")
+
+    # --- Plots (requires optional 'plot' extra) ---
+    try:
+        plot_confusion_matrix(result, save_path=OUTPUT_DIR / "confusion_matrix.png")
+        plot_recovery_rates(result, save_path=OUTPUT_DIR / "recovery_rates.png")
+        print(f"Plots saved to {OUTPUT_DIR}/")
+    except ImportError:
+        print("Skipping plots (install the 'plot' extra for matplotlib support)")
