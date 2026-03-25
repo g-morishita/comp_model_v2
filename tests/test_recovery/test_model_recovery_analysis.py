@@ -19,7 +19,7 @@ from comp_model.recovery.model.display import (
     model_recovery_confusion_table,
     model_recovery_rate_table,
 )
-from comp_model.recovery.model.runner import ModelRecoveryResult, ReplicationResult
+from comp_model.recovery.model.result import ModelRecoveryResult, ReplicationResult
 
 # ---------------------------------------------------------------------------
 # Helpers

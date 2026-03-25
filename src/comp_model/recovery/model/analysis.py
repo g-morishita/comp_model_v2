@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from comp_model.recovery.model.runner import ModelRecoveryResult
+    from comp_model.recovery.model.result import ModelRecoveryResult
 
 
 def compute_confusion_matrix(result: ModelRecoveryResult) -> dict[str, dict[str, int]]:
