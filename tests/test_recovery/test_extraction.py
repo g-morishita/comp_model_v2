@@ -233,6 +233,44 @@ class TestExtractBayesSubjectRecords:
         np.testing.assert_array_equal(s0_easy[0].posterior_draws, posterior["alpha"][:, 0, 0])
         assert s0_easy[0].true_value == 0.25
 
+    def test_2d_condition_aware_samples(self) -> None:
+        """SUBJECT_BLOCK_CONDITION case: (n_draws, n_conditions) with layout."""
+        from comp_model.models.condition.shared_delta import SharedDeltaLayout
+        from comp_model.models.kernels import AsocialQLearningKernel
+
+        rng = np.random.default_rng(4)
+        n_draws, n_conditions = 80, 2
+        posterior = {
+            "alpha": rng.normal(0.3, 0.01, size=(n_draws, n_conditions)),
+        }
+        result = _make_bayes_result(posterior, HierarchyStructure.SUBJECT_BLOCK_CONDITION)
+        layout = SharedDeltaLayout(
+            kernel_spec=AsocialQLearningKernel.spec(),
+            conditions=("easy", "hard"),
+            baseline_condition="easy",
+        )
+        true_params = {
+            "s0": {"alpha__easy": 0.25, "alpha__hard": 0.20},
+        }
+
+        records = extract_bayes_subject_records(
+            result, ["s0"], ("alpha",), true_params, layout=layout
+        )
+
+        assert len(records) == 2  # 1 subject * 2 conditions
+        easy = [r for r in records if r.condition == "easy"]
+        assert len(easy) == 1
+        assert easy[0].param_name == "alpha"
+        assert easy[0].true_value == 0.25
+        assert easy[0].posterior_draws is not None
+        assert easy[0].posterior_draws.shape == (n_draws,)
+        np.testing.assert_array_equal(easy[0].posterior_draws, posterior["alpha"][:, 0])
+
+        hard = [r for r in records if r.condition == "hard"]
+        assert len(hard) == 1
+        assert hard[0].true_value == 0.20
+        np.testing.assert_array_equal(hard[0].posterior_draws, posterior["alpha"][:, 1])
+
     def test_single_subject_2d(self) -> None:
         """Edge case: 2D samples with only one subject."""
         rng = np.random.default_rng(3)
@@ -267,7 +305,7 @@ class TestExtractPopulationRecords:
         result = _make_bayes_result(posterior)
         true_pop = {"alpha_pop": 0.30}
 
-        records = extract_population_records(result, ("alpha",), true_pop)
+        records = extract_population_records(result, true_pop)
 
         assert len(records) == 1
         assert isinstance(records[0], PopulationRecord)
@@ -288,7 +326,7 @@ class TestExtractPopulationRecords:
         result = _make_bayes_result(posterior)
         true_pop = {"mu_alpha_z": 0.0, "sd_alpha_z": 1.0}
 
-        records = extract_population_records(result, ("alpha",), true_pop)
+        records = extract_population_records(result, true_pop)
 
         assert len(records) == 2
         names = {r.param_name for r in records}
@@ -305,6 +343,38 @@ class TestExtractPopulationRecords:
         result = _make_bayes_result(posterior)
         true_pop: dict[str, float] = {}  # no true values
 
-        records = extract_population_records(result, ("alpha",), true_pop)
+        records = extract_population_records(result, true_pop)
 
         assert len(records) == 0
+
+    def test_condition_aware_keys(self) -> None:
+        """Condition-aware population keys (shared/delta) are extracted."""
+        rng = np.random.default_rng(13)
+        n_draws = 100
+        posterior = {
+            "alpha_shared_pop": rng.normal(0.3, 0.005, size=n_draws),
+            "mu_alpha_shared_z": rng.normal(0.0, 0.1, size=n_draws),
+            "sd_alpha_shared_z": rng.normal(1.0, 0.1, size=n_draws),
+            "mu_alpha_delta_z": rng.normal(0.0, 0.1, size=n_draws),
+            "sd_alpha_delta_z": rng.normal(0.5, 0.1, size=n_draws),
+        }
+        result = _make_bayes_result(posterior)
+        true_pop = {
+            "alpha_shared_pop": 0.30,
+            "mu_alpha_shared_z": 0.0,
+            "sd_alpha_shared_z": 1.0,
+            "mu_alpha_delta_z": 0.0,
+            "sd_alpha_delta_z": 0.5,
+        }
+
+        records = extract_population_records(result, true_pop)
+
+        assert len(records) == 5
+        names = {r.param_name for r in records}
+        assert names == {
+            "alpha_shared_pop",
+            "mu_alpha_shared_z",
+            "sd_alpha_shared_z",
+            "mu_alpha_delta_z",
+            "sd_alpha_delta_z",
+        }

@@ -213,7 +213,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
         # specified with scale="unconstrained" (true values are then constants).
         true_pop.update(get_true_population_params(config.param_dists, config.kernel))
 
-        pop_records = extract_population_records(result, param_names, true_pop)
+        pop_records = extract_population_records(result, true_pop)
 
         return ReplicationResult(
             replication_index=r,

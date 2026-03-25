@@ -124,8 +124,25 @@ def extract_bayes_subject_records(
                         posterior_draws=samples,
                     )
                 )
+            elif samples.ndim == 2 and layout is not None:
+                # Shape: (n_draws, n_conditions) — SUBJECT_BLOCK_CONDITION
+                for c_idx, condition in enumerate(layout.conditions):
+                    cond_draws = samples[:, c_idx]
+                    est = float(np.mean(cond_draws))
+                    true_key = f"{name}__{condition}"
+                    true_val = true_p[true_key]
+                    records.append(
+                        SubjectRecord(
+                            subject_id=sid,
+                            param_name=name,
+                            condition=condition,
+                            true_value=true_val,
+                            estimated_value=est,
+                            posterior_draws=cond_draws,
+                        )
+                    )
             elif samples.ndim == 2:
-                # Shape: (n_draws, n_subjects)
+                # Shape: (n_draws, n_subjects) — STUDY_SUBJECT
                 subject_draws = samples[:, i]
                 est = float(np.mean(subject_draws))
                 true_val = true_p[name]
@@ -175,57 +192,41 @@ def extract_bayes_subject_records(
 
 def extract_population_records(
     result: BayesFitResult,
-    param_names: Sequence[str],
     true_pop: dict[str, float],
 ) -> tuple[PopulationRecord, ...]:
     """Extract population records from a hierarchical Bayes fit.
 
-    Looks for population parameters in the posterior:
-
-    1. Constrained-scale population mean (``{param}_pop``)
-    2. Unconstrained-scale mu / sd (``mu_{param}_z``, ``sd_{param}_z``)
+    Iterates over the keys in *true_pop* and extracts a record for every
+    key that also exists in the posterior samples.  This approach is
+    naming-convention agnostic and works for both simple hierarchies
+    (``alpha_pop``, ``mu_alpha_z``) and condition-aware hierarchies
+    (``alpha_shared_pop``, ``mu_alpha_shared_z``, ``sd_alpha_delta_z``).
 
     Parameters
     ----------
     result
         Bayesian fit result with posterior samples.
-    param_names
-        Subject-level parameter names (e.g. ``["alpha_pos", "beta"]``).
     true_pop
         True population parameter values keyed by the same names that appear
-        in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``).
+        in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``,
+        ``mu_alpha_shared_z``).
 
     Returns
     -------
     tuple[PopulationRecord, ...]
-        One record per population parameter found in the posterior.
+        One record per population parameter found in both *true_pop* and
+        the posterior.
     """
     records: list[PopulationRecord] = []
-    for name in param_names:
-        # Constrained-scale population mean from generated quantities
-        pop_key = f"{name}_pop"
-        if pop_key in result.posterior_samples and pop_key in true_pop:
-            draws = result.posterior_samples[pop_key]
+    for key, true_val in true_pop.items():
+        if key in result.posterior_samples:
+            draws = result.posterior_samples[key]
             records.append(
                 PopulationRecord(
-                    param_name=pop_key,
-                    true_value=true_pop[pop_key],
+                    param_name=key,
+                    true_value=true_val,
                     estimated_value=float(np.mean(draws)),
                     posterior_draws=draws,
                 )
             )
-
-        # Unconstrained-scale population mean and SD
-        for prefix in ("mu", "sd"):
-            key = f"{prefix}_{name}_z"
-            if key in result.posterior_samples and key in true_pop:
-                draws = result.posterior_samples[key]
-                records.append(
-                    PopulationRecord(
-                        param_name=key,
-                        true_value=true_pop[key],
-                        estimated_value=float(np.mean(draws)),
-                        posterior_draws=draws,
-                    )
-                )
     return tuple(records)
