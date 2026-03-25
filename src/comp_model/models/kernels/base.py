@@ -26,7 +26,7 @@ without touching the infrastructure.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
@@ -139,6 +139,14 @@ class ModelKernelSpec:
         agent's choices or outcomes (i.e. it is a social-learning model).
         This tells the simulation engine and inference code to expect and
         provide social fields.
+    required_social_fields
+        The set of demonstrator-outcome fields that the kernel consumes
+        during social UPDATE steps.  Valid entries are ``"action"`` and
+        ``"reward"``.  Only meaningful when ``requires_social`` is
+        ``True``.  Used by compatibility checks to verify that the trial
+        schema exposes enough information for the kernel to learn from.
+        An empty set (the default) means the kernel does not need any
+        social information.
     n_actions
         The number of response options the model expects. If ``None``,
         this is inferred from the data. Override with a fixed integer if
@@ -160,6 +168,7 @@ class ModelKernelSpec:
     model_id: str
     parameter_specs: tuple[ParameterSpec, ...]
     requires_social: bool = False
+    required_social_fields: frozenset[str] = field(default_factory=lambda: frozenset[str]())
     n_actions: int | None = None
     state_reset_policy: Literal["per_block", "continuous"] = "per_block"
     description: str = ""

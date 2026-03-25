@@ -163,6 +163,31 @@ class TrialSchema:
             validate_event_payload(event, trial.trial_index, step_index)
 
     @property
+    def social_observable_fields(self) -> frozenset[str]:
+        """Union of observable fields across all social UPDATE steps for the subject.
+
+        A social UPDATE step is one where ``actor_id != learner_id`` and
+        ``learner_id == "subject"``.  This property collects all field names
+        that the subject can observe from such steps.
+
+        Returns
+        -------
+        frozenset[str]
+            The union of ``observable_fields`` for every social update step
+            directed at the subject.  Empty for purely asocial schemas.
+        """
+
+        fields: set[str] = set()
+        for step in self.steps:
+            if (
+                step.phase == EventPhase.UPDATE
+                and step.actor_id != step.learner_id
+                and step.learner_id == "subject"
+            ):
+                fields.update(step.observable_fields)
+        return frozenset(fields)
+
+    @property
     def decision_step_indices(self) -> tuple[int, ...]:
         """The positions (0-based) in the trial where a choice is made.
 

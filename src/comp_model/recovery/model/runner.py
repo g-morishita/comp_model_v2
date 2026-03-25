@@ -85,6 +85,13 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
 
     _check_schema_consistency(config.task, config.schema)
 
+    from comp_model.data.compatibility import check_kernel_schema_compatibility
+
+    for gen_spec in config.generating_models:
+        check_kernel_schema_compatibility(gen_spec.kernel, config.schema)
+    for cand_spec in config.candidate_models:
+        check_kernel_schema_compatibility(cand_spec.kernel, config.schema)
+
     # ------------------------------------------------------------------
     # Phase 1: simulate all datasets (sequential — env_factory may not pickle)
     # ------------------------------------------------------------------

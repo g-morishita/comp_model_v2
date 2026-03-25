@@ -60,6 +60,10 @@ def fit(
       and select a Stan program for the requested hierarchy.
     """
 
+    from comp_model.data.compatibility import check_kernel_schema_compatibility
+
+    check_kernel_schema_compatibility(kernel, schema)
+
     if config.backend == "mle":
         if not isinstance(data, SubjectData):
             raise ValueError("MLE currently supports single-subject fitting only")

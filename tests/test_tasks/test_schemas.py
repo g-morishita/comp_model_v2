@@ -5,8 +5,12 @@ import pytest
 from comp_model.data.schema import Event, EventPhase, Trial
 from comp_model.tasks.schemas import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+    SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
     SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
     SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
@@ -207,3 +211,51 @@ def test_social_update_without_observable_fields_raises() -> None:
                 TrialSchemaStep(EventPhase.UPDATE, "main"),
             ),
         )
+
+
+# ---------------------------------------------------------------------------
+# social_observable_fields property
+# ---------------------------------------------------------------------------
+
+
+class TestSocialObservableFields:
+    """Tests for TrialSchema.social_observable_fields property."""
+
+    def test_asocial_schema_has_empty_fields(self) -> None:
+        """Asocial schema has no social observable fields."""
+        assert ASOCIAL_BANDIT_SCHEMA.social_observable_fields == frozenset()
+
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            SOCIAL_PRE_CHOICE_SCHEMA,
+            SOCIAL_POST_OUTCOME_SCHEMA,
+            SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
+            SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
+            SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
+            SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
+        ],
+        ids=[
+            "pre_choice",
+            "post_outcome",
+            "pre_choice_no_self_outcome",
+            "post_outcome_no_self_outcome",
+            "pre_choice_demo_learns",
+            "post_outcome_demo_learns",
+        ],
+    )
+    def test_full_observation_schemas_expose_action_and_reward(self, schema: TrialSchema) -> None:
+        """Schemas with full observation expose both action and reward."""
+        assert schema.social_observable_fields == frozenset({"action", "reward"})
+
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+        ],
+        ids=["pre_choice_action_only", "post_outcome_action_only"],
+    )
+    def test_action_only_schemas_expose_action_only(self, schema: TrialSchema) -> None:
+        """Action-only schemas expose only the action field."""
+        assert schema.social_observable_fields == frozenset({"action"})
