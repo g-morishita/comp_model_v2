@@ -14,10 +14,10 @@ from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.kernels import AsocialQLearningKernel
 from comp_model.recovery import (
     ParamDist,
-    RecoveryStudyConfig,
-    compute_recovery_metrics,
-    recovery_table,
-    run_recovery,
+    ParameterRecoveryConfig,
+    compute_parameter_recovery_metrics,
+    parameter_recovery_table,
+    run_parameter_recovery,
 )
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
@@ -41,7 +41,7 @@ def main() -> None:
     kernel = AsocialQLearningKernel()
     adapter = AsocialQLearningStanAdapter()
 
-    config = RecoveryStudyConfig(
+    config = ParameterRecoveryConfig(
         n_replications=10,
         n_subjects=20,
         param_dists=(
@@ -64,10 +64,10 @@ def main() -> None:
     )
 
     print(f"Running {config.n_replications} reps x {config.n_subjects} subjects...")
-    result = run_recovery(config)
-    metrics = compute_recovery_metrics(result)
+    result = run_parameter_recovery(config)
+    metrics = compute_parameter_recovery_metrics(result)
     print("\nRecovery Metrics (per-subject Stan):")
-    print(recovery_table(metrics))
+    print(parameter_recovery_table(metrics))
     print("\nDone.")
 
 

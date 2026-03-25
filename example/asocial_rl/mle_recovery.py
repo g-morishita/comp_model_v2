@@ -17,10 +17,10 @@ from comp_model.inference.mle.optimize import MleOptimizerConfig
 from comp_model.models.kernels import AsocialQLearningKernel
 from comp_model.recovery import (
     ParamDist,
-    RecoveryStudyConfig,
-    compute_recovery_metrics,
-    recovery_table,
-    run_recovery,
+    ParameterRecoveryConfig,
+    compute_parameter_recovery_metrics,
+    parameter_recovery_table,
+    run_parameter_recovery,
 )
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
@@ -45,7 +45,7 @@ def main() -> None:
     # -- 2. Configure recovery study -------------------------------------------
     kernel = AsocialQLearningKernel()
 
-    config = RecoveryStudyConfig(
+    config = ParameterRecoveryConfig(
         n_replications=1,
         n_subjects=100,
         param_dists=(
@@ -68,12 +68,12 @@ def main() -> None:
 
     # -- 3. Run recovery -------------------------------------------------------
     print(f"Running {config.n_replications} replications x {config.n_subjects} subjects...")
-    result = run_recovery(config)
+    result = run_parameter_recovery(config)
 
     # -- 4. Compute and display metrics ----------------------------------------
-    metrics = compute_recovery_metrics(result, transforms={"beta": np.log})
+    metrics = compute_parameter_recovery_metrics(result, transforms={"beta": np.log})
     print("\nRecovery Metrics:")
-    print(recovery_table(metrics))
+    print(parameter_recovery_table(metrics))
 
     print("\nDone.")
 

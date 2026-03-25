@@ -28,11 +28,11 @@ from comp_model.models.kernels import (
 )
 from comp_model.recovery import (
     ParamDist,
-    RecoveryStudyConfig,
-    compute_recovery_metrics,
-    recovery_summary,
-    recovery_table,
-    run_recovery,
+    ParameterRecoveryConfig,
+    compute_parameter_recovery_metrics,
+    parameter_recovery_summary,
+    parameter_recovery_table,
+    run_parameter_recovery,
 )
 from comp_model.tasks import SOCIAL_PRE_CHOICE_SCHEMA, BlockSpec, TaskSpec
 
@@ -82,8 +82,8 @@ def main() -> None:
             ),
         )
 
-        config = RecoveryStudyConfig(
-            n_replications=1,
+        config = ParameterRecoveryConfig(
+            n_replications=10,
             n_subjects=N_SUBJECTS,
             param_dists=PARAM_DISTS,
             task=task,
@@ -97,19 +97,20 @@ def main() -> None:
             inference_config=STAN_CONFIG,
             adapter=adapter,
             simulation_base_seed=42,
+            max_workers=2,
         )
 
         print(f"\n{'=' * 60}")
         print(f"Condition: {condition}  (demonstrator beta={demo_params.beta})")
         print(f"Running {config.n_replications} rep x {config.n_subjects} subjects...")
-        result = run_recovery(config)
+        result = run_parameter_recovery(config)
 
         print("\nPer-subject true vs posterior mean:")
-        print(recovery_summary(result))
+        print(parameter_recovery_summary(result))
 
-        metrics = compute_recovery_metrics(result)
+        metrics = compute_parameter_recovery_metrics(result)
         print("\nRecovery metrics:")
-        print(recovery_table(metrics))
+        print(parameter_recovery_table(metrics))
 
     print("\nDone.")
 

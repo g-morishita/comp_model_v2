@@ -38,7 +38,7 @@ class SubjectEstimates:
 
 
 @dataclass(frozen=True, slots=True)
-class ReplicationEstimates:
+class ReplicationResult:
     """All estimates from one simulate-fit cycle.
 
     Attributes

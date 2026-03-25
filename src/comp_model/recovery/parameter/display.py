@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from comp_model.recovery.parameter.metrics import RecoveryMetrics
-    from comp_model.recovery.parameter.runner import RecoveryResult
+    from comp_model.recovery.parameter.metrics import ParameterRecoveryMetricsTable
+    from comp_model.recovery.parameter.runner import ParameterRecoveryResult
 
 
-def recovery_table(metrics: RecoveryMetrics) -> str:
+def parameter_recovery_table(metrics: ParameterRecoveryMetricsTable) -> str:
     """Format recovery metrics as a human-readable table.
 
     Parameters
@@ -45,7 +45,7 @@ def recovery_table(metrics: RecoveryMetrics) -> str:
     return "\n".join(lines)
 
 
-def recovery_summary(result: RecoveryResult) -> str:
+def parameter_recovery_summary(result: ParameterRecoveryResult) -> str:
     """Format per-subject true vs estimated values across replications.
 
     Parameters

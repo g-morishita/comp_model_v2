@@ -11,7 +11,7 @@ import numpy as np
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from comp_model.recovery.parameter.runner import RecoveryResult
+    from comp_model.recovery.parameter.runner import ParameterRecoveryResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +49,7 @@ class ParameterRecoveryMetrics:
 
 
 @dataclass(frozen=True, slots=True)
-class RecoveryMetrics:
+class ParameterRecoveryMetricsTable:
     """Aggregated metrics across all parameters.
 
     Attributes
@@ -61,10 +61,10 @@ class RecoveryMetrics:
     per_parameter: dict[str, ParameterRecoveryMetrics]
 
 
-def compute_recovery_metrics(
-    result: RecoveryResult,
+def compute_parameter_recovery_metrics(
+    result: ParameterRecoveryResult,
     transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
-) -> RecoveryMetrics:
+) -> ParameterRecoveryMetricsTable:
     """Compute recovery metrics from a completed study.
 
     Parameters
@@ -78,7 +78,7 @@ def compute_recovery_metrics(
 
     Returns
     -------
-    RecoveryMetrics
+    ParameterRecoveryMetricsTable
         Per-parameter recovery metrics pooled across replications.
     """
 
@@ -154,7 +154,7 @@ def compute_recovery_metrics(
             n_observations=n,
         )
 
-    return RecoveryMetrics(per_parameter=metrics)
+    return ParameterRecoveryMetricsTable(per_parameter=metrics)
 
 
 def _compute_coverage(

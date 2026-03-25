@@ -75,7 +75,7 @@ class ParamDist:
 
 
 @dataclass(frozen=True, slots=True)
-class RecoveryStudyConfig:
+class ParameterRecoveryConfig:
     """Full specification for a parameter recovery study.
 
     Attributes
@@ -142,7 +142,7 @@ def get_true_population_params(
     Parameters
     ----------
     param_dists
-        Population distributions from ``RecoveryStudyConfig``.
+        Population distributions from ``ParameterRecoveryConfig``.
     kernel
         Model kernel (used to validate parameter names).
 

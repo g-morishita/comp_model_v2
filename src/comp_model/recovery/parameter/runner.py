@@ -15,7 +15,7 @@ from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
 from comp_model.recovery.parameter.config import get_true_population_params, sample_true_params
 from comp_model.recovery.parameter.extraction import (
-    ReplicationEstimates,
+    ReplicationResult,
     extract_bayes_estimates,
     extract_mle_estimates,
     extract_population_estimates,
@@ -24,11 +24,11 @@ from comp_model.runtime import SimulationConfig, simulate_subject
 
 if TYPE_CHECKING:
     from comp_model.inference.mle.optimize import MleFitResult
-    from comp_model.recovery.parameter.config import RecoveryStudyConfig
+    from comp_model.recovery.parameter.config import ParameterRecoveryConfig
 
 
 @dataclass(frozen=True, slots=True)
-class RecoveryResult:
+class ParameterRecoveryResult:
     """Complete results from a recovery study.
 
     Attributes
@@ -39,11 +39,11 @@ class RecoveryResult:
         Estimates from each replication.
     """
 
-    config: RecoveryStudyConfig
-    replications: tuple[ReplicationEstimates, ...]
+    config: ParameterRecoveryConfig
+    replications: tuple[ReplicationResult, ...]
 
 
-def run_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
+def run_parameter_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResult:
     """Run the full parameter recovery pipeline.
 
     Parameters
@@ -53,7 +53,7 @@ def run_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
     Returns
     -------
-    RecoveryResult
+    ParameterRecoveryResult
         Results from all replications.
     """
 
@@ -62,7 +62,7 @@ def run_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
     return _run_mle_recovery(config)
 
 
-def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
+def _run_mle_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResult:
     """Run recovery with per-subject maximum-likelihood fits.
 
     Parameters
@@ -72,11 +72,11 @@ def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
     Returns
     -------
-    RecoveryResult
+    ParameterRecoveryResult
         Recovery outputs for every replication.
     """
 
-    replications: list[ReplicationEstimates] = []
+    replications: list[ReplicationResult] = []
     total_fits = config.n_replications * config.n_subjects
 
     max_workers = config.max_workers
@@ -124,17 +124,17 @@ def _run_mle_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
             estimates = extract_mle_estimates(results, config.layout)
             replications.append(
-                ReplicationEstimates(
+                ReplicationResult(
                     replication_index=r,
                     true_params=true_table,
                     subject_estimates=estimates,
                 )
             )
 
-    return RecoveryResult(config=config, replications=tuple(replications))
+    return ParameterRecoveryResult(config=config, replications=tuple(replications))
 
 
-def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
+def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResult:
     """Run recovery with hierarchical Stan fits.
 
     Parameters
@@ -144,7 +144,7 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
     Returns
     -------
-    RecoveryResult
+    ParameterRecoveryResult
         Recovery outputs for every replication.
     """
 
@@ -173,7 +173,7 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
     def _fit_one(
         item: tuple[int, dict[str, dict[str, float]], Dataset],
-    ) -> ReplicationEstimates:
+    ) -> ReplicationResult:
         """Fit one simulated replication with the Stan backend.
 
         Parameters
@@ -184,7 +184,7 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
 
         Returns
         -------
-        ReplicationEstimates
+        ReplicationResult
             Extracted posterior summaries for the replication.
 
         Raises
@@ -225,7 +225,7 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
         # specified with scale="unconstrained" (true values are then constants).
         true_pop.update(get_true_population_params(config.param_dists, config.kernel))
 
-        return ReplicationEstimates(
+        return ReplicationResult(
             replication_index=r,
             true_params=true_table,
             subject_estimates=estimates,
@@ -240,7 +240,7 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
                 future_to_idx = {
                     executor.submit(_fit_one, item): i for i, item in enumerate(simulated)
                 }
-                results_by_idx: dict[int, ReplicationEstimates] = {}
+                results_by_idx: dict[int, ReplicationResult] = {}
                 for future in as_completed(future_to_idx):
                     idx = future_to_idx[future]
                     results_by_idx[idx] = future.result()
@@ -252,11 +252,11 @@ def _run_stan_recovery(config: RecoveryStudyConfig) -> RecoveryResult:
                 replications.append(_fit_one(item))
                 pbar.update(1)
 
-    return RecoveryResult(config=config, replications=tuple(replications))
+    return ParameterRecoveryResult(config=config, replications=tuple(replications))
 
 
 def _simulate_dataset(
-    config: RecoveryStudyConfig,
+    config: ParameterRecoveryConfig,
     params_per_subject: dict[str, Any],
     seed: int,
 ) -> Dataset:
@@ -282,7 +282,7 @@ def _simulate_dataset(
 
 
 def _simulate_simple(
-    config: RecoveryStudyConfig,
+    config: ParameterRecoveryConfig,
     params_per_subject: dict[str, Any],
     seed: int,
 ) -> Dataset:
@@ -315,7 +315,7 @@ def _simulate_simple(
 
 
 def _simulate_condition_aware(
-    config: RecoveryStudyConfig,
+    config: ParameterRecoveryConfig,
     params_per_subject: dict[str, Any],
     seed: int,
 ) -> Dataset:
