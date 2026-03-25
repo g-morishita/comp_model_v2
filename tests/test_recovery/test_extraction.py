@@ -314,8 +314,8 @@ class TestExtractPopulationRecords:
         assert records[0].estimated_value == pytest.approx(float(np.mean(posterior["alpha_pop"])))
         assert records[0].posterior_draws is not None
 
-    def test_unconstrained_keys(self) -> None:
-        """Unconstrained-scale mu/sd keys are extracted."""
+    def test_unconstrained_keys_are_skipped(self) -> None:
+        """Unconstrained-scale mu/sd keys are not reported."""
         rng = np.random.default_rng(11)
         n_draws = 100
         posterior = {
@@ -328,9 +328,7 @@ class TestExtractPopulationRecords:
 
         records = extract_population_records(result, true_pop)
 
-        assert len(records) == 2
-        names = {r.param_name for r in records}
-        assert names == {"mu_alpha_z", "sd_alpha_z"}
+        assert len(records) == 0
 
     def test_missing_true_pop_skipped(self) -> None:
         """Keys present in posterior but missing from true_pop are skipped."""
@@ -347,34 +345,53 @@ class TestExtractPopulationRecords:
 
         assert len(records) == 0
 
-    def test_condition_aware_keys(self) -> None:
-        """Condition-aware population keys (shared/delta) are extracted."""
+    def test_condition_aware_keys_only_keep_constrained_scale(self) -> None:
+        """Condition-aware population extraction keeps only constrained means."""
         rng = np.random.default_rng(13)
         n_draws = 100
         posterior = {
             "alpha_shared_pop": rng.normal(0.3, 0.005, size=n_draws),
             "mu_alpha_shared_z": rng.normal(0.0, 0.1, size=n_draws),
             "sd_alpha_shared_z": rng.normal(1.0, 0.1, size=n_draws),
-            "mu_alpha_delta_z": rng.normal(0.0, 0.1, size=n_draws),
-            "sd_alpha_delta_z": rng.normal(0.5, 0.1, size=n_draws),
         }
         result = _make_bayes_result(posterior)
         true_pop = {
             "alpha_shared_pop": 0.30,
             "mu_alpha_shared_z": 0.0,
             "sd_alpha_shared_z": 1.0,
-            "mu_alpha_delta_z": 0.0,
-            "sd_alpha_delta_z": 0.5,
         }
 
         records = extract_population_records(result, true_pop)
 
-        assert len(records) == 5
+        assert len(records) == 1
         names = {r.param_name for r in records}
-        assert names == {
-            "alpha_shared_pop",
-            "mu_alpha_shared_z",
-            "sd_alpha_shared_z",
-            "mu_alpha_delta_z",
-            "sd_alpha_delta_z",
+        assert names == {"alpha_shared_pop"}
+
+    def test_condition_aware_vector_delta_keys_are_skipped(self) -> None:
+        """Vector-valued unconstrained delta keys are not reported."""
+        from comp_model.models.condition.shared_delta import SharedDeltaLayout
+        from comp_model.models.kernels import AsocialQLearningKernel
+
+        rng = np.random.default_rng(14)
+        n_draws = 100
+        posterior = {
+            "mu_alpha_delta_z": rng.normal(0.0, 0.1, size=(n_draws, 2)),
+            "sd_alpha_delta_z": rng.normal(0.5, 0.1, size=(n_draws, 2)),
         }
+        result = _make_bayes_result(
+            posterior,
+            HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
+        )
+        layout = SharedDeltaLayout(
+            kernel_spec=AsocialQLearningKernel.spec(),
+            conditions=("baseline", "social", "transfer"),
+            baseline_condition="baseline",
+        )
+        true_pop = {
+            "mu_alpha_delta_z": 0.0,
+            "sd_alpha_delta_z": 0.5,
+        }
+
+        records = extract_population_records(result, true_pop, layout=layout)
+
+        assert records == ()
