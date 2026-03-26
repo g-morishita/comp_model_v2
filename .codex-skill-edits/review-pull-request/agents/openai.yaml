@@ -1,0 +1,6 @@
+interface:
+  display_name: "Review Pull Request"
+  short_description: "Review PRs with prioritized findings."
+  default_prompt: "Use $review-pull-request to inspect this PR line by line, run a quick reproducible check, rank findings by importance, and comment on the PR directly if needed."
+policy:
+  allow_implicit_invocation: true
