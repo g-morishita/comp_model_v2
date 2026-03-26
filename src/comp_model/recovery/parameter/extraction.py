@@ -203,9 +203,11 @@ def extract_population_records(
     and unconstrained-scale population parameters (``mu_alpha_z``,
     ``sd_alpha_z``, ``mu_alpha_shared_z``, ``mu_alpha_delta_z``, etc.).
 
-    For vector-valued posteriors (delta parameters with one element per
-    non-baseline condition), the corresponding ``true_pop`` entry may be a
-    ``list[float]`` with one true value per condition.
+    For vector-valued posteriors, the corresponding ``true_pop`` entry may be
+    a ``list[float]`` with one true value per condition. With a
+    condition-aware layout, vectors may span either all conditions
+    (e.g. constrained ``alpha_pop``) or only the non-baseline conditions
+    (e.g. latent ``mu_alpha_delta_z``).
 
     Parameters
     ----------
@@ -216,11 +218,10 @@ def extract_population_records(
         in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``,
         ``alpha_shared_pop``, ``mu_alpha_shared_z``).  Values may be
         ``float`` for scalar posteriors or ``list[float]`` for
-        condition-indexed delta posteriors.
+        condition-indexed population posteriors.
     layout
         Optional condition-aware layout used to split vector-valued
-        population delta parameters into one record per non-baseline
-        condition.
+        population parameters into one record per condition.
 
     Returns
     -------
@@ -235,8 +236,10 @@ def extract_population_records(
         condition-aware layout is available to interpret it.
     """
     records: list[PopulationRecord] = []
+    all_conditions: tuple[str, ...] = ()
     nonbaseline_conditions: tuple[str, ...] = ()
     if layout is not None:
+        all_conditions = layout.conditions
         nonbaseline_conditions = tuple(
             condition for condition in layout.conditions if condition != layout.baseline_condition
         )
@@ -275,13 +278,22 @@ def extract_population_records(
             continue
 
         if draws.ndim == 2 and layout is not None:
-            if draws.shape[1] != len(nonbaseline_conditions):
+            if draws.shape[1] == len(all_conditions):
+                conditions = all_conditions
+            elif draws.shape[1] == len(nonbaseline_conditions):
+                conditions = nonbaseline_conditions
+            else:
                 raise ValueError(
                     f"Population posterior {key!r} has shape {draws.shape}, "
-                    f"but layout expects {len(nonbaseline_conditions)} "
-                    "non-baseline conditions"
+                    f"but layout expects either {len(all_conditions)} all conditions "
+                    f"or {len(nonbaseline_conditions)} non-baseline conditions"
                 )
-            for c_idx, condition in enumerate(nonbaseline_conditions):
+            if isinstance(true_val, list) and len(true_val) != len(conditions):
+                raise ValueError(
+                    f"Population truth {key!r} has {len(true_val)} values, "
+                    f"but posterior {key!r} splits into {len(conditions)} conditions"
+                )
+            for c_idx, condition in enumerate(conditions):
                 condition_draws = draws[:, c_idx]
                 true_val_c = true_val[c_idx] if isinstance(true_val, list) else float(true_val)
                 records.append(

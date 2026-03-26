@@ -404,3 +404,36 @@ class TestExtractPopulationRecords:
             ("sd_alpha_delta_z", "social"),
             ("sd_alpha_delta_z", "transfer"),
         }
+
+    def test_condition_aware_vector_population_keys_are_split_per_condition(self) -> None:
+        """Constrained population vectors should split across all conditions."""
+        from comp_model.models.condition.shared_delta import SharedDeltaLayout
+        from comp_model.models.kernels import AsocialQLearningKernel
+
+        rng = np.random.default_rng(15)
+        n_draws = 100
+        posterior = {
+            "alpha_pop": rng.normal(0.0, 0.1, size=(n_draws, 3)),
+        }
+        result = _make_bayes_result(
+            posterior,
+            HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
+        )
+        layout = SharedDeltaLayout(
+            kernel_spec=AsocialQLearningKernel.spec(),
+            conditions=("baseline", "social", "transfer"),
+            baseline_condition="baseline",
+        )
+        true_pop: dict[str, float | list[float]] = {
+            "alpha_pop": [0.2, 0.4, 0.6],
+        }
+
+        records = extract_population_records(result, true_pop, layout=layout)
+
+        assert len(records) == 3
+        record_keys = {(r.param_name, r.condition) for r in records}
+        assert record_keys == {
+            ("alpha_pop", "baseline"),
+            ("alpha_pop", "social"),
+            ("alpha_pop", "transfer"),
+        }

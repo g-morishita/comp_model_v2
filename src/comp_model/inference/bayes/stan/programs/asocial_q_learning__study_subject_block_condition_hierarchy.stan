@@ -136,6 +136,10 @@ model {
 }
 generated quantities {
   vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for LOO-CV
+  vector<lower=0,upper=1>[C] alpha_pop;   // group-mean alpha for every condition (constrained)
+  vector<lower=0>[C] beta_pop;            // group-mean beta for every condition (constrained)
+  real alpha_shared_pop;                  // group-mean baseline alpha on constrained scale
+  real beta_shared_pop;                   // group-mean baseline beta on constrained scale
   {
     array[N] vector[A] Q;
     for (n in 1:N) Q[n] = rep_vector(q_init, A);
@@ -165,7 +169,22 @@ generated quantities {
     }
   }
 
+  {
+    int d_idx = 0;
+    for (c in 1:C) {
+      real az = mu_alpha_shared_z;
+      real bz = mu_beta_shared_z;
+      if (c != baseline_cond) {
+        d_idx += 1;
+        az += mu_alpha_delta_z[d_idx];
+        bz += mu_beta_delta_z[d_idx];
+      }
+      alpha_pop[c] = inv_logit(az);
+      beta_pop[c] = log1p_exp(bz);
+    }
+  }
+
   // Population-level constrained parameters (baseline condition)
-  real alpha_shared_pop = inv_logit(mu_alpha_shared_z); // group-mean baseline alpha on constrained scale
-  real beta_shared_pop = log1p_exp(mu_beta_shared_z);   // group-mean baseline beta on constrained scale
+  alpha_shared_pop = alpha_pop[baseline_cond];
+  beta_shared_pop = beta_pop[baseline_cond];
 }

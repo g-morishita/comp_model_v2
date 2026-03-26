@@ -204,7 +204,7 @@ def compute_population_metrics(
     result: ParameterRecoveryResult,
     transforms: dict[str, Callable[[np.ndarray], np.ndarray]] | None = None,
 ) -> ParameterRecoveryMetricsTable:
-    """Compute population-level recovery metrics from a completed study.
+    """Compute population recovery metrics from a study.
 
     Parameters
     ----------
@@ -217,7 +217,9 @@ def compute_population_metrics(
     Returns
     -------
     ParameterRecoveryMetricsTable
-        Per-parameter population-level recovery metrics pooled across replications.
+        Per-parameter population recovery metrics pooled across replications.
+        Recovery runners are expected to populate this level with the
+        constrained-scale population summaries intended for reporting.
     """
     pairs, coverage_data = _collect_pairs(result, "population")
     return _build_metrics_table(pairs, coverage_data, transforms)
@@ -241,7 +243,9 @@ def compute_parameter_recovery_metrics(
     Returns
     -------
     ParameterRecoveryMetricsTable
-        Per-parameter recovery metrics pooled across replications.
+        Per-parameter recovery metrics pooled across replications. Subject-
+        level metrics are always on the constrained scale. Population-level
+        metrics use the population records supplied by the recovery runner.
     """
     pairs, coverage_data = _collect_pairs(result, "all")
     return _build_metrics_table(pairs, coverage_data, transforms)

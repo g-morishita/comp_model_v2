@@ -156,6 +156,12 @@ model {
 }
 generated quantities {
   vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for LOO-CV
+  vector<lower=0,upper=1>[C] alpha_pos_pop; // group-mean alpha_pos for every condition (constrained)
+  vector<lower=0,upper=1>[C] alpha_neg_pop; // group-mean alpha_neg for every condition (constrained)
+  vector<lower=0>[C] beta_pop;              // group-mean beta for every condition (constrained)
+  real alpha_pos_shared_pop;                // group-mean baseline alpha_pos (constrained)
+  real alpha_neg_shared_pop;                // group-mean baseline alpha_neg (constrained)
+  real beta_shared_pop;                     // group-mean baseline beta (constrained)
   {
     array[N] vector[A] Q;
     for (n in 1:N) Q[n] = rep_vector(q_init, A);
@@ -186,7 +192,25 @@ generated quantities {
     }
   }
 
-  real alpha_pos_shared_pop = inv_logit(mu_alpha_pos_shared_z); // group-mean baseline alpha_pos (constrained)
-  real alpha_neg_shared_pop = inv_logit(mu_alpha_neg_shared_z); // group-mean baseline alpha_neg (constrained)
-  real beta_shared_pop = log1p_exp(mu_beta_shared_z);           // group-mean baseline beta (constrained)
+  {
+    int d_idx = 0;
+    for (c in 1:C) {
+      real apz = mu_alpha_pos_shared_z;
+      real anz = mu_alpha_neg_shared_z;
+      real bz = mu_beta_shared_z;
+      if (c != baseline_cond) {
+        d_idx += 1;
+        apz += mu_alpha_pos_delta_z[d_idx];
+        anz += mu_alpha_neg_delta_z[d_idx];
+        bz += mu_beta_delta_z[d_idx];
+      }
+      alpha_pos_pop[c] = inv_logit(apz);
+      alpha_neg_pop[c] = inv_logit(anz);
+      beta_pop[c] = log1p_exp(bz);
+    }
+  }
+
+  alpha_pos_shared_pop = alpha_pos_pop[baseline_cond];
+  alpha_neg_shared_pop = alpha_neg_pop[baseline_cond];
+  beta_shared_pop = beta_pop[baseline_cond];
 }
