@@ -1,14 +1,15 @@
 """Parameter-level recovery analysis utilities."""
 
 from comp_model.recovery.parameter.config import (
-    ParamDist,
+    FlatParamDist,
+    HierarchicalParamDist,
     ParameterRecoveryConfig,
-    get_true_population_params,
     sample_true_params,
 )
 from comp_model.recovery.parameter.display import (
     parameter_recovery_summary,
     parameter_recovery_table,
+    parameter_recovery_tables,
 )
 from comp_model.recovery.parameter.extraction import (
     extract_bayes_subject_records,
@@ -20,6 +21,8 @@ from comp_model.recovery.parameter.metrics import (
     ParameterRecoveryMetrics,
     ParameterRecoveryMetricsTable,
     compute_parameter_recovery_metrics,
+    compute_population_metrics,
+    compute_subject_metrics,
 )
 from comp_model.recovery.parameter.plotting import (
     plot_coverage,
@@ -37,7 +40,8 @@ from comp_model.recovery.parameter.result import (
 from comp_model.recovery.parameter.runner import run_parameter_recovery
 
 __all__ = [
-    "ParamDist",
+    "FlatParamDist",
+    "HierarchicalParamDist",
     "ParameterRecoveryConfig",
     "ParameterRecoveryMetrics",
     "ParameterRecoveryMetricsTable",
@@ -48,12 +52,14 @@ __all__ = [
     "SubjectLevelResult",
     "SubjectRecord",
     "compute_parameter_recovery_metrics",
+    "compute_population_metrics",
+    "compute_subject_metrics",
     "extract_bayes_subject_records",
     "extract_mle_subject_records",
     "extract_population_records",
-    "get_true_population_params",
     "parameter_recovery_summary",
     "parameter_recovery_table",
+    "parameter_recovery_tables",
     "plot_coverage",
     "plot_population_scatter",
     "plot_subject_scatter",

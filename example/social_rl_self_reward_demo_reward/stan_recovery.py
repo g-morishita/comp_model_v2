@@ -19,7 +19,7 @@ from comp_model.models.kernels import (
     SocialRlSelfRewardDemoRewardKernel,
 )
 from comp_model.recovery import (
-    ParamDist,
+    HierarchicalParamDist,
     ParameterRecoveryConfig,
     compute_parameter_recovery_metrics,
     parameter_recovery_table,
@@ -51,9 +51,21 @@ def main() -> None:
         n_replications=10,
         n_subjects=20,
         param_dists=(
-            ParamDist("alpha_self", stats.norm(-0.847, 0.5), scale="unconstrained"),
-            ParamDist("alpha_other", stats.norm(-0.847, 0.5), scale="unconstrained"),
-            ParamDist("beta", stats.norm(1.687, 0.5), scale="unconstrained"),
+            HierarchicalParamDist(
+                "alpha_self",
+                mu_prior=stats.norm(0, 1),
+                sd_prior=stats.halfnorm(0, 1),
+            ),
+            HierarchicalParamDist(
+                "alpha_other",
+                mu_prior=stats.norm(0, 1),
+                sd_prior=stats.halfnorm(0, 1),
+            ),
+            HierarchicalParamDist(
+                "beta",
+                mu_prior=stats.norm(0, 1),
+                sd_prior=stats.halfnorm(0, 1),
+            ),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(

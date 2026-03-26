@@ -14,7 +14,7 @@ from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter, StanFit
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.kernels import AsocialQLearningKernel
 from comp_model.recovery import (
-    ParamDist,
+    HierarchicalParamDist,
     ParameterRecoveryConfig,
     compute_parameter_recovery_metrics,
     parameter_recovery_table,
@@ -46,8 +46,16 @@ def main() -> None:
         n_replications=10,
         n_subjects=20,
         param_dists=(
-            ParamDist("alpha", stats.uniform(0.0, 0.1), scale="constrained"),
-            ParamDist("beta", stats.uniform(0.0, 30.0), scale="constrained"),
+            HierarchicalParamDist(
+                "alpha",
+                mu_prior=stats.norm(-2.2, 0.4),
+                sd_prior=stats.halfnorm(scale=0.4),
+            ),
+            HierarchicalParamDist(
+                "beta",
+                mu_prior=stats.norm(1.5, 0.4),
+                sd_prior=stats.halfnorm(scale=0.5),
+            ),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(

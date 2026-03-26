@@ -24,7 +24,7 @@ from comp_model.inference.bayes.stan import (
 )
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.kernels import AsocialQLearningKernel, AsocialRlAsymmetricKernel
-from comp_model.recovery import ParamDist
+from comp_model.recovery import FlatParamDist
 from comp_model.recovery.model import (
     CandidateModelSpec,
     GeneratingModelSpec,
@@ -84,17 +84,17 @@ generating_models = (
         name="Symmetric",
         kernel=AsocialQLearningKernel(),
         param_dists=(
-            ParamDist("alpha", stats.uniform(0.1, 0.6)),  # alpha in [0.1, 0.7]
-            ParamDist("beta", stats.uniform(1.0, 9.0)),
+            FlatParamDist("alpha", stats.uniform(0.1, 0.6)),  # alpha in [0.1, 0.7]
+            FlatParamDist("beta", stats.uniform(1.0, 9.0)),
         ),
     ),
     GeneratingModelSpec(
         name="Asymmetric",
         kernel=AsocialRlAsymmetricKernel(),
         param_dists=(
-            ParamDist("alpha_pos", stats.uniform(0.5, 0.4)),  # alpha_pos in [0.5, 0.9]
-            ParamDist("alpha_neg", stats.uniform(0.05, 0.25)),  # alpha_neg in [0.05, 0.3]
-            ParamDist("beta", stats.uniform(1.0, 9.0)),
+            FlatParamDist("alpha_pos", stats.uniform(0.5, 0.4)),  # alpha_pos in [0.5, 0.9]
+            FlatParamDist("alpha_neg", stats.uniform(0.05, 0.25)),  # alpha_neg in [0.05, 0.3]
+            FlatParamDist("beta", stats.uniform(1.0, 9.0)),
         ),
     ),
 )

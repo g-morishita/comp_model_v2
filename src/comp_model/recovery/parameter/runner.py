@@ -61,8 +61,12 @@ def _build_true_population_values(
     config: ParameterRecoveryConfig,
     true_table: dict[str, dict[str, float]],
     param_names: tuple[str, ...],
-) -> dict[str, float]:
-    """Build constrained-scale population truths for recovery summaries.
+    pop_params: dict[str, float],
+) -> dict[str, float | list[float]]:
+    """Build true population values for recovery summaries.
+
+    Combines constrained-scale population means (computed from subject
+    values) with unconstrained-scale mu/sd (from hierarchical sampling).
 
     Parameters
     ----------
@@ -72,32 +76,35 @@ def _build_true_population_values(
         Ground-truth constrained subject parameters keyed by subject id.
     param_names
         Subject-level parameter names from the fitted kernel.
+    pop_params
+        Sampled population parameters from hierarchical sampling, keyed by
+        Stan naming convention (e.g. ``mu_alpha_z``, ``sd_alpha_z``).
 
     Returns
     -------
-    dict[str, float]
-        True constrained-scale population values keyed to the constrained
-        population outputs emitted by Stan.
-
-    Notes
-    -----
-    Population-level recovery reports only constrained-scale means:
-
-    - ``{name}_pop`` for simple hierarchies
-    - ``{name}_shared_pop`` for condition-aware hierarchies
+    dict[str, float | list[float]]
+        True population values keyed to Stan output names.  Scalar for
+        simple population means and shared z-params.  Lists for
+        condition-indexed delta z-params (one entry per non-baseline
+        condition).
     """
+    true_pop: dict[str, float | list[float]] = {}
 
     if config.layout is None:
-        true_pop: dict[str, float] = {}
+        # Constrained-scale population means
         for name in param_names:
             vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
             if vals:
                 true_pop[f"{name}_pop"] = float(np.mean(vals))
+        # Unconstrained-scale mu/sd from hierarchical sampling
+        true_pop.update(pop_params)
         return true_pop
 
-    true_pop = {}
+    # Condition-aware hierarchy
     baseline_condition = config.layout.baseline_condition
+    nonbaseline = tuple(c for c in config.layout.conditions if c != baseline_condition)
 
+    # Constrained-scale shared population mean (baseline condition mean)
     for name in param_names:
         baseline_key = f"{name}__{baseline_condition}"
         vals = [
@@ -105,6 +112,24 @@ def _build_true_population_values(
         ]
         if vals:
             true_pop[f"{name}_shared_pop"] = float(np.mean(vals))
+
+    # Unconstrained-scale shared mu/sd (scalar)
+    for name in param_names:
+        for prefix in ("mu_", "sd_"):
+            key = f"{prefix}{name}_shared_z"
+            if key in pop_params:
+                true_pop[key] = pop_params[key]
+
+    # Unconstrained-scale delta mu/sd (list per non-baseline condition)
+    for name in param_names:
+        for prefix in ("mu_", "sd_"):
+            vals_list: list[float] = []
+            for condition in nonbaseline:
+                pop_key = f"{prefix}{name}_delta_z__{condition}"
+                if pop_key in pop_params:
+                    vals_list.append(pop_params[pop_key])
+            if vals_list:
+                true_pop[f"{prefix}{name}_delta_z"] = vals_list
 
     return true_pop
 
@@ -158,7 +183,7 @@ def _run_mle_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResul
     with tqdm(total=total_fits, desc="Recovery (MLE)", unit="subj") as pbar:
         for r in range(config.n_replications):
             rng = np.random.default_rng(config.simulation_base_seed + r)
-            true_table, params_per_subject = sample_true_params(
+            true_table, params_per_subject, _pop_params = sample_true_params(
                 config.param_dists, config.kernel, config.n_subjects, rng, config.layout
             )
             dataset = _simulate_dataset(
@@ -220,16 +245,16 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
         Recovery outputs for every replication.
     """
 
-    simulated: list[tuple[int, dict[str, dict[str, float]], Dataset]] = []
+    simulated: list[tuple[int, dict[str, dict[str, float]], Dataset, dict[str, float]]] = []
     for r in range(config.n_replications):
         rng = np.random.default_rng(config.simulation_base_seed + r)
-        true_table, params_per_subject = sample_true_params(
+        true_table, params_per_subject, pop_params = sample_true_params(
             config.param_dists, config.kernel, config.n_subjects, rng, config.layout
         )
         dataset = _simulate_dataset(
             config, params_per_subject, seed=config.simulation_base_seed + r
         )
-        simulated.append((r, true_table, dataset))
+        simulated.append((r, true_table, dataset, pop_params))
 
     max_workers = config.max_workers
     if max_workers is None:
@@ -244,15 +269,15 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
     subject_ids = [f"sub_{i:02d}" for i in range(config.n_subjects)]
 
     def _fit_one(
-        item: tuple[int, dict[str, dict[str, float]], Dataset],
+        item: tuple[int, dict[str, dict[str, float]], Dataset, dict[str, float]],
     ) -> ReplicationResult:
         """Fit one simulated replication with the Stan backend.
 
         Parameters
         ----------
         item
-            Tuple containing the replication index, true parameter table, and
-            simulated dataset.
+            Tuple containing the replication index, true parameter table,
+            simulated dataset, and sampled population parameters.
 
         Returns
         -------
@@ -265,7 +290,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
             If dispatch returns a non-Bayesian fit result for a Stan backend.
         """
 
-        r, true_table, dataset = item
+        r, true_table, dataset, pop_params = item
         result = fit(
             config.inference_config,
             config.kernel,
@@ -284,7 +309,8 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
             true_table,
             config.layout,  # type: ignore[arg-type]
         )
-        true_pop = _build_true_population_values(config, true_table, param_names)
+
+        true_pop = _build_true_population_values(config, true_table, param_names, pop_params)
         pop_records = extract_population_records(result, true_pop, config.layout)
 
         return ReplicationResult(

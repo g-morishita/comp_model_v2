@@ -142,7 +142,7 @@ class TestParameterRecoveryRejectsIncompatible:
         """Recovery raises before any simulation."""
         from scipy import stats
 
-        from comp_model.recovery.parameter.config import ParamDist, ParameterRecoveryConfig
+        from comp_model.recovery.parameter.config import FlatParamDist, ParameterRecoveryConfig
         from comp_model.recovery.parameter.runner import run_parameter_recovery
         from comp_model.tasks.spec import BlockSpec, TaskSpec
 
@@ -160,9 +160,9 @@ class TestParameterRecoveryRejectsIncompatible:
             n_replications=1,
             n_subjects=1,
             param_dists=(
-                ParamDist("alpha_self", stats.uniform(0.1, 0.8)),
-                ParamDist("alpha_other", stats.uniform(0.1, 0.8)),
-                ParamDist("beta", stats.uniform(0.5, 4.0)),
+                FlatParamDist("alpha_self", stats.uniform(0.1, 0.8)),
+                FlatParamDist("alpha_other", stats.uniform(0.1, 0.8)),
+                FlatParamDist("beta", stats.uniform(0.5, 4.0)),
             ),
             task=task,
             env_factory=_make_dummy_env,
@@ -196,7 +196,7 @@ class TestModelRecoveryRejectsIncompatible:
             ModelRecoveryConfig,
         )
         from comp_model.recovery.model.runner import run_model_recovery
-        from comp_model.recovery.parameter.config import ParamDist
+        from comp_model.recovery.parameter.config import FlatParamDist
         from comp_model.tasks.spec import BlockSpec, TaskSpec
 
         task = TaskSpec(
@@ -215,9 +215,9 @@ class TestModelRecoveryRejectsIncompatible:
                     name="social",
                     kernel=_SOCIAL_KERNEL,
                     param_dists=(
-                        ParamDist("alpha_self", stats.uniform(0.1, 0.8)),
-                        ParamDist("alpha_other", stats.uniform(0.1, 0.8)),
-                        ParamDist("beta", stats.uniform(0.5, 4.0)),
+                        FlatParamDist("alpha_self", stats.uniform(0.1, 0.8)),
+                        FlatParamDist("alpha_other", stats.uniform(0.1, 0.8)),
+                        FlatParamDist("beta", stats.uniform(0.5, 4.0)),
                     ),
                 ),
             ),
@@ -251,7 +251,7 @@ class TestModelRecoveryRejectsIncompatible:
             ModelRecoveryConfig,
         )
         from comp_model.recovery.model.runner import run_model_recovery
-        from comp_model.recovery.parameter.config import ParamDist
+        from comp_model.recovery.parameter.config import FlatParamDist
         from comp_model.tasks.spec import BlockSpec, TaskSpec
 
         task = TaskSpec(
@@ -270,8 +270,8 @@ class TestModelRecoveryRejectsIncompatible:
                     name="asocial",
                     kernel=AsocialQLearningKernel(),
                     param_dists=(
-                        ParamDist("alpha", stats.uniform(0.1, 0.8)),
-                        ParamDist("beta", stats.uniform(0.5, 4.0)),
+                        FlatParamDist("alpha", stats.uniform(0.1, 0.8)),
+                        FlatParamDist("beta", stats.uniform(0.5, 4.0)),
                     ),
                 ),
             ),
