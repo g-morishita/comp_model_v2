@@ -17,7 +17,7 @@ from comp_model.recovery.model.criteria import (
     select_winner,
 )
 from comp_model.recovery.model.result import ModelRecoveryResult, ReplicationResult
-from comp_model.recovery.parameter.config import sample_true_params
+from comp_model.recovery.parameter.config import sample_true_params_with_population
 from comp_model.runtime import SimulationConfig
 from comp_model.runtime.engine import simulate_dataset
 
@@ -103,7 +103,7 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
         for rep_idx in range(config.n_replications):
             seed = config.simulation_base_seed + rep_idx
             rng = np.random.default_rng(seed)
-            _, params_per_subject, _ = sample_true_params(
+            _, params_per_subject, _ = sample_true_params_with_population(
                 gen_spec.param_dists,
                 gen_spec.kernel,
                 config.n_subjects,

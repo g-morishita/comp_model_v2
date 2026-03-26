@@ -13,9 +13,13 @@ from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels import AsocialQLearningKernel
-from comp_model.recovery import HierarchicalParamDist
+from comp_model.recovery import HierarchicalParamDist, ParamDist
 from comp_model.recovery.parameter import runner as runner_module
-from comp_model.recovery.parameter.config import ParameterRecoveryConfig, sample_true_params
+from comp_model.recovery.parameter.config import (
+    ParameterRecoveryConfig,
+    sample_true_params,
+    sample_true_params_with_population,
+)
 from comp_model.recovery.parameter.runner import run_parameter_recovery
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
@@ -63,6 +67,55 @@ def _condition_task() -> TaskSpec:
 class TestRunParameterRecovery:
     """Tests for population-record generation in parameter recovery."""
 
+    def test_param_dist_remains_constructible(self) -> None:
+        """ParamDist should remain callable for flat recovery configs."""
+        dist = ParamDist("alpha", stats.uniform(0.1, 0.8))
+
+        assert dist.name == "alpha"
+        assert dist.scale == "constrained"
+
+    def test_sample_true_params_keeps_two_value_return(self) -> None:
+        """Public helper should preserve the historical two-value contract."""
+        kernel = AsocialQLearningKernel()
+
+        true_table, params_per_subject = sample_true_params(
+            (
+                ParamDist("alpha", stats.uniform(0.1, 0.8)),
+                ParamDist("beta", stats.uniform(1.0, 9.0)),
+            ),
+            kernel,
+            n_subjects=2,
+            rng=np.random.default_rng(0),
+        )
+
+        assert len(true_table) == 2
+        assert len(params_per_subject) == 2
+
+    def test_get_true_population_params_is_available(self) -> None:
+        """Public helper should expose deterministic population moments."""
+        from comp_model.recovery import (
+            get_true_population_params as public_get_true_population_params,
+        )
+
+        kernel = AsocialQLearningKernel()
+
+        true_pop = public_get_true_population_params(
+            (
+                ParamDist("alpha", stats.norm(0.0, 0.5), scale="unconstrained"),
+                HierarchicalParamDist(
+                    "beta",
+                    mu_prior=stats.norm(1.0, 0.5),
+                    sd_prior=stats.halfnorm(scale=0.4),
+                ),
+            ),
+            kernel,
+        )
+
+        assert true_pop["mu_alpha_z"] == pytest.approx(0.0)
+        assert true_pop["sd_alpha_z"] == pytest.approx(0.5)
+        assert true_pop["mu_beta_z"] == pytest.approx(1.0)
+        assert true_pop["sd_beta_z"] == pytest.approx(float(stats.halfnorm(scale=0.4).mean()))
+
     def test_hierarchical_sampling_varies_population_params_across_replications(self) -> None:
         """Hierarchical sampling should draw different population params per replication."""
 
@@ -70,7 +123,7 @@ class TestRunParameterRecovery:
         pop_values: list[tuple[float, float, float, float]] = []
 
         for seed in range(4):
-            _, _, pop_params = sample_true_params(
+            _, _, pop_params = sample_true_params_with_population(
                 (
                     HierarchicalParamDist(
                         "alpha",
@@ -270,7 +323,11 @@ class TestRunParameterRecovery:
                 diagnostics={},
             )
 
-        monkeypatch.setattr(runner_module, "sample_true_params", _fake_sample_true_params)
+        monkeypatch.setattr(
+            runner_module,
+            "sample_true_params_with_population",
+            _fake_sample_true_params,
+        )
         monkeypatch.setattr(runner_module, "_simulate_dataset", _fake_simulate_dataset)
         monkeypatch.setattr(runner_module, "fit", _fake_fit)
 

@@ -12,7 +12,7 @@ from tqdm import tqdm
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
-from comp_model.recovery.parameter.config import sample_true_params
+from comp_model.recovery.parameter.config import sample_true_params_with_population
 from comp_model.recovery.parameter.extraction import (
     extract_bayes_subject_records,
     extract_mle_subject_records,
@@ -183,7 +183,7 @@ def _run_mle_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResul
     with tqdm(total=total_fits, desc="Recovery (MLE)", unit="subj") as pbar:
         for r in range(config.n_replications):
             rng = np.random.default_rng(config.simulation_base_seed + r)
-            true_table, params_per_subject, _pop_params = sample_true_params(
+            true_table, params_per_subject, _pop_params = sample_true_params_with_population(
                 config.param_dists, config.kernel, config.n_subjects, rng, config.layout
             )
             dataset = _simulate_dataset(
@@ -248,7 +248,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
     simulated: list[tuple[int, dict[str, dict[str, float]], Dataset, dict[str, float]]] = []
     for r in range(config.n_replications):
         rng = np.random.default_rng(config.simulation_base_seed + r)
-        true_table, params_per_subject, pop_params = sample_true_params(
+        true_table, params_per_subject, pop_params = sample_true_params_with_population(
             config.param_dists, config.kernel, config.n_subjects, rng, config.layout
         )
         dataset = _simulate_dataset(

@@ -88,3 +88,30 @@ class TestParameterRecoveryTables:
 
         assert "Subject-level metrics" in output
         assert "Population-level metrics" not in output
+
+    def test_population_only_output_has_no_leading_blank_line(self) -> None:
+        """Population-only output should start with the section label."""
+        result = ParameterRecoveryResult(
+            config=None,  # type: ignore[arg-type]
+            replications=(
+                ReplicationResult(
+                    replication_index=0,
+                    subject_level=SubjectLevelResult(records=()),
+                    population_level=PopulationLevelResult(
+                        records=(
+                            PopulationRecord(
+                                param_name="alpha_pop",
+                                condition=None,
+                                true_value=0.3,
+                                estimated_value=0.32,
+                                posterior_draws=np.linspace(0.25, 0.35, 50),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        )
+
+        output = parameter_recovery_tables(result)
+
+        assert output.startswith("Population-level metrics")

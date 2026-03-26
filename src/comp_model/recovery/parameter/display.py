@@ -84,7 +84,8 @@ def parameter_recovery_tables(
 
     population_metrics = compute_population_metrics(result, transforms)
     if population_metrics.per_parameter:
-        sections.append("")
+        if sections:
+            sections.append("")
         sections.append("Population-level metrics")
         sections.append(parameter_recovery_table(population_metrics))
 

@@ -5,7 +5,9 @@ from comp_model.recovery.parameter.config import (
     HierarchicalParamDist,
     ParamDist,
     ParameterRecoveryConfig,
+    get_true_population_params,
     sample_true_params,
+    sample_true_params_with_population,
 )
 from comp_model.recovery.parameter.display import (
     parameter_recovery_summary,
@@ -59,6 +61,7 @@ __all__ = [
     "extract_bayes_subject_records",
     "extract_mle_subject_records",
     "extract_population_records",
+    "get_true_population_params",
     "parameter_recovery_summary",
     "parameter_recovery_table",
     "parameter_recovery_tables",
@@ -67,6 +70,7 @@ __all__ = [
     "plot_subject_scatter",
     "run_parameter_recovery",
     "sample_true_params",
+    "sample_true_params_with_population",
     "save_population_csv",
     "save_subject_csv",
 ]
