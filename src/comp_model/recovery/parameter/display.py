@@ -67,8 +67,8 @@ def parameter_recovery_tables(
     -------
     str
         Formatted string with labeled subject-level and population-level
-        sections.  The population section is omitted when no population
-        records exist.
+        sections. The population section reports the population records
+        supplied by the recovery runner and is omitted when none exist.
     """
     from comp_model.recovery.parameter.metrics import (
         compute_population_metrics,

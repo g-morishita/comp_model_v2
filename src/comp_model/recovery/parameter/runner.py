@@ -12,6 +12,7 @@ from tqdm import tqdm
 from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.dispatch import fit
+from comp_model.models.kernels.transforms import get_transform
 from comp_model.recovery.parameter.config import sample_true_params
 from comp_model.recovery.parameter.extraction import (
     extract_bayes_subject_records,
@@ -59,77 +60,60 @@ def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
 
 def _build_true_population_values(
     config: ParameterRecoveryConfig,
-    true_table: dict[str, dict[str, float]],
-    param_names: tuple[str, ...],
     pop_params: dict[str, float],
 ) -> dict[str, float | list[float]]:
-    """Build true population values for recovery summaries.
+    """Build true population values on the same constrained scale used by Stan.
 
-    Combines constrained-scale population means (computed from subject
-    values) with unconstrained-scale mu/sd (from hierarchical sampling).
+    For simple hierarchies, the true population value is the constrained
+    transform of ``mu_{name}_z``. For condition-aware shared-delta hierarchies,
+    the baseline uses ``mu_{name}_shared_z`` and each non-baseline condition
+    uses ``mu_{name}_shared_z + mu_{name}_delta_z__{condition}``, transformed
+    with the kernel's parameter transform.
 
     Parameters
     ----------
     config
-        Recovery study configuration.
-    true_table
-        Ground-truth constrained subject parameters keyed by subject id.
-    param_names
-        Subject-level parameter names from the fitted kernel.
+        Recovery configuration containing the kernel parameter transforms and
+        optional condition-aware layout.
     pop_params
-        Sampled population parameters from hierarchical sampling, keyed by
-        Stan naming convention (e.g. ``mu_alpha_z``, ``sd_alpha_z``).
+        Sampled population-level latent parameters on the unconstrained scale,
+        keyed by the Stan naming convention used in ``sample_true_params``.
 
     Returns
     -------
     dict[str, float | list[float]]
-        True population values keyed to Stan output names.  Scalar for
-        simple population means and shared z-params.  Lists for
-        condition-indexed delta z-params (one entry per non-baseline
-        condition).
+        True population values on the constrained scale keyed by the Stan
+        population parameter names extracted from fits. Scalar values are used
+        for simple hierarchies, and condition-aware hierarchies produce one
+        list entry per condition.
     """
+
     true_pop: dict[str, float | list[float]] = {}
+    for param_spec in config.kernel.spec().parameter_specs:
+        transform = get_transform(param_spec.transform_id).forward
+        if config.layout is None:
+            mu_key = f"mu_{param_spec.name}_z"
+            if mu_key in pop_params:
+                true_pop[f"{param_spec.name}_pop"] = transform(pop_params[mu_key])
+            continue
 
-    if config.layout is None:
-        # Constrained-scale population means
-        for name in param_names:
-            vals = [true_table[sid][name] for sid in true_table if name in true_table[sid]]
-            if vals:
-                true_pop[f"{name}_pop"] = float(np.mean(vals))
-        # Unconstrained-scale mu/sd from hierarchical sampling
-        true_pop.update(pop_params)
-        return true_pop
+        shared_mu_key = f"mu_{param_spec.name}_shared_z"
+        if shared_mu_key not in pop_params:
+            continue
 
-    # Condition-aware hierarchy
-    baseline_condition = config.layout.baseline_condition
-    nonbaseline = tuple(c for c in config.layout.conditions if c != baseline_condition)
+        condition_values: list[float] = []
+        shared_mu = pop_params[shared_mu_key]
+        for condition in config.layout.conditions:
+            mu_z = shared_mu
+            if condition != config.layout.baseline_condition:
+                delta_key = f"mu_{param_spec.name}_delta_z__{condition}"
+                if delta_key not in pop_params:
+                    break
+                mu_z += pop_params[delta_key]
+            condition_values.append(transform(mu_z))
 
-    # Constrained-scale shared population mean (baseline condition mean)
-    for name in param_names:
-        baseline_key = f"{name}__{baseline_condition}"
-        vals = [
-            true_table[sid][baseline_key] for sid in true_table if baseline_key in true_table[sid]
-        ]
-        if vals:
-            true_pop[f"{name}_shared_pop"] = float(np.mean(vals))
-
-    # Unconstrained-scale shared mu/sd (scalar)
-    for name in param_names:
-        for prefix in ("mu_", "sd_"):
-            key = f"{prefix}{name}_shared_z"
-            if key in pop_params:
-                true_pop[key] = pop_params[key]
-
-    # Unconstrained-scale delta mu/sd (list per non-baseline condition)
-    for name in param_names:
-        for prefix in ("mu_", "sd_"):
-            vals_list: list[float] = []
-            for condition in nonbaseline:
-                pop_key = f"{prefix}{name}_delta_z__{condition}"
-                if pop_key in pop_params:
-                    vals_list.append(pop_params[pop_key])
-            if vals_list:
-                true_pop[f"{prefix}{name}_delta_z"] = vals_list
+        if len(condition_values) == len(config.layout.conditions):
+            true_pop[f"{param_spec.name}_pop"] = condition_values
 
     return true_pop
 
@@ -309,8 +293,7 @@ def _run_stan_recovery(config: ParameterRecoveryConfig) -> ParameterRecoveryResu
             true_table,
             config.layout,  # type: ignore[arg-type]
         )
-
-        true_pop = _build_true_population_values(config, true_table, param_names, pop_params)
+        true_pop = _build_true_population_values(config, pop_params)
         pop_records = extract_population_records(result, true_pop, config.layout)
 
         return ReplicationResult(

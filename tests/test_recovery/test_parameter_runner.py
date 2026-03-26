@@ -13,6 +13,7 @@ from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels import AsocialQLearningKernel
+from comp_model.models.kernels.transforms import get_transform
 from comp_model.recovery import FlatParamDist, HierarchicalParamDist
 from comp_model.recovery.parameter import runner as runner_module
 from comp_model.recovery.parameter.config import ParameterRecoveryConfig, sample_true_params
@@ -123,7 +124,7 @@ class TestRunParameterRecovery:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Condition-aware Stan recovery must emit shared/delta population records.
+        """Condition-aware Stan recovery must emit transformed shared-plus-delta pops.
 
         Parameters
         ----------
@@ -190,16 +191,14 @@ class TestRunParameterRecovery:
                 "beta__social": 2.50,
             },
         }
-
-        # Known pop_params that the fake sampler returns
-        fake_pop_params: dict[str, float] = {
-            "mu_alpha_shared_z": 0.1,
+        fake_pop_params = {
+            "mu_alpha_shared_z": 0.0,
             "sd_alpha_shared_z": 0.2,
             "mu_beta_shared_z": 1.0,
             "sd_beta_shared_z": 0.3,
-            "mu_alpha_delta_z__social": -0.4,
+            "mu_alpha_delta_z__social": 0.4,
             "sd_alpha_delta_z__social": 0.1,
-            "mu_beta_delta_z__social": 0.5,
+            "mu_beta_delta_z__social": -0.2,
             "sd_beta_delta_z__social": 0.2,
         }
 
@@ -249,7 +248,7 @@ class TestRunParameterRecovery:
             return Dataset(subjects=())
 
         def _fake_fit(*args: object, **kwargs: object) -> BayesFitResult:
-            """Return a Bayesian fit result with condition-aware population keys.
+            """Return a Bayesian fit result with condition-aware population outputs.
 
             Parameters
             ----------
@@ -268,16 +267,8 @@ class TestRunParameterRecovery:
             posterior = {
                 "alpha": np.full((n_draws, 2, 2), 0.55),
                 "beta": np.full((n_draws, 2, 2), 1.75),
-                "alpha_shared_pop": np.full(n_draws, 0.45),
-                "beta_shared_pop": np.full(n_draws, 1.25),
-                "mu_alpha_shared_z": np.full(n_draws, 0.1),
-                "sd_alpha_shared_z": np.full(n_draws, 0.2),
-                "mu_beta_shared_z": np.full(n_draws, 1.0),
-                "sd_beta_shared_z": np.full(n_draws, 0.3),
-                "mu_alpha_delta_z": np.full((n_draws, 1), -0.4),
-                "sd_alpha_delta_z": np.full((n_draws, 1), 0.1),
-                "mu_beta_delta_z": np.full((n_draws, 1), 0.5),
-                "sd_beta_delta_z": np.full((n_draws, 1), 0.2),
+                "alpha_pop": np.tile(np.array([[0.52, 0.61]]), (n_draws, 1)),
+                "beta_pop": np.tile(np.array([[1.30, 1.20]]), (n_draws, 1)),
             }
             return BayesFitResult(
                 model_id="asocial_q_learning",
@@ -305,28 +296,39 @@ class TestRunParameterRecovery:
         records = {
             (record.param_name, record.condition): record for record in population_level.records
         }
-        # Constrained-scale shared population means
-        assert ("alpha_shared_pop", None) in records
-        assert ("beta_shared_pop", None) in records
-        assert records[("alpha_shared_pop", None)].true_value == pytest.approx(0.45)
-        assert records[("beta_shared_pop", None)].true_value == pytest.approx(1.25)
-
-        # Unconstrained-scale shared mu/sd
-        assert ("mu_alpha_shared_z", None) in records
-        assert ("sd_alpha_shared_z", None) in records
-        assert ("mu_beta_shared_z", None) in records
-        assert ("sd_beta_shared_z", None) in records
-
-        # Unconstrained-scale delta mu/sd (split per non-baseline condition)
-        assert ("mu_alpha_delta_z", "social") in records
-        assert ("sd_alpha_delta_z", "social") in records
-        assert ("mu_beta_delta_z", "social") in records
-        assert ("sd_beta_delta_z", "social") in records
-
-        # True values for unconstrained-scale shared params come from pop_params
-        assert records[("mu_alpha_shared_z", None)].true_value == pytest.approx(0.1)
-        assert records[("sd_alpha_shared_z", None)].true_value == pytest.approx(0.2)
-
-        # True values for unconstrained-scale delta params come from pop_params
-        assert records[("mu_alpha_delta_z", "social")].true_value == pytest.approx(-0.4)
-        assert records[("sd_alpha_delta_z", "social")].true_value == pytest.approx(0.1)
+        assert set(records) == {
+            ("alpha_pop", "baseline"),
+            ("alpha_pop", "social"),
+            ("beta_pop", "baseline"),
+            ("beta_pop", "social"),
+        }
+        alpha_transform = get_transform("sigmoid").forward
+        beta_transform = get_transform("softplus").forward
+        assert records[("alpha_pop", "baseline")].true_value == pytest.approx(
+            alpha_transform(fake_pop_params["mu_alpha_shared_z"])
+        )
+        assert records[("alpha_pop", "social")].true_value == pytest.approx(
+            alpha_transform(
+                fake_pop_params["mu_alpha_shared_z"] + fake_pop_params["mu_alpha_delta_z__social"]
+            )
+        )
+        assert records[("beta_pop", "baseline")].true_value == pytest.approx(
+            beta_transform(fake_pop_params["mu_beta_shared_z"])
+        )
+        assert records[("beta_pop", "social")].true_value == pytest.approx(
+            beta_transform(
+                fake_pop_params["mu_beta_shared_z"] + fake_pop_params["mu_beta_delta_z__social"]
+            )
+        )
+        assert records[("alpha_pop", "baseline")].estimated_value == pytest.approx(0.52)
+        assert records[("alpha_pop", "social")].estimated_value == pytest.approx(0.61)
+        assert records[("beta_pop", "baseline")].estimated_value == pytest.approx(1.30)
+        assert records[("beta_pop", "social")].estimated_value == pytest.approx(1.20)
+        np.testing.assert_array_equal(
+            records[("alpha_pop", "baseline")].posterior_draws,
+            np.full(8, 0.52),
+        )
+        np.testing.assert_array_equal(
+            records[("beta_pop", "social")].posterior_draws,
+            np.full(8, 1.20),
+        )

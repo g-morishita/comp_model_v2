@@ -193,6 +193,14 @@ model {
 }
 generated quantities {
   vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for LOO-CV
+  vector<lower=0,upper=1>[C] alpha_other_outcome_pop; // group-mean alpha_other_outcome for every condition
+  vector<lower=0,upper=1>[C] alpha_other_action_pop;  // group-mean alpha_other_action for every condition
+  vector<lower=0,upper=1>[C] w_imitation_pop;         // group-mean w_imitation for every condition
+  vector<lower=0>[C] beta_pop;                        // group-mean beta for every condition
+  real alpha_other_outcome_shared_pop;                // group-mean baseline alpha_other_outcome
+  real alpha_other_action_shared_pop;                 // group-mean baseline alpha_other_action
+  real w_imitation_shared_pop;                        // group-mean baseline w_imitation
+  real beta_shared_pop;                               // group-mean baseline beta
   {
     array[N] vector[A] Q;
     array[N] vector[A] T;
@@ -226,9 +234,30 @@ generated quantities {
     }
   }
 
+  {
+    int d_idx = 0;
+    for (c in 1:C) {
+      real aoz = mu_alpha_other_outcome_shared_z;
+      real aaz = mu_alpha_other_action_shared_z;
+      real wiz = mu_w_imitation_shared_z;
+      real bz = mu_beta_shared_z;
+      if (c != baseline_cond) {
+        d_idx += 1;
+        aoz += mu_alpha_other_outcome_delta_z[d_idx];
+        aaz += mu_alpha_other_action_delta_z[d_idx];
+        wiz += mu_w_imitation_delta_z[d_idx];
+        bz += mu_beta_delta_z[d_idx];
+      }
+      alpha_other_outcome_pop[c] = inv_logit(aoz);
+      alpha_other_action_pop[c] = inv_logit(aaz);
+      w_imitation_pop[c] = inv_logit(wiz);
+      beta_pop[c] = log1p_exp(bz);
+    }
+  }
+
   // Population-level constrained parameters (baseline condition)
-  real alpha_other_outcome_shared_pop = inv_logit(mu_alpha_other_outcome_shared_z); // group-mean baseline alpha_other_outcome (constrained)
-  real alpha_other_action_shared_pop  = inv_logit(mu_alpha_other_action_shared_z);  // group-mean baseline alpha_other_action (constrained)
-  real w_imitation_shared_pop         = inv_logit(mu_w_imitation_shared_z);         // group-mean baseline w_imitation (constrained)
-  real beta_shared_pop                = log1p_exp(mu_beta_shared_z);                // group-mean baseline beta (constrained)
+  alpha_other_outcome_shared_pop = alpha_other_outcome_pop[baseline_cond];
+  alpha_other_action_shared_pop  = alpha_other_action_pop[baseline_cond];
+  w_imitation_shared_pop         = w_imitation_pop[baseline_cond];
+  beta_shared_pop                = beta_pop[baseline_cond];
 }

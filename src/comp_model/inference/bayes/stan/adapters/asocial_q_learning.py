@@ -189,6 +189,8 @@ class AsocialQLearningStanAdapter:
                 "beta_shared_z",
                 "alpha_delta_z",
                 "beta_delta_z",
+                "alpha_pop",
+                "beta_pop",
                 "alpha_shared_pop",
                 "beta_shared_pop",
             )
