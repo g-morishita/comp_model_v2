@@ -13,7 +13,7 @@ from comp_model.inference.bayes.stan import AsocialRlAsymmetricStanAdapter, Stan
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.kernels import AsocialRlAsymmetricKernel
 from comp_model.recovery import (
-    ParamDist,
+    FlatParamDist,
     ParameterRecoveryConfig,
     compute_parameter_recovery_metrics,
     parameter_recovery_table,
@@ -45,9 +45,9 @@ def main() -> None:
         n_replications=10,
         n_subjects=20,
         param_dists=(
-            ParamDist("alpha_pos", stats.norm(0.0, 0.5), scale="unconstrained"),
-            ParamDist("alpha_neg", stats.norm(-1.386, 0.5), scale="unconstrained"),
-            ParamDist("beta", stats.norm(1.687, 0.5), scale="unconstrained"),
+            FlatParamDist("alpha_pos", stats.norm(0.0, 0.5), scale="unconstrained"),
+            FlatParamDist("alpha_neg", stats.norm(-1.386, 0.5), scale="unconstrained"),
+            FlatParamDist("beta", stats.norm(1.687, 0.5), scale="unconstrained"),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(

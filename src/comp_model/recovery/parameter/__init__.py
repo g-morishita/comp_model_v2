@@ -1,9 +1,10 @@
 """Parameter-level recovery analysis utilities."""
 
 from comp_model.recovery.parameter.config import (
+    FlatParamDist,
+    HierarchicalParamDist,
     ParamDist,
     ParameterRecoveryConfig,
-    get_true_population_params,
     sample_true_params,
 )
 from comp_model.recovery.parameter.display import (
@@ -40,6 +41,8 @@ from comp_model.recovery.parameter.result import (
 from comp_model.recovery.parameter.runner import run_parameter_recovery
 
 __all__ = [
+    "FlatParamDist",
+    "HierarchicalParamDist",
     "ParamDist",
     "ParameterRecoveryConfig",
     "ParameterRecoveryMetrics",
@@ -56,7 +59,6 @@ __all__ = [
     "extract_bayes_subject_records",
     "extract_mle_subject_records",
     "extract_population_records",
-    "get_true_population_params",
     "parameter_recovery_summary",
     "parameter_recovery_table",
     "parameter_recovery_tables",

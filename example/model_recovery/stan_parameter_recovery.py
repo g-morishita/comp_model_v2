@@ -16,7 +16,7 @@ from comp_model.inference.bayes.stan import AsocialRlAsymmetricStanAdapter, Stan
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.kernels import AsocialRlAsymmetricKernel
 from comp_model.recovery import (
-    ParamDist,
+    HierarchicalParamDist,
     ParameterRecoveryConfig,
     compute_parameter_recovery_metrics,
     parameter_recovery_table,
@@ -47,9 +47,21 @@ config = ParameterRecoveryConfig(
     n_subjects=20,
     param_dists=(
         # Optimism bias: strong positive RPE learning, weak negative
-        ParamDist("alpha_pos", stats.uniform(0.4, 0.5)),  # alpha_pos in [0.4, 0.9]
-        ParamDist("alpha_neg", stats.uniform(0.05, 0.25)),  # alpha_neg in [0.05, 0.3]
-        ParamDist("beta", stats.uniform(1.0, 9.0)),
+        HierarchicalParamDist(
+            "alpha_pos",
+            mu_prior=stats.norm(1.2, 0.25),
+            sd_prior=stats.halfnorm(scale=0.2),
+        ),
+        HierarchicalParamDist(
+            "alpha_neg",
+            mu_prior=stats.norm(-2.0, 0.25),
+            sd_prior=stats.halfnorm(scale=0.15),
+        ),
+        HierarchicalParamDist(
+            "beta",
+            mu_prior=stats.norm(1.5, 0.3),
+            sd_prior=stats.halfnorm(scale=0.3),
+        ),
     ),
     task=task,
     env_factory=lambda: StationaryBanditEnvironment(n_actions=N_ACTIONS, reward_probs=(0.75, 0.25)),

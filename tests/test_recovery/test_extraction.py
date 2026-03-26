@@ -389,9 +389,9 @@ class TestExtractPopulationRecords:
             conditions=("baseline", "social", "transfer"),
             baseline_condition="baseline",
         )
-        true_pop = {
-            "mu_alpha_delta_z": 0.0,
-            "sd_alpha_delta_z": 0.5,
+        true_pop: dict[str, float | list[float]] = {
+            "mu_alpha_delta_z": [0.0, 0.0],
+            "sd_alpha_delta_z": [0.5, 0.5],
         }
 
         records = extract_population_records(result, true_pop, layout=layout)

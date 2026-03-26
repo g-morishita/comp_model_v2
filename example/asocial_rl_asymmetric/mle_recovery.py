@@ -16,7 +16,7 @@ from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.inference.mle.optimize import MleOptimizerConfig
 from comp_model.models.kernels import AsocialRlAsymmetricKernel
 from comp_model.recovery import (
-    ParamDist,
+    FlatParamDist,
     ParameterRecoveryConfig,
     compute_parameter_recovery_metrics,
     parameter_recovery_table,
@@ -47,9 +47,9 @@ def main() -> None:
         n_replications=1,
         n_subjects=100,
         param_dists=(
-            ParamDist("alpha_pos", stats.uniform(0.0, 1.0)),
-            ParamDist("alpha_neg", stats.uniform(0.0, 1.0)),
-            ParamDist("beta", stats.uniform(0.1, 20.0)),
+            FlatParamDist("alpha_pos", stats.uniform(0.0, 1.0)),
+            FlatParamDist("alpha_neg", stats.uniform(0.0, 1.0)),
+            FlatParamDist("beta", stats.uniform(0.1, 20.0)),
         ),
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(

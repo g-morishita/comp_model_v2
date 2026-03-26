@@ -9,7 +9,7 @@ from comp_model.environments import StationaryBanditEnvironment
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.inference.mle.optimize import MleOptimizerConfig
 from comp_model.models.kernels import AsocialQLearningKernel
-from comp_model.recovery import ParamDist
+from comp_model.recovery import FlatParamDist
 from comp_model.recovery.model import (
     CandidateModelSpec,
     GeneratingModelSpec,
@@ -56,8 +56,8 @@ def _mle_config(n_restarts: int = 1) -> InferenceConfig:
 
 
 _PARAM_DISTS = (
-    ParamDist("alpha", stats.uniform(0.1, 0.8)),
-    ParamDist("beta", stats.uniform(1.0, 9.0)),
+    FlatParamDist("alpha", stats.uniform(0.1, 0.8)),
+    FlatParamDist("beta", stats.uniform(1.0, 9.0)),
 )
 
 # ---------------------------------------------------------------------------

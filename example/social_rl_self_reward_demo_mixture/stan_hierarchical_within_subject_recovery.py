@@ -31,7 +31,7 @@ from comp_model.models.kernels import (
     SocialRlSelfRewardDemoMixtureKernel,
 )
 from comp_model.recovery import (
-    ParamDist,
+    HierarchicalParamDist,
     ParameterRecoveryConfig,
     compute_parameter_recovery_metrics,
     parameter_recovery_summary,
@@ -55,11 +55,31 @@ REWARD_PROBS = (0.8, 0.2)
 #   sigmoid(-3, 3) → constrained (0.047, 0.953) for alpha params
 #   softplus(-1, 5) → constrained (0.31, 5.0)   for beta
 PARAM_DISTS = (
-    ParamDist("alpha_self", stats.uniform(-3, 6), scale="unconstrained"),
-    ParamDist("alpha_other_outcome", stats.uniform(-3, 6), scale="unconstrained"),
-    ParamDist("alpha_other_action", stats.uniform(-3, 6), scale="unconstrained"),
-    ParamDist("w_imitation", stats.uniform(-3, 6), scale="unconstrained"),
-    ParamDist("beta", stats.uniform(-1, 6), scale="unconstrained"),
+    HierarchicalParamDist(
+        "alpha_self",
+        mu_prior=stats.norm(0, 1),
+        sd_prior=stats.halfnorm(0, 1),
+    ),
+    HierarchicalParamDist(
+        "alpha_other_outcome",
+        mu_prior=stats.norm(0, 1),
+        sd_prior=stats.halfnorm(0, 1),
+    ),
+    HierarchicalParamDist(
+        "alpha_other_action",
+        mu_prior=stats.norm(0, 1),
+        sd_prior=stats.halfnorm(0, 1),
+    ),
+    HierarchicalParamDist(
+        "w_imitation",
+        mu_prior=stats.norm(0, 1),
+        sd_prior=stats.halfnorm(0, 1),
+    ),
+    HierarchicalParamDist(
+        "beta",
+        mu_prior=stats.norm(0, 1),
+        sd_prior=stats.halfnorm(0, 1),
+    ),
 )
 
 STAN_CONFIG = InferenceConfig(

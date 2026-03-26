@@ -17,6 +17,8 @@ from comp_model.recovery.model import (
     save_replication_csv,
 )
 from comp_model.recovery.parameter import (
+    FlatParamDist,
+    HierarchicalParamDist,
     ParamDist,
     ParameterRecoveryConfig,
     ParameterRecoveryMetrics,
@@ -32,7 +34,6 @@ from comp_model.recovery.parameter import (
     extract_bayes_subject_records,
     extract_mle_subject_records,
     extract_population_records,
-    get_true_population_params,
     parameter_recovery_summary,
     parameter_recovery_table,
     parameter_recovery_tables,
@@ -47,7 +48,9 @@ from comp_model.recovery.parameter import (
 
 __all__ = [
     "CandidateModelSpec",
+    "FlatParamDist",
     "GeneratingModelSpec",
+    "HierarchicalParamDist",
     "ModelRecoveryConfig",
     "ModelRecoveryResult",
     "ParamDist",
@@ -68,7 +71,6 @@ __all__ = [
     "extract_bayes_subject_records",
     "extract_mle_subject_records",
     "extract_population_records",
-    "get_true_population_params",
     "model_recovery_confusion_table",
     "model_recovery_rate_table",
     "parameter_recovery_summary",

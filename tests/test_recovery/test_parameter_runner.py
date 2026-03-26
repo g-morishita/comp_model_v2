@@ -13,9 +13,9 @@ from comp_model.inference.bayes.stan import AsocialQLearningStanAdapter
 from comp_model.inference.config import HierarchyStructure, InferenceConfig
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels import AsocialQLearningKernel
-from comp_model.recovery import ParamDist
+from comp_model.recovery import HierarchicalParamDist
 from comp_model.recovery.parameter import runner as runner_module
-from comp_model.recovery.parameter.config import ParameterRecoveryConfig
+from comp_model.recovery.parameter.config import ParameterRecoveryConfig, sample_true_params
 from comp_model.recovery.parameter.runner import run_parameter_recovery
 from comp_model.tasks import ASOCIAL_BANDIT_SCHEMA, BlockSpec, TaskSpec
 
@@ -63,6 +63,44 @@ def _condition_task() -> TaskSpec:
 class TestRunParameterRecovery:
     """Tests for population-record generation in parameter recovery."""
 
+    def test_hierarchical_sampling_varies_population_params_across_replications(self) -> None:
+        """Hierarchical sampling should draw different population params per replication."""
+
+        kernel = AsocialQLearningKernel()
+        pop_values: list[tuple[float, float, float, float]] = []
+
+        for seed in range(4):
+            _, _, pop_params = sample_true_params(
+                (
+                    HierarchicalParamDist(
+                        "alpha",
+                        mu_prior=stats.norm(0.0, 0.5),
+                        sd_prior=stats.halfnorm(scale=0.3),
+                    ),
+                    HierarchicalParamDist(
+                        "beta",
+                        mu_prior=stats.norm(1.0, 0.5),
+                        sd_prior=stats.halfnorm(scale=0.4),
+                    ),
+                ),
+                kernel,
+                n_subjects=8,
+                rng=np.random.default_rng(seed),
+            )
+            pop_values.append(
+                (
+                    pop_params["mu_alpha_z"],
+                    pop_params["sd_alpha_z"],
+                    pop_params["mu_beta_z"],
+                    pop_params["sd_beta_z"],
+                )
+            )
+
+        assert len({round(v[0], 8) for v in pop_values}) > 1
+        assert len({round(v[2], 8) for v in pop_values}) > 1
+        assert all(v[1] >= 0.0 for v in pop_values)
+        assert all(v[3] >= 0.0 for v in pop_values)
+
     def test_condition_aware_stan_pop_records_are_emitted(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -85,10 +123,26 @@ class TestRunParameterRecovery:
             n_replications=1,
             n_subjects=2,
             param_dists=(
-                ParamDist("alpha", stats.norm(0.1, 0.2), scale="unconstrained"),
-                ParamDist("beta", stats.norm(1.0, 0.3), scale="unconstrained"),
-                ParamDist("alpha__delta", stats.norm(-0.4, 0.1), scale="unconstrained"),
-                ParamDist("beta__delta", stats.norm(0.5, 0.2), scale="unconstrained"),
+                HierarchicalParamDist(
+                    "alpha",
+                    mu_prior=stats.norm(0, 1),
+                    sd_prior=stats.halfnorm(0, 0.5),
+                ),
+                HierarchicalParamDist(
+                    "beta",
+                    mu_prior=stats.norm(0, 1),
+                    sd_prior=stats.halfnorm(0, 0.5),
+                ),
+                HierarchicalParamDist(
+                    "alpha__delta",
+                    mu_prior=stats.norm(0, 0.5),
+                    sd_prior=stats.halfnorm(0, 0.3),
+                ),
+                HierarchicalParamDist(
+                    "beta__delta",
+                    mu_prior=stats.norm(0, 0.5),
+                    sd_prior=stats.halfnorm(0, 0.3),
+                ),
             ),
             task=_condition_task(),
             env_factory=_env_factory,
@@ -119,10 +173,22 @@ class TestRunParameterRecovery:
             },
         }
 
+        # Known pop_params that the fake sampler returns
+        fake_pop_params: dict[str, float] = {
+            "mu_alpha_shared_z": 0.1,
+            "sd_alpha_shared_z": 0.2,
+            "mu_beta_shared_z": 1.0,
+            "sd_beta_shared_z": 0.3,
+            "mu_alpha_delta_z__social": -0.4,
+            "sd_alpha_delta_z__social": 0.1,
+            "mu_beta_delta_z__social": 0.5,
+            "sd_beta_delta_z__social": 0.2,
+        }
+
         def _fake_sample_true_params(
             *args: object,
             **kwargs: object,
-        ) -> tuple[dict[str, dict[str, float]], dict[str, object]]:
+        ) -> tuple[dict[str, dict[str, float]], dict[str, object], dict[str, float]]:
             """Return a fixed condition-aware truth table for the runner test.
 
             Parameters
@@ -134,10 +200,11 @@ class TestRunParameterRecovery:
 
             Returns
             -------
-            tuple[dict[str, dict[str, float]], dict[str, object]]
-                Fixed true-table and dummy parsed parameters.
+            tuple[dict[str, dict[str, float]], dict[str, object], dict[str, float]]
+                Fixed true-table, dummy parsed parameters, and population params.
             """
-            return true_table, {}
+            del args, kwargs
+            return true_table, {}, fake_pop_params
 
         def _fake_simulate_dataset(
             cfg: ParameterRecoveryConfig,
@@ -234,10 +301,10 @@ class TestRunParameterRecovery:
         assert ("mu_beta_delta_z", "social") in records
         assert ("sd_beta_delta_z", "social") in records
 
-        # True values for unconstrained-scale shared params come from ParamDist
+        # True values for unconstrained-scale shared params come from pop_params
         assert records[("mu_alpha_shared_z", None)].true_value == pytest.approx(0.1)
         assert records[("sd_alpha_shared_z", None)].true_value == pytest.approx(0.2)
 
-        # True values for unconstrained-scale delta params come from ParamDist
+        # True values for unconstrained-scale delta params come from pop_params
         assert records[("mu_alpha_delta_z", "social")].true_value == pytest.approx(-0.4)
         assert records[("sd_alpha_delta_z", "social")].true_value == pytest.approx(0.1)

@@ -103,7 +103,7 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
         for rep_idx in range(config.n_replications):
             seed = config.simulation_base_seed + rep_idx
             rng = np.random.default_rng(seed)
-            _, params_per_subject = sample_true_params(
+            _, params_per_subject, _ = sample_true_params(
                 gen_spec.param_dists,
                 gen_spec.kernel,
                 config.n_subjects,

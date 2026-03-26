@@ -192,7 +192,7 @@ def extract_bayes_subject_records(
 
 def extract_population_records(
     result: BayesFitResult,
-    true_pop: dict[str, float],
+    true_pop: dict[str, float | list[float]],
     layout: SharedDeltaLayout | None = None,
 ) -> tuple[PopulationRecord, ...]:
     """Extract population records from a hierarchical Bayes fit.
@@ -203,6 +203,10 @@ def extract_population_records(
     and unconstrained-scale population parameters (``mu_alpha_z``,
     ``sd_alpha_z``, ``mu_alpha_shared_z``, ``mu_alpha_delta_z``, etc.).
 
+    For vector-valued posteriors (delta parameters with one element per
+    non-baseline condition), the corresponding ``true_pop`` entry may be a
+    ``list[float]`` with one true value per condition.
+
     Parameters
     ----------
     result
@@ -210,7 +214,9 @@ def extract_population_records(
     true_pop
         True population parameter values keyed by the same names that appear
         in the posterior (e.g. ``alpha_pop``, ``mu_alpha_z``,
-        ``alpha_shared_pop``, ``mu_alpha_shared_z``).
+        ``alpha_shared_pop``, ``mu_alpha_shared_z``).  Values may be
+        ``float`` for scalar posteriors or ``list[float]`` for
+        condition-indexed delta posteriors.
     layout
         Optional condition-aware layout used to split vector-valued
         population delta parameters into one record per non-baseline
@@ -243,11 +249,12 @@ def extract_population_records(
 
         if draws.ndim == 0:
             scalar_draws = draws.reshape(1)
+            scalar_true = true_val[0] if isinstance(true_val, list) else float(true_val)
             records.append(
                 PopulationRecord(
                     param_name=key,
                     condition=None,
-                    true_value=true_val,
+                    true_value=scalar_true,
                     estimated_value=float(np.mean(scalar_draws)),
                     posterior_draws=scalar_draws,
                 )
@@ -255,11 +262,12 @@ def extract_population_records(
             continue
 
         if draws.ndim == 1:
+            scalar_true = true_val[0] if isinstance(true_val, list) else float(true_val)
             records.append(
                 PopulationRecord(
                     param_name=key,
                     condition=None,
-                    true_value=true_val,
+                    true_value=scalar_true,
                     estimated_value=float(np.mean(draws)),
                     posterior_draws=draws,
                 )
@@ -275,11 +283,12 @@ def extract_population_records(
                 )
             for c_idx, condition in enumerate(nonbaseline_conditions):
                 condition_draws = draws[:, c_idx]
+                true_val_c = true_val[c_idx] if isinstance(true_val, list) else float(true_val)
                 records.append(
                     PopulationRecord(
                         param_name=key,
                         condition=condition,
-                        true_value=true_val,
+                        true_value=true_val_c,
                         estimated_value=float(np.mean(condition_draws)),
                         posterior_draws=condition_draws,
                     )
