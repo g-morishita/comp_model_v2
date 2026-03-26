@@ -141,17 +141,7 @@ class HierarchicalParamDist:
         return mu, sd
 
 
-ParamDist = FlatParamDist
-"""Backward-compatible alias for flat parameter sampling.
-
-Historically ``ParamDist`` was the public flat distribution spec used by
-recovery utilities.  Keep it constructible so existing code continues to
-work, and use :class:`HierarchicalParamDist` explicitly for the new
-hierarchical sampling path.
-"""
-
-
-ParamDistLike = FlatParamDist | HierarchicalParamDist
+ParamDist = FlatParamDist | HierarchicalParamDist
 """Type alias accepted by recovery configurations.
 
 Either a :class:`FlatParamDist` for flat (non-hierarchical) sampling or a
@@ -202,7 +192,7 @@ class ParameterRecoveryConfig:
 
     n_replications: int
     n_subjects: int
-    param_dists: tuple[ParamDistLike, ...]
+    param_dists: tuple[ParamDist, ...]
     task: TaskSpec
     env_factory: Callable[[], Environment]
     kernel: ModelKernel[Any, Any]
@@ -217,89 +207,8 @@ class ParameterRecoveryConfig:
     condition_demonstrator_params: dict[str, Any] | None = None
 
 
-def get_true_population_params(
-    param_dists: tuple[ParamDistLike, ...],
-    kernel: ModelKernel[Any, Any],
-) -> dict[str, float]:
-    """Return deterministic population moments on the unconstrained scale.
-
-    For flat unconstrained distributions this reproduces the historical
-    behavior by returning the distribution mean and standard deviation.
-    For hierarchical distributions this returns the hyper-prior means for
-    the population mean and standard deviation.
-
-    Parameters
-    ----------
-    param_dists
-        Population distributions from ``ParameterRecoveryConfig``.
-    kernel
-        Model kernel.
-
-    Returns
-    -------
-    dict[str, float]
-        Population parameters on the unconstrained scale, keyed by Stan
-        convention names.
-    """
-    del kernel
-
-    result: dict[str, float] = {}
-    for dist in param_dists:
-        if isinstance(dist, HierarchicalParamDist):
-            result[f"mu_{dist.name}_z"] = float(dist.mu_prior.mean())
-            result[f"sd_{dist.name}_z"] = float(dist.sd_prior.mean())
-        elif dist.scale == "unconstrained":
-            result[f"mu_{dist.name}_z"] = float(dist.dist.mean())
-            result[f"sd_{dist.name}_z"] = float(dist.dist.std())
-    return result
-
-
 def sample_true_params(
-    param_dists: tuple[ParamDistLike, ...],
-    kernel: ModelKernel[Any, Any],
-    n_subjects: int,
-    rng: np.random.Generator,
-    layout: SharedDeltaLayout | None = None,
-) -> tuple[dict[str, dict[str, float]], dict[str, Any]]:
-    """Sample ground-truth parameters for subject-level simulation.
-
-    This public helper preserves the historical two-value return contract.
-    Use :func:`sample_true_params_with_population` when the sampled
-    population parameters are also needed.
-
-    Parameters
-    ----------
-    param_dists
-        Population distributions for each parameter.
-    kernel
-        Model kernel whose transforms and ``parse_params`` are used.
-    n_subjects
-        Number of subjects to sample.
-    rng
-        Random number generator.
-    layout
-        Optional condition-aware layout. When provided, delta distributions
-        must also be supplied via ``param_dists`` using names like
-        ``alpha__delta``.
-
-    Returns
-    -------
-    tuple[dict[str, dict[str, float]], dict[str, Any]]
-        Ground-truth constrained parameters and parsed parameters for
-        ``simulate_dataset``.
-    """
-    true_table, params_per_subject, _pop_params = sample_true_params_with_population(
-        param_dists,
-        kernel,
-        n_subjects,
-        rng,
-        layout,
-    )
-    return true_table, params_per_subject
-
-
-def sample_true_params_with_population(
-    param_dists: tuple[ParamDistLike, ...],
+    param_dists: tuple[ParamDist, ...],
     kernel: ModelKernel[Any, Any],
     n_subjects: int,
     rng: np.random.Generator,
@@ -347,7 +256,7 @@ def sample_true_params_with_population(
     """
 
     spec = kernel.spec()
-    dist_by_name: dict[str, ParamDistLike] = {d.name: d for d in param_dists}
+    dist_by_name: dict[str, ParamDist] = {d.name: d for d in param_dists}
 
     if layout is not None:
         return _sample_condition_aware(dist_by_name, spec, kernel, n_subjects, rng, layout)
@@ -355,7 +264,7 @@ def sample_true_params_with_population(
 
 
 def _sample_z(
-    pdist: ParamDistLike,
+    pdist: ParamDist,
     rng: np.random.Generator,
     transform_id: str,
     mu_sd: dict[str, tuple[float, float]],
@@ -386,7 +295,7 @@ def _sample_z(
 
 
 def _sample_population_params(
-    dist_by_name: dict[str, ParamDistLike],
+    dist_by_name: dict[str, ParamDist],
     param_names: tuple[str, ...],
     rng: np.random.Generator,
     suffix: str = "",
@@ -427,7 +336,7 @@ def _sample_population_params(
 
 
 def _sample_simple(
-    dist_by_name: dict[str, ParamDistLike],
+    dist_by_name: dict[str, ParamDist],
     spec: Any,
     kernel: ModelKernel[Any, Any],
     n_subjects: int,
@@ -475,7 +384,7 @@ def _sample_simple(
 
 
 def _sample_condition_aware(
-    dist_by_name: dict[str, ParamDistLike],
+    dist_by_name: dict[str, ParamDist],
     spec: Any,
     kernel: ModelKernel[Any, Any],
     n_subjects: int,
