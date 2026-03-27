@@ -25,49 +25,13 @@ without touching the infrastructure.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from comp_model.data.extractors import DecisionTrialView
-
-
-@dataclass(frozen=True, slots=True)
-class InitSpec:
-    """Instructions for where to start searching for a parameter's best-fitting value.
-
-    When fitting a model by maximum likelihood (MLE), the optimiser needs a
-    starting point for each parameter. This class records that starting point
-    and the strategy used to generate it.
-
-    Starting values are specified on an *unconstrained* scale — a mathematical
-    trick that lets the optimiser search over all real numbers even when the
-    actual parameter has a restricted range (e.g. learning rate must be
-    between 0 and 1). The transform specified on the matching
-    :class:`ParameterSpec` converts the unconstrained value back to the
-    meaningful scale (e.g. unconstrained 0.0 → learning rate 0.5 via the
-    sigmoid function).
-
-    Attributes
-    ----------
-    strategy
-        A label identifying how starting values should be generated
-        (e.g. fixed point, random perturbation).
-    kwargs
-        Extra settings consumed by the chosen strategy.
-    default_unconstrained
-        The default starting value on the unconstrained scale.
-        Defaults to 0.0, which maps to 0.5 under a sigmoid transform —
-        a neutral, uninformed starting point for parameters bounded between
-        0 and 1.
-    """
-
-    strategy: str
-    kwargs: Mapping[str, float]
-    default_unconstrained: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +42,7 @@ class ParameterSpec:
     temperature — has a ``ParameterSpec`` that tells the fitting machinery
     everything it needs to know: what the parameter is called, how to
     transform raw (unconstrained) values into meaningful (constrained) values,
-    and where to start searching during optimisation.
+    and which constrained values are considered valid for the model.
 
     Attributes
     ----------
@@ -101,15 +65,32 @@ class ParameterSpec:
     description
         A plain-English explanation of what the parameter represents, used
         in documentation and model summaries.
-    mle_init
-        Optional instructions for the starting point used during maximum
-        likelihood fitting. If ``None``, a default starting point is used.
+    bounds
+        Optional lower and upper bounds on the parameter's constrained scale.
+        Use ``None`` for an open side, for example ``(0.0, None)`` for a
+        strictly positive parameter or ``(0.0, 1.0)`` for a probability-like
+        parameter. These are model properties, not optimizer settings.
     """
 
     name: str
     transform_id: str
     description: str = ""
-    mle_init: InitSpec | None = None
+    bounds: tuple[float | None, float | None] | None = None
+
+    def __post_init__(self) -> None:
+        """Validate optional constrained bounds."""
+
+        if self.bounds is None:
+            return
+        lower, upper = self.bounds
+        if lower is None and upper is None:
+            raise ValueError("bounds must specify at least one side or be set to None")
+        if lower is not None and not math.isfinite(lower):
+            raise ValueError("lower bound must be finite")
+        if upper is not None and not math.isfinite(upper):
+            raise ValueError("upper bound must be finite")
+        if lower is not None and upper is not None and lower >= upper:
+            raise ValueError("lower bound must be smaller than upper bound")
 
 
 @dataclass(frozen=True, slots=True)

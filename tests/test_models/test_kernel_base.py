@@ -2,11 +2,11 @@
 
 import pytest
 
-from comp_model.models.kernels.base import InitSpec, ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.base import ModelKernelSpec, ParameterSpec
 
 
-def test_parameter_spec_captures_init_metadata() -> None:
-    """Ensure parameter metadata stores init specification.
+def test_parameter_spec_captures_bounds() -> None:
+    """Ensure parameter metadata stores constrained bounds.
 
     Returns
     -------
@@ -14,15 +14,32 @@ def test_parameter_spec_captures_init_metadata() -> None:
         This test asserts stored dataclass values.
     """
 
-    init = InitSpec(strategy="fixed", kwargs={}, default_unconstrained=0.5)
     parameter = ParameterSpec(
         name="alpha",
         transform_id="sigmoid",
         description="learning rate",
-        mle_init=init,
+        bounds=(0.0, 1.0),
     )
 
-    assert parameter.mle_init == init
+    assert parameter.bounds == (0.0, 1.0)
+
+
+@pytest.mark.parametrize(
+    ("bounds", "message"),
+    [
+        pytest.param((None, None), "at least one side", id="both_open"),
+        pytest.param((1.0, 1.0), "smaller", id="equal_sides"),
+        pytest.param((2.0, 1.0), "smaller", id="reversed"),
+    ],
+)
+def test_parameter_spec_rejects_invalid_bounds(
+    bounds: tuple[float | None, float | None],
+    message: str,
+) -> None:
+    """ParameterSpec rejects malformed constrained bounds."""
+
+    with pytest.raises(ValueError, match=message):
+        ParameterSpec(name="beta", transform_id="softplus", bounds=bounds)
 
 
 def test_model_kernel_spec_defaults_match_plan() -> None:

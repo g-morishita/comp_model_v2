@@ -19,7 +19,7 @@ from comp_model.models.kernels.transforms import get_transform
 if TYPE_CHECKING:
     from comp_model.data.schema import SubjectData
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
-    from comp_model.models.kernels.base import ModelKernel
+    from comp_model.models.kernels.base import ModelKernel, ParameterSpec
     from comp_model.tasks.schemas import TrialSchema
 
 
@@ -37,29 +37,50 @@ class MleOptimizerConfig:
         Optional RNG seed used for restart generation.
     tol
         Optional optimizer tolerance.
-    z_bounds
-        Optional lower and upper bounds on unconstrained parameters.
-        ``None`` runs unconstrained optimization with normal restart draws.
-    restart_scale
-        Standard deviation for normal restart draws when ``z_bounds`` is
-        ``None``.
+    restart_lower_bound
+        Lower fallback bound used when restart generation needs a missing bound.
+        For simple fits this is interpreted on the constrained parameter scale
+        when a parameter does not provide a lower bound. For conditioned delta
+        terms it is used directly on the unconstrained scale. When left as
+        ``None``, it defaults to ``-restart_upper_bound``.
+    restart_upper_bound
+        Upper fallback bound used when restart generation needs a missing bound.
+        For positive-only parameters this lets users cap the randomly sampled
+        restart range without storing inference settings on ``ParameterSpec``.
     max_iter
         Maximum number of optimizer iterations.
 
     Notes
     -----
     Restarts use one deterministic default start plus ``n_restarts - 1`` random
-    draws. When ``z_bounds`` is set, draws are sampled uniformly inside the
-    bounds; when ``None``, draws are sampled from ``Normal(0, restart_scale)``.
+    draws. Simple fits sample each shared parameter uniformly from its
+    constrained bounds, filling any open side with the fallback bounds above.
+    Conditioned delta terms use the fallback interval directly on the
+    unconstrained scale.
     """
 
     method: str = "L-BFGS-B"
     n_restarts: int = 10
     seed: int | None = 0
     tol: float | None = None
-    z_bounds: tuple[float, float] | None = None
-    restart_scale: float = 3.0
+    restart_lower_bound: float | None = None
+    restart_upper_bound: float = 3.0
     max_iter: int = 500
+
+    def __post_init__(self) -> None:
+        """Validate fallback restart bounds."""
+
+        resolved_lower = (
+            -self.restart_upper_bound
+            if self.restart_lower_bound is None
+            else self.restart_lower_bound
+        )
+        if not math.isfinite(resolved_lower):
+            raise ValueError("restart_lower_bound must be finite when provided")
+        if not math.isfinite(self.restart_upper_bound):
+            raise ValueError("restart_upper_bound must be finite")
+        if resolved_lower >= self.restart_upper_bound:
+            raise ValueError("restart_lower_bound must be smaller than restart_upper_bound")
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +140,100 @@ class MleFitResult:
 DEFAULT_MLE_OPTIMIZER_CONFIG = MleOptimizerConfig()
 
 
+def _fallback_restart_lower_bound(config: MleOptimizerConfig) -> float:
+    """Resolve the effective fallback lower bound for restart generation."""
+
+    return (
+        -config.restart_upper_bound
+        if config.restart_lower_bound is None
+        else config.restart_lower_bound
+    )
+
+
+def _resolved_restart_interval(
+    parameter: ParameterSpec,
+    config: MleOptimizerConfig,
+) -> tuple[float, float]:
+    """Resolve a finite constrained restart interval for one parameter."""
+
+    lower = parameter.bounds[0] if parameter.bounds is not None else None
+    upper = parameter.bounds[1] if parameter.bounds is not None else None
+    resolved_lower = _fallback_restart_lower_bound(config) if lower is None else lower
+    resolved_upper = config.restart_upper_bound if upper is None else upper
+    if resolved_lower >= resolved_upper:
+        raise ValueError(
+            f"Invalid restart interval for parameter {parameter.name!r}: "
+            f"{resolved_lower} >= {resolved_upper}. "
+            "Widen the optimizer fallback bounds or tighten the parameter bounds."
+        )
+    return (resolved_lower, resolved_upper)
+
+
+def _default_unconstrained_start(
+    parameter: ParameterSpec,
+    config: MleOptimizerConfig,
+) -> float:
+    """Build the deterministic default start for one kernel parameter."""
+
+    lower, upper = _resolved_restart_interval(parameter, config)
+    midpoint = (lower + upper) / 2.0
+    return float(get_transform(parameter.transform_id).inverse(midpoint))
+
+
+def _random_unconstrained_start(
+    parameter: ParameterSpec,
+    config: MleOptimizerConfig,
+    rng: np.random.Generator,
+) -> float:
+    """Sample one unconstrained restart from parameter bounds."""
+
+    lower, upper = _resolved_restart_interval(parameter, config)
+    constrained_draw = float(rng.uniform(lower, upper))
+    return float(get_transform(parameter.transform_id).inverse(constrained_draw))
+
+
+def _conditioned_default_start(
+    layout: SharedDeltaLayout,
+    config: MleOptimizerConfig,
+) -> np.ndarray:
+    """Build the deterministic default start for a conditioned layout."""
+
+    parameter_by_name = {
+        parameter.name: parameter for parameter in layout.kernel_spec.parameter_specs
+    }
+    values: list[float] = []
+    for key in layout.parameter_keys():
+        if key.endswith("__shared_z"):
+            parameter_name = key[: -len("__shared_z")]
+            values.append(_default_unconstrained_start(parameter_by_name[parameter_name], config))
+        else:
+            values.append(0.0)
+    return np.asarray(values, dtype=float)
+
+
+def _conditioned_random_start(
+    layout: SharedDeltaLayout,
+    config: MleOptimizerConfig,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Sample one random restart for a conditioned layout."""
+
+    parameter_by_name = {
+        parameter.name: parameter for parameter in layout.kernel_spec.parameter_specs
+    }
+    fallback_lower = _fallback_restart_lower_bound(config)
+    values: list[float] = []
+    for key in layout.parameter_keys():
+        if key.endswith("__shared_z"):
+            parameter_name = key[: -len("__shared_z")]
+            values.append(
+                _random_unconstrained_start(parameter_by_name[parameter_name], config, rng)
+            )
+        else:
+            values.append(float(rng.uniform(fallback_lower, config.restart_upper_bound)))
+    return np.asarray(values, dtype=float)
+
+
 def fit_mle_simple(
     kernel: ModelKernel[object, object],
     subject_data: SubjectData,
@@ -146,10 +261,12 @@ def fit_mle_simple(
     Notes
     -----
     The optimizer minimizes the negative replay log-likelihood. The default
-    start comes from each parameter's ``mle_init.default_unconstrained`` when
-    available, followed by random restart points in ``config.z_bounds``. The
-    winning unconstrained solution is transformed back to the constrained
-    parameter space before reporting AIC and BIC.
+    start is the midpoint of each parameter's constrained bounds (with any
+    open side filled from the optimizer config), transformed onto the
+    unconstrained scale. Random restarts are then sampled uniformly from the
+    same constrained intervals. The winning unconstrained solution is
+    transformed back to the constrained parameter space before reporting AIC
+    and BIC.
     """
 
     from comp_model.data.compatibility import check_kernel_schema_compatibility
@@ -166,24 +283,23 @@ def fit_mle_simple(
     n_params = len(param_names)
     n_trials = sum(len(block.trials) for block in subject_data.blocks)
 
-    default_start = np.array(
-        [
-            parameter.mle_init.default_unconstrained if parameter.mle_init is not None else 0.0
-            for parameter in spec.parameter_specs
-        ]
+    default_start = np.asarray(
+        [_default_unconstrained_start(parameter, config) for parameter in spec.parameter_specs],
+        dtype=float,
     )
 
     rng = np.random.default_rng(config.seed)
     starts = [default_start.copy()]
     for _ in range(config.n_restarts - 1):
-        if config.z_bounds is not None:
-            starts.append(rng.uniform(config.z_bounds[0], config.z_bounds[1], size=n_params))
-        else:
-            starts.append(rng.normal(0.0, config.restart_scale, size=n_params))
-
-    bounds: list[tuple[float, float]] | None = None
-    if config.z_bounds is not None:
-        bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
+        starts.append(
+            np.asarray(
+                [
+                    _random_unconstrained_start(parameter, config, rng)
+                    for parameter in spec.parameter_specs
+                ],
+                dtype=float,
+            )
+        )
 
     def objective(z_vector: np.ndarray) -> float:
         """Evaluate the negative replay log-likelihood for one parameter vector.
@@ -222,7 +338,6 @@ def fit_mle_simple(
             objective,
             start,
             method=config.method,
-            bounds=bounds,
             tol=config.tol,
             options={"maxiter": config.max_iter},
         )
@@ -318,18 +433,11 @@ def fit_mle_conditioned(
     n_params = len(param_keys)
     n_trials = sum(len(block.trials) for block in subject_data.blocks)
 
-    default_start = np.zeros(n_params)
+    default_start = _conditioned_default_start(layout, config)
     rng = np.random.default_rng(config.seed)
     starts = [default_start.copy()]
     for _ in range(config.n_restarts - 1):
-        if config.z_bounds is not None:
-            starts.append(rng.uniform(config.z_bounds[0], config.z_bounds[1], size=n_params))
-        else:
-            starts.append(rng.normal(0.0, config.restart_scale, size=n_params))
-
-    bounds: list[tuple[float, float]] | None = None
-    if config.z_bounds is not None:
-        bounds = [(config.z_bounds[0], config.z_bounds[1])] * n_params
+        starts.append(_conditioned_random_start(layout, config, rng))
 
     def objective(z_vector: np.ndarray) -> float:
         """Evaluate the conditioned negative replay log-likelihood.
@@ -374,7 +482,6 @@ def fit_mle_conditioned(
             objective,
             start,
             method=config.method,
-            bounds=bounds,
             tol=config.tol,
             options={"maxiter": config.max_iter},
         )
