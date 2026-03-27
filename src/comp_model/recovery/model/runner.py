@@ -128,6 +128,8 @@ def _simulate_generated_dataset(
             kernel=gen_spec.kernel,
             params_per_subject=params_per_subject,
             config=SimulationConfig(seed=seed),
+            demonstrator_kernel=config.demonstrator_kernel,
+            demonstrator_params=config.demonstrator_params,
         )
 
     from comp_model.tasks.spec import TaskSpec
@@ -142,6 +144,16 @@ def _simulate_generated_dataset(
                     f"Generating model {gen_spec.name!r} is missing parameters for "
                     f"task condition {condition!r}"
                 )
+            # Resolve per-condition demonstrator params
+            demo_params = config.demonstrator_params
+            if config.condition_demonstrator_params is not None:
+                if condition not in config.condition_demonstrator_params:
+                    raise ValueError(
+                        f"Generating model {gen_spec.name!r} is missing demonstrator "
+                        f"parameters for task condition {condition!r} in "
+                        f"'condition_demonstrator_params'"
+                    )
+                demo_params = config.condition_demonstrator_params[condition]
             env = config.env_factory()
             subject = simulate_subject(
                 task=TaskSpec(task_id="tmp", blocks=(block_spec,)),
@@ -150,6 +162,8 @@ def _simulate_generated_dataset(
                 params=condition_params[condition],
                 config=SimulationConfig(seed=seed + subject_offset * 1000 + block_index),
                 subject_id=subject_id,
+                demonstrator_kernel=config.demonstrator_kernel,
+                demonstrator_params=demo_params,
             )
             blocks.append(dataclasses.replace(subject.blocks[0], block_index=block_index))
         subjects.append(SubjectData(subject_id=subject_id, blocks=tuple(blocks)))

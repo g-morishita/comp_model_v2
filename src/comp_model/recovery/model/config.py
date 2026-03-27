@@ -92,6 +92,15 @@ class ModelRecoveryConfig:
         Model selection criterion.  MLE criteria (``"aic"``, ``"bic"``,
         ``"log_likelihood"``) require candidates with ``backend="mle"``.
         Bayesian criteria (``"waic"``, ``"loo"``) require ``backend="stan"``.
+    demonstrator_kernel
+        Optional demonstrator kernel for social tasks. Used during
+        simulation to generate demonstrator behaviour.
+    demonstrator_params
+        Default demonstrator parameters for all conditions.
+    condition_demonstrator_params
+        Per-condition demonstrator parameters mapping condition name to
+        params. When set, overrides ``demonstrator_params`` for each
+        condition. Requires ``demonstrator_kernel`` to be set.
     simulation_base_seed
         Base seed for reproducible simulation.
     max_workers
@@ -107,5 +116,8 @@ class ModelRecoveryConfig:
     env_factory: Callable[[], Environment]
     schema: TrialSchema
     criterion: Literal["aic", "bic", "log_likelihood", "waic", "loo"] = "aic"
+    demonstrator_kernel: ModelKernel[Any, Any] | None = None
+    demonstrator_params: Any | None = None
+    condition_demonstrator_params: dict[str, Any] | None = None
     simulation_base_seed: int = 42
     max_workers: int | None = None
