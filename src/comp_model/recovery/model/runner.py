@@ -145,11 +145,15 @@ def _simulate_generated_dataset(
                     f"task condition {condition!r}"
                 )
             # Resolve per-condition demonstrator params
-            demo_params = (
-                config.condition_demonstrator_params[condition]
-                if config.condition_demonstrator_params is not None
-                else config.demonstrator_params
-            )
+            demo_params = config.demonstrator_params
+            if config.condition_demonstrator_params is not None:
+                if condition not in config.condition_demonstrator_params:
+                    raise ValueError(
+                        f"Generating model {gen_spec.name!r} is missing demonstrator "
+                        f"parameters for task condition {condition!r} in "
+                        f"'condition_demonstrator_params'"
+                    )
+                demo_params = config.condition_demonstrator_params[condition]
             env = config.env_factory()
             subject = simulate_subject(
                 task=TaskSpec(task_id="tmp", blocks=(block_spec,)),

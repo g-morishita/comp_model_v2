@@ -107,12 +107,6 @@ STAN_CONFIG_CONDITION = InferenceConfig(
     stan_config=StanFitConfig(n_warmup=1000, n_samples=1000, n_chains=4, seed=42),
 )
 
-STAN_CONFIG_SIMPLE = InferenceConfig(
-    hierarchy=HierarchyStructure.STUDY_SUBJECT,
-    backend="stan",
-    stan_config=StanFitConfig(n_warmup=1000, n_samples=1000, n_chains=4, seed=42),
-)
-
 # ---------------------------------------------------------------------------
 # Layouts
 # ---------------------------------------------------------------------------

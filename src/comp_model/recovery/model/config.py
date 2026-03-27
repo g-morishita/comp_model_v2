@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
@@ -118,6 +118,6 @@ class ModelRecoveryConfig:
     criterion: Literal["aic", "bic", "log_likelihood", "waic", "loo"] = "aic"
     demonstrator_kernel: ModelKernel[Any, Any] | None = None
     demonstrator_params: Any | None = None
-    condition_demonstrator_params: dict[str, Any] | None = field(default=None)
+    condition_demonstrator_params: dict[str, Any] | None = None
     simulation_base_seed: int = 42
     max_workers: int | None = None
