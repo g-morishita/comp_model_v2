@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from comp_model.models.kernels.base import InitSpec, ModelKernel, ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.base import ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
 from comp_model.models.kernels.transforms import get_transform
 
@@ -101,31 +101,19 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
                     name="alpha_pos",
                     transform_id="sigmoid",
                     description="learning rate for positive prediction errors",
-                    mle_init=InitSpec(
-                        strategy="fixed",
-                        kwargs={},
-                        default_unconstrained=0.0,
-                    ),
+                    bounds=(0.0, 1.0),
                 ),
                 ParameterSpec(
                     name="alpha_neg",
                     transform_id="sigmoid",
                     description="learning rate for negative prediction errors",
-                    mle_init=InitSpec(
-                        strategy="fixed",
-                        kwargs={},
-                        default_unconstrained=0.0,
-                    ),
+                    bounds=(0.0, 1.0),
                 ),
                 ParameterSpec(
                     name="beta",
                     transform_id="softplus",
                     description="inverse temperature",
-                    mle_init=InitSpec(
-                        strategy="fixed",
-                        kwargs={},
-                        default_unconstrained=1.0,
-                    ),
+                    bounds=(0.0, None),
                 ),
             ),
             requires_social=False,

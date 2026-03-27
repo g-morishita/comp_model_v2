@@ -7,7 +7,6 @@ from comp_model.models.kernels.asocial_rl_asymmetric import (
     AsocialRlAsymmetricState,
 )
 from comp_model.models.kernels.base import (
-    InitSpec,
     ModelKernel,
     ModelKernelSpec,
     ParameterSpec,
@@ -40,7 +39,6 @@ __all__ = [
     "AsocialRlAsymmetricKernel",
     "AsocialRlAsymmetricParams",
     "AsocialRlAsymmetricState",
-    "InitSpec",
     "ModelKernel",
     "ModelKernelSpec",
     "ParameterSpec",
