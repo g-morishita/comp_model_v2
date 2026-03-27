@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from tqdm import tqdm
 
+from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
+from comp_model.inference.config import HierarchyStructure
 from comp_model.inference.dispatch import fit
 from comp_model.recovery.model.criteria import (
     score_candidate_bayes,
@@ -19,14 +21,23 @@ from comp_model.recovery.model.criteria import (
 from comp_model.recovery.model.result import ModelRecoveryResult, ReplicationResult
 from comp_model.recovery.parameter.config import sample_true_params
 from comp_model.runtime import SimulationConfig
-from comp_model.runtime.engine import simulate_dataset
+from comp_model.runtime.engine import simulate_dataset, simulate_subject
 
 if TYPE_CHECKING:
-    from comp_model.data.schema import Dataset
     from comp_model.inference.mle.optimize import MleFitResult
-    from comp_model.recovery.model.config import CandidateModelSpec, ModelRecoveryConfig
+    from comp_model.models.condition.shared_delta import SharedDeltaLayout
+    from comp_model.recovery.model.config import (
+        CandidateModelSpec,
+        GeneratingModelSpec,
+        ModelRecoveryConfig,
+    )
     from comp_model.tasks.schemas import TrialSchema
     from comp_model.tasks.spec import TaskSpec
+
+_CONDITION_HIERARCHIES = (
+    HierarchyStructure.SUBJECT_BLOCK_CONDITION,
+    HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
+)
 
 
 def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
@@ -51,6 +62,106 @@ def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
                 f"schema {block_spec.schema.schema_id!r}, but the recovery study "
                 f"expects {schema.schema_id!r}"
             )
+
+
+def _validate_layout_for_kernel(
+    *,
+    owner: str,
+    kernel: Any,
+    layout: SharedDeltaLayout | None,
+) -> None:
+    """Ensure an optional layout matches the kernel it is paired with."""
+
+    if layout is None:
+        return
+
+    kernel_spec = kernel.spec()
+    if layout.kernel_spec != kernel_spec:
+        raise ValueError(
+            f"{owner} layout kernel_spec {layout.kernel_spec.model_id!r} does not match "
+            f"kernel {kernel_spec.model_id!r}"
+        )
+
+
+def _check_layout_consistency(config: ModelRecoveryConfig) -> None:
+    """Validate layout usage across generating and candidate models."""
+
+    for gen_spec in config.generating_models:
+        _validate_layout_for_kernel(
+            owner=f"Generating model {gen_spec.name!r}",
+            kernel=gen_spec.kernel,
+            layout=gen_spec.layout,
+        )
+
+    for cand_spec in config.candidate_models:
+        _validate_layout_for_kernel(
+            owner=f"Candidate model {cand_spec.name!r}",
+            kernel=cand_spec.kernel,
+            layout=cand_spec.layout,
+        )
+        hierarchy = cand_spec.inference_config.hierarchy
+        if hierarchy in _CONDITION_HIERARCHIES and cand_spec.layout is None:
+            raise ValueError(
+                f"Candidate model {cand_spec.name!r} uses condition-aware hierarchy "
+                f"{hierarchy.value!r} but layout=None"
+            )
+        if hierarchy not in _CONDITION_HIERARCHIES and cand_spec.layout is not None:
+            raise ValueError(
+                f"Candidate model {cand_spec.name!r} provides a layout, but hierarchy "
+                f"{hierarchy.value!r} is not condition-aware"
+            )
+
+
+def _simulate_generated_dataset(
+    config: ModelRecoveryConfig,
+    gen_spec: GeneratingModelSpec,
+    params_per_subject: dict[str, Any],
+    seed: int,
+) -> Dataset:
+    """Simulate one generated dataset for a model recovery replication."""
+
+    if gen_spec.layout is None:
+        return simulate_dataset(
+            task=config.task,
+            env_factory=config.env_factory,
+            kernel=gen_spec.kernel,
+            params_per_subject=params_per_subject,
+            config=SimulationConfig(seed=seed),
+        )
+
+    from comp_model.tasks.spec import TaskSpec
+
+    subjects: list[SubjectData] = []
+    for subject_offset, (subject_id, condition_params) in enumerate(params_per_subject.items()):
+        blocks: list[Block] = []
+        for block_index, block_spec in enumerate(config.task.blocks):
+            condition = block_spec.condition
+            if condition not in condition_params:
+                raise ValueError(
+                    f"Generating model {gen_spec.name!r} is missing parameters for "
+                    f"task condition {condition!r}"
+                )
+            env = config.env_factory()
+            subject = simulate_subject(
+                task=TaskSpec(task_id="tmp", blocks=(block_spec,)),
+                env=env,
+                kernel=gen_spec.kernel,
+                params=condition_params[condition],
+                config=SimulationConfig(seed=seed + subject_offset * 1000 + block_index),
+                subject_id=subject_id,
+            )
+            blocks.append(
+                Block(
+                    block_index=block_index,
+                    condition=subject.blocks[0].condition,
+                    schema_id=subject.blocks[0].schema_id,
+                    trials=subject.blocks[0].trials,
+                    metadata=subject.blocks[0].metadata,
+                )
+            )
+        subjects.append(SubjectData(subject_id=subject_id, blocks=tuple(blocks)))
+
+    return Dataset(subjects=tuple(subjects))
 
 
 def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
@@ -84,6 +195,7 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
     """
 
     _check_schema_consistency(config.task, config.schema)
+    _check_layout_consistency(config)
 
     from comp_model.data.compatibility import check_kernel_schema_compatibility
 
@@ -108,14 +220,9 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
                 gen_spec.kernel,
                 config.n_subjects,
                 rng,
+                gen_spec.layout,
             )
-            dataset = simulate_dataset(
-                task=config.task,
-                env_factory=config.env_factory,
-                kernel=gen_spec.kernel,
-                params_per_subject=params_per_subject,
-                config=SimulationConfig(seed=seed),
-            )
+            dataset = _simulate_generated_dataset(config, gen_spec, params_per_subject, seed)
             key = (gen_spec.name, rep_idx)
             simulated[key] = dataset
             gen_rep_order.append(key)
@@ -239,7 +346,13 @@ def _fit_candidate_job(
 
     if criterion in ("aic", "bic", "log_likelihood"):
         mle_results: list[MleFitResult] = [
-            fit(cand.inference_config, cand.kernel, subject_data, schema)  # type: ignore[return-value]
+            fit(
+                cand.inference_config,
+                cand.kernel,
+                subject_data,
+                schema,
+                cand.layout,
+            )  # type: ignore[return-value]
             for subject_data in dataset.subjects
         ]
         return score_candidate_mle(mle_results, criterion)  # type: ignore[arg-type]
@@ -250,6 +363,7 @@ def _fit_candidate_job(
             cand.kernel,
             dataset,
             schema,
+            cand.layout,
             adapter=cand.adapter,
         )
         if not isinstance(result, BayesFitResult):

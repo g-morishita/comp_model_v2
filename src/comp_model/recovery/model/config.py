@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
     from comp_model.environments.base import Environment
     from comp_model.inference.config import InferenceConfig
+    from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernel
     from comp_model.recovery.parameter.config import ParamDist
     from comp_model.tasks.schemas import TrialSchema
@@ -28,11 +29,15 @@ class GeneratingModelSpec:
         Model kernel used to simulate data.
     param_dists
         Population distributions from which true parameters are sampled.
+    layout
+        Optional condition-aware parameter layout used when simulating
+        within-subject shared-plus-delta parameters for this generating model.
     """
 
     name: str
     kernel: ModelKernel[Any, Any]
     param_dists: tuple[ParamDist, ...]
+    layout: SharedDeltaLayout | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,12 +56,16 @@ class CandidateModelSpec:
         ``"stan"`` for waic/loo).
     adapter
         Optional Stan adapter required when ``inference_config.backend == "stan"``.
+    layout
+        Optional condition-aware parameter layout used for conditioned MLE
+        fits and condition-aware Stan hierarchies.
     """
 
     name: str
     kernel: ModelKernel[Any, Any]
     inference_config: InferenceConfig
     adapter: object | None = None
+    layout: SharedDeltaLayout | None = None
 
 
 @dataclass(frozen=True, slots=True)
