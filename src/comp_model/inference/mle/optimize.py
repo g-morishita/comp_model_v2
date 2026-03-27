@@ -17,6 +17,8 @@ from comp_model.inference.mle.objective import log_likelihood_conditioned, log_l
 from comp_model.models.kernels.transforms import get_transform
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from comp_model.data.schema import SubjectData
     from comp_model.models.condition.shared_delta import SharedDeltaLayout
     from comp_model.models.kernels.base import ModelKernel, ParameterSpec
@@ -67,19 +69,24 @@ class MleOptimizerConfig:
     restart_upper_bound: float = 3.0
     max_iter: int = 500
 
-    def __post_init__(self) -> None:
-        """Validate fallback restart bounds."""
+    @property
+    def resolved_restart_lower_bound(self) -> float:
+        """Resolve the effective fallback lower bound for restart generation."""
 
-        resolved_lower = (
+        return (
             -self.restart_upper_bound
             if self.restart_lower_bound is None
             else self.restart_lower_bound
         )
-        if not math.isfinite(resolved_lower):
+
+    def __post_init__(self) -> None:
+        """Validate fallback restart bounds."""
+
+        if not math.isfinite(self.resolved_restart_lower_bound):
             raise ValueError("restart_lower_bound must be finite when provided")
         if not math.isfinite(self.restart_upper_bound):
             raise ValueError("restart_upper_bound must be finite")
-        if resolved_lower >= self.restart_upper_bound:
+        if self.resolved_restart_lower_bound >= self.restart_upper_bound:
             raise ValueError("restart_lower_bound must be smaller than restart_upper_bound")
 
 
@@ -140,16 +147,6 @@ class MleFitResult:
 DEFAULT_MLE_OPTIMIZER_CONFIG = MleOptimizerConfig()
 
 
-def _fallback_restart_lower_bound(config: MleOptimizerConfig) -> float:
-    """Resolve the effective fallback lower bound for restart generation."""
-
-    return (
-        -config.restart_upper_bound
-        if config.restart_lower_bound is None
-        else config.restart_lower_bound
-    )
-
-
 def _resolved_restart_interval(
     parameter: ParameterSpec,
     config: MleOptimizerConfig,
@@ -158,7 +155,7 @@ def _resolved_restart_interval(
 
     lower = parameter.bounds[0] if parameter.bounds is not None else None
     upper = parameter.bounds[1] if parameter.bounds is not None else None
-    resolved_lower = _fallback_restart_lower_bound(config) if lower is None else lower
+    resolved_lower = config.resolved_restart_lower_bound if lower is None else lower
     resolved_upper = config.restart_upper_bound if upper is None else upper
     if resolved_lower >= resolved_upper:
         raise ValueError(
@@ -192,11 +189,12 @@ def _random_unconstrained_start(
     return float(get_transform(parameter.transform_id).inverse(constrained_draw))
 
 
-def _conditioned_default_start(
+def _build_conditioned_start(
     layout: SharedDeltaLayout,
-    config: MleOptimizerConfig,
+    shared_value_factory: Callable[[ParameterSpec], float],
+    delta_value_factory: Callable[[], float],
 ) -> np.ndarray:
-    """Build the deterministic default start for a conditioned layout."""
+    """Build one conditioned restart vector from shared and delta value factories."""
 
     parameter_by_name = {
         parameter.name: parameter for parameter in layout.kernel_spec.parameter_specs
@@ -205,10 +203,23 @@ def _conditioned_default_start(
     for key in layout.parameter_keys():
         if key.endswith("__shared_z"):
             parameter_name = key[: -len("__shared_z")]
-            values.append(_default_unconstrained_start(parameter_by_name[parameter_name], config))
+            values.append(shared_value_factory(parameter_by_name[parameter_name]))
         else:
-            values.append(0.0)
+            values.append(delta_value_factory())
     return np.asarray(values, dtype=float)
+
+
+def _conditioned_default_start(
+    layout: SharedDeltaLayout,
+    config: MleOptimizerConfig,
+) -> np.ndarray:
+    """Build the deterministic default start for a conditioned layout."""
+
+    return _build_conditioned_start(
+        layout,
+        shared_value_factory=lambda parameter: _default_unconstrained_start(parameter, config),
+        delta_value_factory=lambda: 0.0,
+    )
 
 
 def _conditioned_random_start(
@@ -218,20 +229,13 @@ def _conditioned_random_start(
 ) -> np.ndarray:
     """Sample one random restart for a conditioned layout."""
 
-    parameter_by_name = {
-        parameter.name: parameter for parameter in layout.kernel_spec.parameter_specs
-    }
-    fallback_lower = _fallback_restart_lower_bound(config)
-    values: list[float] = []
-    for key in layout.parameter_keys():
-        if key.endswith("__shared_z"):
-            parameter_name = key[: -len("__shared_z")]
-            values.append(
-                _random_unconstrained_start(parameter_by_name[parameter_name], config, rng)
-            )
-        else:
-            values.append(float(rng.uniform(fallback_lower, config.restart_upper_bound)))
-    return np.asarray(values, dtype=float)
+    return _build_conditioned_start(
+        layout,
+        shared_value_factory=lambda parameter: _random_unconstrained_start(parameter, config, rng),
+        delta_value_factory=lambda: float(
+            rng.uniform(config.resolved_restart_lower_bound, config.restart_upper_bound)
+        ),
+    )
 
 
 def fit_mle_simple(
