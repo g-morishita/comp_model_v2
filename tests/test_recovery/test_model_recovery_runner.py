@@ -369,13 +369,13 @@ class TestRunModelRecovery:
         seen_fit_layouts: list[SharedDeltaLayout | None] = []
 
         def _fake_sample_true_params(
-            *args: object,
-            **kwargs: object,
+            _param_dists: Any,
+            _kernel: Any,
+            _n_subjects: int,
+            _rng: Any,
+            layout: SharedDeltaLayout | None = None,
         ) -> tuple[dict[str, dict[str, float]], dict[str, object], dict[str, float]]:
-            del kwargs
-            seen_sample_layouts.append(
-                cast("SharedDeltaLayout | None", args[4] if len(args) > 4 else None)
-            )
+            seen_sample_layouts.append(layout)
             return {}, {}, {}
 
         def _fake_simulate_dataset(
@@ -389,13 +389,18 @@ class TestRunModelRecovery:
 
             return Dataset(subjects=())
 
-        def _fake_fit(*args: object, **kwargs: object) -> BayesFitResult:
-            del kwargs
-            seen_fit_layouts.append(
-                cast("SharedDeltaLayout | None", args[4] if len(args) > 4 else None)
-            )
+        def _fake_fit(
+            _config: Any,
+            candidate_kernel: Any,
+            _data: Any,
+            _schema: Any,
+            layout: SharedDeltaLayout | None = None,
+            adapter: Any | None = None,
+        ) -> BayesFitResult:
+            del adapter
+            seen_fit_layouts.append(layout)
             return BayesFitResult(
-                model_id=kernel.spec().model_id,
+                model_id=candidate_kernel.spec().model_id,
                 hierarchy=HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
                 posterior_samples={},
                 log_lik=np.zeros((4, 3)),

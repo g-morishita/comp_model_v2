@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
@@ -150,15 +151,7 @@ def _simulate_generated_dataset(
                 config=SimulationConfig(seed=seed + subject_offset * 1000 + block_index),
                 subject_id=subject_id,
             )
-            blocks.append(
-                Block(
-                    block_index=block_index,
-                    condition=subject.blocks[0].condition,
-                    schema_id=subject.blocks[0].schema_id,
-                    trials=subject.blocks[0].trials,
-                    metadata=subject.blocks[0].metadata,
-                )
-            )
+            blocks.append(dataclasses.replace(subject.blocks[0], block_index=block_index))
         subjects.append(SubjectData(subject_id=subject_id, blocks=tuple(blocks)))
 
     return Dataset(subjects=tuple(subjects))
