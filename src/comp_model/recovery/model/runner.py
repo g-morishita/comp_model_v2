@@ -70,9 +70,12 @@ def _precompile_stan_models(config: ModelRecoveryConfig) -> None:
     if not stan_candidates:
         return
 
-    seen: set[str] = set()
-    cmdstanpy = importlib.import_module("cmdstanpy")
+    try:
+        cmdstanpy = importlib.import_module("cmdstanpy")
+    except ModuleNotFoundError:
+        return
 
+    seen: set[str] = set()
     for cand in stan_candidates:
         adapter: Any = cand.adapter
         stan_file: str = adapter.stan_program_path(cand.inference_config.hierarchy)
