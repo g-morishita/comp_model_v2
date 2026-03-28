@@ -113,6 +113,34 @@ def _check_layout_consistency(config: ModelRecoveryConfig) -> None:
             )
 
 
+def _with_console_suppressed(cand: CandidateModelSpec) -> CandidateModelSpec:
+    """Return a copy of *cand* with Stan console output disabled.
+
+    When fitting candidates in parallel, CmdStan's per-chain progress
+    messages interleave on the terminal.  This helper sets
+    ``show_console=False`` on the Stan config so parallel workers stay
+    quiet.  If the candidate does not use a Stan backend the spec is
+    returned unchanged.
+
+    Parameters
+    ----------
+    cand
+        Original candidate model specification.
+
+    Returns
+    -------
+    CandidateModelSpec
+        A shallow copy with ``show_console=False`` on the Stan config,
+        or the original spec if no Stan config is present.
+    """
+    stan_cfg = getattr(cand.inference_config, "stan_config", None)
+    if stan_cfg is None:
+        return cand
+    quiet_stan = dataclasses.replace(stan_cfg, show_console=False)
+    quiet_inf = dataclasses.replace(cand.inference_config, stan_config=quiet_stan)
+    return dataclasses.replace(cand, inference_config=quiet_inf)
+
+
 def _simulate_generated_dataset(
     config: ModelRecoveryConfig,
     gen_spec: GeneratingModelSpec,
@@ -240,7 +268,7 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
 
     with tqdm(total=total_jobs, desc="Model recovery", unit="fit") as pbar:
         if max_workers > 1 and total_jobs > 1:
-            cand_by_name = {c.name: c for c in config.candidate_models}
+            cand_by_name = {c.name: _with_console_suppressed(c) for c in config.candidate_models}
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 future_to_key = {
                     executor.submit(

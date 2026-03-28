@@ -42,6 +42,11 @@ class StanFitConfig:
         Stan NUTS target acceptance rate.
     max_treedepth
         Maximum NUTS tree depth.
+    show_console
+        If ``True`` (default), display CmdStan progress on the console.
+        Set to ``False`` to suppress chain progress output, which is
+        useful when running multiple fits in parallel to avoid
+        interleaved output.
 
     Notes
     -----
@@ -55,6 +60,7 @@ class StanFitConfig:
     seed: int | None = None
     adapt_delta: float = 0.8
     max_treedepth: int = 10
+    show_console: bool = True
 
 
 DEFAULT_STAN_FIT_CONFIG = StanFitConfig()
@@ -118,6 +124,7 @@ def fit_stan(
         seed=resolved_config.seed,
         adapt_delta=resolved_config.adapt_delta,
         max_treedepth=resolved_config.max_treedepth,
+        show_console=resolved_config.show_console,
     )
 
     posterior_samples = {}
