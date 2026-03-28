@@ -567,16 +567,16 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
         absent_optional = _validate_header_row(
             reader.fieldnames,
             expected_fields=converter.fieldnames,
-            optional_fields=frozenset({"available_actions"}),
+            optional_fields=frozenset({"available_actions", "schema_id"}),
         )
         infer_actions = "available_actions" in absent_optional
+        infer_schema_id = "schema_id" in absent_optional
         if infer_actions:
             is_social = "demonstrator_action" in converter.fieldnames
             inferred_available_actions = _infer_available_actions(source, is_social=is_social)
-            effective_fields = tuple(f for f in converter.fieldnames if f != "available_actions")
         else:
             inferred_available_actions = None
-            effective_fields = converter.fieldnames
+        effective_fields = tuple(f for f in converter.fieldnames if f not in absent_optional)
 
         for row_number, raw_row in enumerate(reader, start=2):
             row = _normalize_input_row(
@@ -586,6 +586,8 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
             )
             if infer_actions:
                 row["available_actions"] = inferred_available_actions  # type: ignore[assignment]
+            if infer_schema_id:
+                row["schema_id"] = schema.schema_id
             subject_id = row["subject_id"]
             block_index = _parse_non_negative_int(row["block_index"], field_name="block_index")
             condition = row["condition"]

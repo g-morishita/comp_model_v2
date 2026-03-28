@@ -760,6 +760,78 @@ def test_load_csv_with_available_actions_still_works(
     assert input_event.payload["available_actions"] == (0, 1, 2)
 
 
+def test_load_csv_without_schema_id_uses_schema_argument(
+    tmp_path: Path,
+) -> None:
+    """Ensure omitting ``schema_id`` column fills it from the schema argument.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies schema_id is injected from the function argument.
+    """
+
+    csv_path = tmp_path / "no_schema_id.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
+                "s1,0,A,0,0|1,1,1.0",
+                "s1,0,A,1,0|1,0,0.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    assert dataset.subjects[0].blocks[0].schema_id == "asocial_bandit"
+
+
+def test_load_csv_without_schema_id_and_available_actions(
+    tmp_path: Path,
+) -> None:
+    """Ensure both ``schema_id`` and ``available_actions`` can be omitted.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies both columns are inferred simultaneously.
+    """
+
+    csv_path = tmp_path / "minimal.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,trial_index,choice,reward,demonstrator_action,demonstrator_reward",
+                "s1,0,social,0,0,1.0,1,0.0",
+                "s1,0,social,1,1,0.0,2,1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
+
+    block = dataset.subjects[0].blocks[0]
+    assert block.schema_id == "social_pre_choice"
+    trial = block.trials[0]
+    input_event = trial.events[0]
+    assert input_event.payload["available_actions"] == (0, 1, 2)
+
+
 def _fitting_view_signatures(
     dataset: Dataset,
     schema: TrialSchema,
