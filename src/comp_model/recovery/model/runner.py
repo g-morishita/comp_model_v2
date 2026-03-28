@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import importlib
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
@@ -44,6 +43,41 @@ _CONDITION_HIERARCHIES = (
     HierarchyStructure.SUBJECT_BLOCK_CONDITION,
     HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION,
 )
+
+
+def _precompile_stan_models(config: ModelRecoveryConfig) -> None:
+    """Pre-compile all unique Stan programs before parallel fitting.
+
+    Parameters
+    ----------
+    config
+        Model recovery configuration containing candidate model specs.
+
+    Notes
+    -----
+    CmdStanPy compilation is not safe for concurrent access.  When multiple
+    ``ProcessPoolExecutor`` workers call ``CmdStanModel`` on the same
+    ``.stan`` file simultaneously, one process may delete intermediate build
+    artefacts while another still expects them, causing a
+    ``FileNotFoundError``.  Compiling once in the main process ensures the
+    cached executable is available for all workers.
+    """
+    seen: set[str] = set()
+    cmdstanpy = importlib.import_module("cmdstanpy")
+
+    for cand in config.candidate_models:
+        if cand.inference_config.backend != "stan" or cand.adapter is None:
+            continue
+        adapter: Any = cand.adapter
+        stan_file: str = adapter.stan_program_path(cand.inference_config.hierarchy)
+        if stan_file in seen:
+            continue
+        seen.add(stan_file)
+        functions_dir = str(Path(stan_file).parent / "functions")
+        cmdstanpy.CmdStanModel(
+            stan_file=stan_file,
+            stanc_options={"include-paths": [functions_dir]},
+        )
 
 
 def _check_schema_consistency(task: TaskSpec, schema: TrialSchema) -> None:
@@ -268,6 +302,11 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
             key = (gen_spec.name, rep_idx)
             simulated[key] = dataset
             gen_rep_order.append(key)
+
+    # ------------------------------------------------------------------
+    # Phase 1.5: pre-compile Stan programs (avoids parallel race condition)
+    # ------------------------------------------------------------------
+    _precompile_stan_models(config)
 
     # ------------------------------------------------------------------
     # Phase 2: fit — one job per (generating_model, candidate, replication)
