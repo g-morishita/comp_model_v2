@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from comp_model.environments.base import Environment
     from comp_model.inference.config import InferenceConfig
@@ -106,6 +107,12 @@ class ModelRecoveryConfig:
     max_workers
         Maximum parallel workers when fitting candidate models.
         ``None`` selects automatically.
+    log_dir
+        Directory for per-job Stan log files when running in parallel.
+        Each worker writes chain progress to
+        ``<log_dir>/gen=<name>_cand=<name>_rep=<idx>.log`` so you can
+        ``tail -f`` any file to inspect a slow chain.  ``None`` (default)
+        suppresses all Stan console output in parallel mode.
     """
 
     generating_models: tuple[GeneratingModelSpec, ...]
@@ -121,3 +128,4 @@ class ModelRecoveryConfig:
     condition_demonstrator_params: dict[str, Any] | None = None
     simulation_base_seed: int = 42
     max_workers: int | None = None
+    log_dir: Path | None = None
