@@ -62,12 +62,18 @@ def _precompile_stan_models(config: ModelRecoveryConfig) -> None:
     ``FileNotFoundError``.  Compiling once in the main process ensures the
     cached executable is available for all workers.
     """
+    stan_candidates = [
+        c
+        for c in config.candidate_models
+        if c.inference_config.backend == "stan" and c.adapter is not None
+    ]
+    if not stan_candidates:
+        return
+
     seen: set[str] = set()
     cmdstanpy = importlib.import_module("cmdstanpy")
 
-    for cand in config.candidate_models:
-        if cand.inference_config.backend != "stan" or cand.adapter is None:
-            continue
+    for cand in stan_candidates:
         adapter: Any = cand.adapter
         stan_file: str = adapter.stan_program_path(cand.inference_config.hierarchy)
         if stan_file in seen:
