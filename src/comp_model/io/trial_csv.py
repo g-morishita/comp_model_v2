@@ -509,26 +509,22 @@ def _infer_available_actions(path: Path, *, is_social: bool) -> str:
         integers.
     """
 
+    action_columns = ["choice"]
+    if is_social:
+        action_columns.append("demonstrator_action")
     actions: set[int] = set()
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for row_number, row in enumerate(reader, start=2):
-            choice_raw = row.get("choice")
-            if choice_raw is None:
-                raise ValueError(f"Row {row_number}: missing 'choice' column")
-            try:
-                actions.add(int(choice_raw))
-            except ValueError as error:
-                raise ValueError(f"Row {row_number}: 'choice' must be an integer") from error
-            if is_social:
-                demo_raw = row.get("demonstrator_action")
-                if demo_raw is None:
-                    raise ValueError(f"Row {row_number}: missing 'demonstrator_action' column")
+            for col_name in action_columns:
+                raw_val = row.get(col_name)
+                if raw_val is None:
+                    raise ValueError(f"Row {row_number}: missing '{col_name}' column")
                 try:
-                    actions.add(int(demo_raw))
+                    actions.add(int(raw_val))
                 except ValueError as error:
                     raise ValueError(
-                        f"Row {row_number}: 'demonstrator_action' must be an integer"
+                        f"Row {row_number}: '{col_name}' must be an integer"
                     ) from error
     if not actions:
         raise ValueError("Cannot infer available_actions from an empty CSV file")
