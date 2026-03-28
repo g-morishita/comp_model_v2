@@ -43,10 +43,18 @@ class StanFitConfig:
     max_treedepth
         Maximum NUTS tree depth.
     show_console
-        If ``True`` (default), display CmdStan progress on the console.
-        Set to ``False`` to suppress chain progress output, which is
-        useful when running multiple fits in parallel to avoid
-        interleaved output.
+        If ``True`` (default), display CmdStan's raw text progress on
+        the console.  Set to ``False`` to suppress it (e.g. in parallel
+        runs where output would interleave).
+    show_progress
+        If ``True``, display a ``tqdm`` progress bar per chain instead
+        of (or in addition to) raw console text.  Useful in parallel
+        contexts: set ``show_console=False, show_progress=True`` to get
+        tqdm bars that handle concurrency without interleaving.
+    refresh
+        How often (in iterations) CmdStan reports progress.  Lower
+        values give more granular updates but add overhead.  ``None``
+        uses CmdStan's default.
 
     Notes
     -----
@@ -61,6 +69,8 @@ class StanFitConfig:
     adapt_delta: float = 0.8
     max_treedepth: int = 10
     show_console: bool = True
+    show_progress: bool = False
+    refresh: int | None = None
 
 
 DEFAULT_STAN_FIT_CONFIG = StanFitConfig()
@@ -125,6 +135,8 @@ def fit_stan(
         adapt_delta=resolved_config.adapt_delta,
         max_treedepth=resolved_config.max_treedepth,
         show_console=resolved_config.show_console,
+        show_progress=resolved_config.show_progress,
+        refresh=resolved_config.refresh,
     )
 
     posterior_samples = {}
