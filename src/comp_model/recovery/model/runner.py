@@ -141,7 +141,7 @@ def _with_console_suppressed(cand: CandidateModelSpec) -> CandidateModelSpec:
         or the original spec if no Stan config is present.
     """
     stan_cfg = getattr(cand.inference_config, "stan_config", None)
-    if stan_cfg is None:
+    if stan_cfg is None or not stan_cfg.show_console:
         return cand
     quiet_stan = dataclasses.replace(stan_cfg, show_console=False)
     quiet_inf = dataclasses.replace(cand.inference_config, stan_config=quiet_stan)
