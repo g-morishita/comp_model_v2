@@ -138,6 +138,14 @@ layout_model7c = SharedDeltaLayout(
 )
 
 # ---------------------------------------------------------------------------
+# Shared prior configurations
+# ---------------------------------------------------------------------------
+
+ALPHA_PRIORS = {"mu_prior": stats.norm(0, 1), "sd_prior": stats.halfnorm(0, 1)}
+BETA_PRIORS = {"mu_prior": stats.norm(1, 1), "sd_prior": stats.halfnorm(0, 1)}
+DELTA_PRIORS = {"mu_prior": stats.norm(0, 0.5), "sd_prior": stats.halfnorm(0, 0.5)}
+
+# ---------------------------------------------------------------------------
 # Generating model specs
 # ---------------------------------------------------------------------------
 
@@ -147,16 +155,10 @@ generating_models = (
         name="M1_Asocial",
         kernel=AsocialQLearningKernel(),
         param_dists=(
-            HierarchicalParamDist(
-                "alpha", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist("beta", mu_prior=stats.norm(1, 1), sd_prior=stats.halfnorm(0, 1)),
-            HierarchicalParamDist(
-                "alpha__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "beta__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
+            HierarchicalParamDist("alpha", **ALPHA_PRIORS),
+            HierarchicalParamDist("beta", **BETA_PRIORS),
+            HierarchicalParamDist("alpha__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("beta__delta", **DELTA_PRIORS),
         ),
         layout=layout_model1,
     ),
@@ -165,22 +167,12 @@ generating_models = (
         name="M3_DemoReward",
         kernel=SocialRlSelfRewardDemoRewardKernel(),
         param_dists=(
-            HierarchicalParamDist(
-                "alpha_self", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist(
-                "alpha_other", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist("beta", mu_prior=stats.norm(1, 1), sd_prior=stats.halfnorm(0, 1)),
-            HierarchicalParamDist(
-                "alpha_self__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "alpha_other__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "beta__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
+            HierarchicalParamDist("alpha_self", **ALPHA_PRIORS),
+            HierarchicalParamDist("alpha_other", **ALPHA_PRIORS),
+            HierarchicalParamDist("beta", **BETA_PRIORS),
+            HierarchicalParamDist("alpha_self__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("alpha_other__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("beta__delta", **DELTA_PRIORS),
         ),
         layout=layout_model3,
     ),
@@ -190,30 +182,14 @@ generating_models = (
         name="M4c_DemoAction",
         kernel=SocialRlSelfRewardDemoActionMixtureKernel(),
         param_dists=(
-            HierarchicalParamDist(
-                "alpha_self", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist(
-                "alpha_other_action", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist(
-                "w_imitation", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist("beta", mu_prior=stats.norm(1, 1), sd_prior=stats.halfnorm(0, 1)),
-            HierarchicalParamDist(
-                "alpha_self__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "alpha_other_action__delta",
-                mu_prior=stats.norm(0, 0.5),
-                sd_prior=stats.halfnorm(0, 0.5),
-            ),
-            HierarchicalParamDist(
-                "w_imitation__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "beta__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
+            HierarchicalParamDist("alpha_self", **ALPHA_PRIORS),
+            HierarchicalParamDist("alpha_other_action", **ALPHA_PRIORS),
+            HierarchicalParamDist("w_imitation", **ALPHA_PRIORS),
+            HierarchicalParamDist("beta", **BETA_PRIORS),
+            HierarchicalParamDist("alpha_self__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("alpha_other_action__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("w_imitation__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("beta__delta", **DELTA_PRIORS),
         ),
         layout=layout_model4c,
     ),
@@ -223,38 +199,16 @@ generating_models = (
         name="M7c_FullMixture",
         kernel=SocialRlSelfRewardDemoMixtureKernel(),
         param_dists=(
-            HierarchicalParamDist(
-                "alpha_self", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist(
-                "alpha_other_outcome", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist(
-                "alpha_other_action", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist(
-                "w_imitation", mu_prior=stats.norm(0, 1), sd_prior=stats.halfnorm(0, 1)
-            ),
-            HierarchicalParamDist("beta", mu_prior=stats.norm(1, 1), sd_prior=stats.halfnorm(0, 1)),
-            HierarchicalParamDist(
-                "alpha_self__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "alpha_other_outcome__delta",
-                mu_prior=stats.norm(0, 0.5),
-                sd_prior=stats.halfnorm(0, 0.5),
-            ),
-            HierarchicalParamDist(
-                "alpha_other_action__delta",
-                mu_prior=stats.norm(0, 0.5),
-                sd_prior=stats.halfnorm(0, 0.5),
-            ),
-            HierarchicalParamDist(
-                "w_imitation__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
-            HierarchicalParamDist(
-                "beta__delta", mu_prior=stats.norm(0, 0.5), sd_prior=stats.halfnorm(0, 0.5)
-            ),
+            HierarchicalParamDist("alpha_self", **ALPHA_PRIORS),
+            HierarchicalParamDist("alpha_other_outcome", **ALPHA_PRIORS),
+            HierarchicalParamDist("alpha_other_action", **ALPHA_PRIORS),
+            HierarchicalParamDist("w_imitation", **ALPHA_PRIORS),
+            HierarchicalParamDist("beta", **BETA_PRIORS),
+            HierarchicalParamDist("alpha_self__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("alpha_other_outcome__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("alpha_other_action__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("w_imitation__delta", **DELTA_PRIORS),
+            HierarchicalParamDist("beta__delta", **DELTA_PRIORS),
         ),
         layout=layout_model7c,
     ),
