@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
@@ -113,12 +118,13 @@ def _check_layout_consistency(config: ModelRecoveryConfig) -> None:
             )
 
 
-def _with_parallel_progress(cand: CandidateModelSpec) -> CandidateModelSpec:
-    """Return a copy of *cand* configured for parallel-safe Stan progress.
+def _with_console_suppressed(cand: CandidateModelSpec) -> CandidateModelSpec:
+    """Return a copy of *cand* with Stan console output disabled.
 
-    Replaces raw console output (``show_console``) with ``tqdm``-based
-    progress bars (``show_progress``) so that chain progress is still
-    visible but does not interleave across concurrent worker processes.
+    When fitting candidates in parallel without a ``log_dir``, Stan's
+    raw progress text would interleave on the terminal.  This helper
+    sets ``show_console=False`` so parallel workers stay quiet while
+    the job-level ``tqdm`` bar still reports overall progress.
 
     If the candidate does not use a Stan backend the spec is returned
     unchanged.
@@ -131,14 +137,13 @@ def _with_parallel_progress(cand: CandidateModelSpec) -> CandidateModelSpec:
     Returns
     -------
     CandidateModelSpec
-        A shallow copy with ``show_console=False`` and
-        ``show_progress=True`` on the Stan config, or the original
-        spec if no Stan config is present.
+        A shallow copy with ``show_console=False`` on the Stan config,
+        or the original spec if no Stan config is present.
     """
     stan_cfg = getattr(cand.inference_config, "stan_config", None)
     if stan_cfg is None:
         return cand
-    quiet_stan = dataclasses.replace(stan_cfg, show_console=False, show_progress=True)
+    quiet_stan = dataclasses.replace(stan_cfg, show_console=False)
     quiet_inf = dataclasses.replace(cand.inference_config, stan_config=quiet_stan)
     return dataclasses.replace(cand, inference_config=quiet_inf)
 
@@ -268,9 +273,22 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
     scores: dict[str, dict[int, dict[str, float]]] = {}
     total_jobs = len(jobs)
 
+    log_dir = config.log_dir
+    if log_dir is not None:
+        log_dir.mkdir(parents=True, exist_ok=True)
+
     with tqdm(total=total_jobs, desc="Model recovery", unit="fit") as pbar:
         if max_workers > 1 and total_jobs > 1:
-            cand_by_name = {c.name: _with_parallel_progress(c) for c in config.candidate_models}
+            # When log_dir is set, keep show_console=True so chain
+            # progress is written — stdout/stderr are redirected to
+            # per-job files inside the worker.  Without log_dir,
+            # suppress console output entirely.
+            if log_dir is not None:
+                cand_by_name = {c.name: c for c in config.candidate_models}
+            else:
+                cand_by_name = {
+                    c.name: _with_console_suppressed(c) for c in config.candidate_models
+                }
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 future_to_key = {
                     executor.submit(
@@ -281,6 +299,7 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
                         simulated[(gen_name, rep_idx)],
                         config.schema,
                         config.criterion,
+                        log_dir,
                     ): (gen_name, rep_idx, cand_name)
                     for gen_name, cand_name, rep_idx in jobs
                 }
@@ -333,6 +352,36 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
 # ---------------------------------------------------------------------------
 
 
+@contextlib.contextmanager
+def _redirect_to_log(log_path: Path | None):
+    """Context manager that redirects stdout and stderr to *log_path*.
+
+    When *log_path* is ``None`` the context manager is a no-op and
+    output goes to the original streams as usual.
+
+    Parameters
+    ----------
+    log_path
+        File to write captured output to, or ``None`` to skip.
+
+    Yields
+    ------
+    None
+    """
+    if log_path is None:
+        yield
+        return
+    with open(log_path, "w") as fh:
+        old_out, old_err = sys.stdout, sys.stderr
+        sys.stdout = fh  # type: ignore[assignment]
+        sys.stderr = fh  # type: ignore[assignment]
+        try:
+            yield
+        finally:
+            sys.stdout = old_out
+            sys.stderr = old_err
+
+
 def _fit_candidate_job(
     gen_name: str,
     rep_idx: int,
@@ -340,11 +389,17 @@ def _fit_candidate_job(
     dataset: Dataset,
     schema: Any,
     criterion: str,
+    log_dir: Path | None = None,
 ) -> float:
     """Fit one candidate model to one dataset and return its score.
 
     This function is the unit of work submitted to the process pool.  It runs
     entirely in a single process with no nested parallelism.
+
+    When *log_dir* is not ``None``, stdout and stderr are redirected to
+    ``<log_dir>/gen=<gen_name>_cand=<cand_name>_rep=<rep_idx>.log`` so
+    that Stan chain progress can be inspected with ``tail -f`` without
+    interleaving across workers.
 
     Parameters
     ----------
@@ -360,12 +415,34 @@ def _fit_candidate_job(
         Trial schema used for replay extraction.
     criterion
         Scoring criterion.
+    log_dir
+        Directory for per-job log files.  ``None`` skips redirection.
 
     Returns
     -------
     float
         Score for ``cand`` on ``dataset`` (higher = better).
     """
+
+    log_path = (
+        log_dir / f"gen={gen_name}_cand={cand.name}_rep={rep_idx}.log"
+        if log_dir is not None
+        else None
+    )
+
+    with _redirect_to_log(log_path):
+        return _fit_candidate_inner(gen_name, rep_idx, cand, dataset, schema, criterion)
+
+
+def _fit_candidate_inner(
+    gen_name: str,
+    rep_idx: int,
+    cand: CandidateModelSpec,
+    dataset: Dataset,
+    schema: Any,
+    criterion: str,
+) -> float:
+    """Core fitting logic, separated to allow stdout/stderr redirection."""
 
     if criterion in ("aic", "bic", "log_likelihood"):
         mle_results: list[MleFitResult] = [
