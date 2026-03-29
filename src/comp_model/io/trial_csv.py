@@ -46,7 +46,7 @@ _COMMON_FIELDNAMES = (
     "choice",
     "reward",
 )
-_SOCIAL_FIELDNAMES = (*_COMMON_FIELDNAMES, "demonstrator_action", "demonstrator_reward")
+_SOCIAL_FIELDNAMES = (*_COMMON_FIELDNAMES, "demonstrator_choice", "demonstrator_reward")
 
 
 class TrialCsvConverter(Protocol):
@@ -324,7 +324,7 @@ class _SocialTrialCsvConverter:
                 choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
                 reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
             ),
-            "demonstrator_action": str(
+            "demonstrator_choice": str(
                 _require_social_action(view.social_action, self.schema_id, trial.trial_index)
             ),
             "demonstrator_reward": str(
@@ -351,7 +351,7 @@ class _SocialTrialCsvConverter:
         available_actions = _parse_available_actions(row["available_actions"])
         choice = _parse_int_field(row, "choice")
         reward = _parse_float_field(row, "reward")
-        demonstrator_action = _parse_int_field(row, "demonstrator_action")
+        demonstrator_choice = _parse_int_field(row, "demonstrator_choice")
         demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
         _validate_action_in_available_set(
             action=choice,
@@ -359,9 +359,9 @@ class _SocialTrialCsvConverter:
             field_name="choice",
         )
         _validate_action_in_available_set(
-            action=demonstrator_action,
+            action=demonstrator_choice,
             available_actions=available_actions,
-            field_name="demonstrator_action",
+            field_name="demonstrator_choice",
         )
         return _build_trial_from_schema(
             schema=self.schema,
@@ -370,7 +370,7 @@ class _SocialTrialCsvConverter:
             choice=choice,
             reward=reward,
             demonstrator_observation={
-                "social_action": demonstrator_action,
+                "social_action": demonstrator_choice,
                 "social_reward": demonstrator_reward,
             },
         )
@@ -489,7 +489,7 @@ def _infer_available_actions(
     """Infer ``available_actions`` from buffered CSV rows.
 
     Collects every unique integer that appears in the ``choice`` column (and
-    ``demonstrator_action`` when ``is_social`` is true), then returns the
+    ``demonstrator_choice`` when ``is_social`` is true), then returns the
     sorted union formatted as a pipe-delimited string (e.g. ``"0|1|2"``).
 
     Parameters
@@ -497,7 +497,7 @@ def _infer_available_actions(
     rows
         Buffered CSV rows (list of dicts from :class:`csv.DictReader`).
     is_social
-        When true, also include values from the ``demonstrator_action`` column.
+        When true, also include values from the ``demonstrator_choice`` column.
 
     Returns
     -------
@@ -512,7 +512,7 @@ def _infer_available_actions(
 
     action_columns = ["choice"]
     if is_social:
-        action_columns.append("demonstrator_action")
+        action_columns.append("demonstrator_choice")
     actions: set[int] = set()
     for row_number, row in enumerate(rows, start=2):
         for col_name in action_columns:
@@ -566,7 +566,7 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
         infer_schema_id = "schema_id" in absent_optional
         buffered_rows = list(reader)
         if infer_actions:
-            is_social = "demonstrator_action" in converter.fieldnames
+            is_social = "demonstrator_choice" in converter.fieldnames
             inferred_available_actions = _infer_available_actions(
                 buffered_rows, is_social=is_social
             )
@@ -818,10 +818,10 @@ def _build_trial_from_schema(
         payload was supplied.
     """
 
-    demonstrator_action: int | None = None
+    demonstrator_choice: int | None = None
     demonstrator_reward: float | None = None
     if demonstrator_observation is not None:
-        demonstrator_action = demonstrator_observation.get("social_action")
+        demonstrator_choice = demonstrator_observation.get("social_action")
         demonstrator_reward = demonstrator_observation.get("social_reward")
 
     events: list[Event] = []
@@ -832,9 +832,9 @@ def _build_trial_from_schema(
             if step.actor_id == "subject":
                 payload = {"action": choice}
             else:
-                if demonstrator_action is None:
-                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator action")
-                payload = {"action": demonstrator_action}
+                if demonstrator_choice is None:
+                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator choice")
+                payload = {"action": demonstrator_choice}
         elif step.phase == EventPhase.OUTCOME:
             if step.actor_id == "subject":
                 payload = {"reward": reward}
@@ -847,9 +847,9 @@ def _build_trial_from_schema(
             if step.actor_id == "subject":
                 payload = {"choice": choice, "reward": reward}
             else:
-                if demonstrator_action is None or demonstrator_reward is None:
+                if demonstrator_choice is None or demonstrator_reward is None:
                     raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator data")
-                payload = {"choice": demonstrator_action, "reward": demonstrator_reward}
+                payload = {"choice": demonstrator_choice, "reward": demonstrator_reward}
         else:
             raise ValueError(f"Unsupported event phase {step.phase!r}")
 

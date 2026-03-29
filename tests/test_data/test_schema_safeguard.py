@@ -361,7 +361,7 @@ class TestCsvSchemaIdRoundTrip:
         header = (
             "subject_id,block_index,condition,schema_id,"
             "trial_index,available_actions,choice,reward,"
-            "demonstrator_action,demonstrator_reward"
+            "demonstrator_choice,demonstrator_reward"
         )
         row = "sub_00,0,default,social_pre_choice,0,0|1,1,1.0,0,0.5"
         csv_path.write_text(f"{header}\n{row}\n", encoding="utf-8")
