@@ -40,6 +40,30 @@ data {
   real beta_prior_p1;           // first hyperparameter of the beta prior
   real beta_prior_p2;           // second hyperparameter of the beta prior
   real beta_prior_p3;           // third hyperparameter of the beta prior
+  int sd_alpha_pos_prior_family;   // prior family code for the group-level shared alpha_pos SD
+  real sd_alpha_pos_prior_p1;      // first hyperparameter of the shared alpha_pos SD prior
+  real sd_alpha_pos_prior_p2;      // second hyperparameter of the shared alpha_pos SD prior
+  real sd_alpha_pos_prior_p3;      // third hyperparameter of the shared alpha_pos SD prior
+  int sd_alpha_neg_prior_family;   // prior family code for the group-level shared alpha_neg SD
+  real sd_alpha_neg_prior_p1;      // first hyperparameter of the shared alpha_neg SD prior
+  real sd_alpha_neg_prior_p2;      // second hyperparameter of the shared alpha_neg SD prior
+  real sd_alpha_neg_prior_p3;      // third hyperparameter of the shared alpha_neg SD prior
+  int sd_beta_prior_family;        // prior family code for the group-level shared beta SD
+  real sd_beta_prior_p1;           // first hyperparameter of the shared beta SD prior
+  real sd_beta_prior_p2;           // second hyperparameter of the shared beta SD prior
+  real sd_beta_prior_p3;           // third hyperparameter of the shared beta SD prior
+  int sd_alpha_pos_delta_prior_family;   // prior family code for the group-level alpha_pos delta SD
+  real sd_alpha_pos_delta_prior_p1;      // first hyperparameter of the alpha_pos delta SD prior
+  real sd_alpha_pos_delta_prior_p2;      // second hyperparameter of the alpha_pos delta SD prior
+  real sd_alpha_pos_delta_prior_p3;      // third hyperparameter of the alpha_pos delta SD prior
+  int sd_alpha_neg_delta_prior_family;   // prior family code for the group-level alpha_neg delta SD
+  real sd_alpha_neg_delta_prior_p1;      // first hyperparameter of the alpha_neg delta SD prior
+  real sd_alpha_neg_delta_prior_p2;      // second hyperparameter of the alpha_neg delta SD prior
+  real sd_alpha_neg_delta_prior_p3;      // third hyperparameter of the alpha_neg delta SD prior
+  int sd_beta_delta_prior_family;        // prior family code for the group-level beta delta SD
+  real sd_beta_delta_prior_p1;           // first hyperparameter of the beta delta SD prior
+  real sd_beta_delta_prior_p2;           // second hyperparameter of the beta delta SD prior
+  real sd_beta_delta_prior_p3;           // third hyperparameter of the beta delta SD prior
 }
 parameters {
   // Population-level: shared
@@ -106,23 +130,26 @@ model {
   array[N] vector[A] Q; // per-subject action-value vectors
 
   target += prior_lpdf(mu_alpha_pos_shared_z | alpha_pos_prior_family, alpha_pos_prior_p1, alpha_pos_prior_p2, alpha_pos_prior_p3);
-  sd_alpha_pos_shared_z ~ normal(0, 1);   // half-normal prior on group SD
+  target += prior_lpdf(sd_alpha_pos_shared_z | sd_alpha_pos_prior_family, sd_alpha_pos_prior_p1, sd_alpha_pos_prior_p2, sd_alpha_pos_prior_p3);
   raw_alpha_pos_shared_z ~ normal(0, 1);  // non-centred parameterisation
 
   target += prior_lpdf(mu_alpha_neg_shared_z | alpha_neg_prior_family, alpha_neg_prior_p1, alpha_neg_prior_p2, alpha_neg_prior_p3);
-  sd_alpha_neg_shared_z ~ normal(0, 1);
+  target += prior_lpdf(sd_alpha_neg_shared_z | sd_alpha_neg_prior_family, sd_alpha_neg_prior_p1, sd_alpha_neg_prior_p2, sd_alpha_neg_prior_p3);
   raw_alpha_neg_shared_z ~ normal(0, 1);
 
   target += prior_lpdf(mu_beta_shared_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
-  sd_beta_shared_z ~ normal(0, 1);
+  target += prior_lpdf(sd_beta_shared_z | sd_beta_prior_family, sd_beta_prior_p1, sd_beta_prior_p2, sd_beta_prior_p3);
   raw_beta_shared_z ~ normal(0, 1);
 
   mu_alpha_pos_delta_z ~ normal(0, 1);   // regularising prior on group-level delta means
-  sd_alpha_pos_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(sd_alpha_pos_delta_z[d] | sd_alpha_pos_delta_prior_family, sd_alpha_pos_delta_prior_p1, sd_alpha_pos_delta_prior_p2, sd_alpha_pos_delta_prior_p3);
   mu_alpha_neg_delta_z ~ normal(0, 1);
-  sd_alpha_neg_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(sd_alpha_neg_delta_z[d] | sd_alpha_neg_delta_prior_family, sd_alpha_neg_delta_prior_p1, sd_alpha_neg_delta_prior_p2, sd_alpha_neg_delta_prior_p3);
   mu_beta_delta_z ~ normal(0, 1);
-  sd_beta_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(sd_beta_delta_z[d] | sd_beta_delta_prior_family, sd_beta_delta_prior_p1, sd_beta_delta_prior_p2, sd_beta_delta_prior_p3);
   for (d in 1:(C - 1)) {
     raw_alpha_pos_delta_z[d] ~ normal(0, 1); // non-centred deviates for per-subject alpha_pos deltas
     raw_alpha_neg_delta_z[d] ~ normal(0, 1);

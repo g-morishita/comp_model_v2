@@ -28,10 +28,18 @@ data {
   real alpha_prior_p1;      // first hyperparameter of the alpha prior
   real alpha_prior_p2;      // second hyperparameter of the alpha prior
   real alpha_prior_p3;      // third hyperparameter of the alpha prior
+  int sd_alpha_prior_family;   // prior family code for the group-level alpha SD
+  real sd_alpha_prior_p1;      // first hyperparameter of the alpha SD prior
+  real sd_alpha_prior_p2;      // second hyperparameter of the alpha SD prior
+  real sd_alpha_prior_p3;      // third hyperparameter of the alpha SD prior
   int beta_prior_family;    // prior family code for the group-level beta mean
   real beta_prior_p1;       // first hyperparameter of the beta prior
   real beta_prior_p2;       // second hyperparameter of the beta prior
   real beta_prior_p3;       // third hyperparameter of the beta prior
+  int sd_beta_prior_family;    // prior family code for the group-level beta SD
+  real sd_beta_prior_p1;       // first hyperparameter of the beta SD prior
+  real sd_beta_prior_p2;       // second hyperparameter of the beta SD prior
+  real sd_beta_prior_p3;       // third hyperparameter of the beta SD prior
 }
 parameters {
   real mu_alpha_z;              // group-level mean of alpha in unconstrained space
@@ -52,11 +60,11 @@ model {
   array[N] vector[A] Q; // per-subject action-value vectors
 
   target += prior_lpdf(mu_alpha_z | alpha_prior_family, alpha_prior_p1, alpha_prior_p2, alpha_prior_p3);
-  sd_alpha_z ~ normal(0, 1);   // half-normal prior on group SD (constrained positive)
+  target += prior_lpdf(sd_alpha_z | sd_alpha_prior_family, sd_alpha_prior_p1, sd_alpha_prior_p2, sd_alpha_prior_p3);   // configurable prior on group SD (constrained positive)
   raw_alpha_z ~ normal(0, 1);  // standard normal prior for non-centred parameterisation
 
   target += prior_lpdf(mu_beta_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
-  sd_beta_z ~ normal(0, 1);
+  target += prior_lpdf(sd_beta_z | sd_beta_prior_family, sd_beta_prior_p1, sd_beta_prior_p2, sd_beta_prior_p3);
   raw_beta_z ~ normal(0, 1);
 
   for (n in 1:N) Q[n] = rep_vector(q_init, A); // initialise Q-values for all subjects
