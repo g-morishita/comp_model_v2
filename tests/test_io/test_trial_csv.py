@@ -691,7 +691,7 @@ def test_load_csv_without_available_actions_infers_from_choices_asocial(
 def test_load_csv_without_available_actions_infers_from_social_columns(
     tmp_path: Path,
 ) -> None:
-    """Ensure omitting ``available_actions`` includes ``demonstrator_action``.
+    """Ensure omitting ``available_actions`` includes ``demonstrator_choice``.
 
     Parameters
     ----------
@@ -708,7 +708,7 @@ def test_load_csv_without_available_actions_infers_from_social_columns(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,schema_id,trial_index,choice,reward,demonstrator_action,demonstrator_reward",
+                "subject_id,block_index,condition,schema_id,trial_index,choice,reward,demonstrator_choice,demonstrator_reward",
                 "s1,0,social,social_pre_choice,0,0,1.0,1,0.0",
                 "s1,0,social,social_pre_choice,1,0,0.0,2,1.0",
             ]
@@ -814,7 +814,7 @@ def test_load_csv_without_schema_id_and_available_actions(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,trial_index,choice,reward,demonstrator_action,demonstrator_reward",
+                "subject_id,block_index,condition,trial_index,choice,reward,demonstrator_choice,demonstrator_reward",
                 "s1,0,social,0,0,1.0,1,0.0",
                 "s1,0,social,1,1,0.0,2,1.0",
             ]
