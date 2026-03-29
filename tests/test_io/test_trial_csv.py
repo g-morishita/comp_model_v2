@@ -212,7 +212,7 @@ def test_load_dataset_from_csv_rejects_inconsistent_block_conditions(
 def test_load_dataset_from_csv_rejects_missing_required_columns(
     tmp_path: Path,
 ) -> None:
-    """Ensure missing converter columns are rejected at header validation.
+    """Ensure missing required columns (not optional ones) are rejected.
 
     Parameters
     ----------
@@ -229,8 +229,8 @@ def test_load_dataset_from_csv_rejects_missing_required_columns(
     csv_path.write_text(
         "\n".join(
             [
-                "subject_id,block_index,condition,schema_id,trial_index,choice,reward",
-                "s1,0,A,asocial_bandit,0,1,1.0",
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions",
+                "s1,0,A,asocial_bandit,0,0|1",
             ]
         )
         + "\n",
@@ -649,6 +649,187 @@ def _make_social_post_outcome_dataset() -> Dataset:
             ),
         ),
     )
+
+
+def test_load_csv_without_available_actions_infers_from_choices_asocial(
+    tmp_path: Path,
+) -> None:
+    """Ensure omitting ``available_actions`` infers from ``choice`` column.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies inferred available actions match observed choices.
+    """
+
+    csv_path = tmp_path / "no_actions.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,schema_id,trial_index,choice,reward",
+                "s1,0,A,asocial_bandit,0,1,1.0",
+                "s1,0,A,asocial_bandit,1,0,0.0",
+                "s1,0,A,asocial_bandit,2,2,1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    trial = dataset.subjects[0].blocks[0].trials[0]
+    input_event = trial.events[0]
+    assert input_event.payload["available_actions"] == (0, 1, 2)
+
+
+def test_load_csv_without_available_actions_infers_from_social_columns(
+    tmp_path: Path,
+) -> None:
+    """Ensure omitting ``available_actions`` includes ``demonstrator_action``.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies the inferred set includes demonstrator actions.
+    """
+
+    csv_path = tmp_path / "no_actions_social.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,schema_id,trial_index,choice,reward,demonstrator_action,demonstrator_reward",
+                "s1,0,social,social_pre_choice,0,0,1.0,1,0.0",
+                "s1,0,social,social_pre_choice,1,0,0.0,2,1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
+
+    trial = dataset.subjects[0].blocks[0].trials[0]
+    input_event = trial.events[0]
+    assert input_event.payload["available_actions"] == (0, 1, 2)
+
+
+def test_load_csv_with_available_actions_still_works(
+    tmp_path: Path,
+) -> None:
+    """Ensure explicit ``available_actions`` column is still honoured.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies backward compatibility when the column is present.
+    """
+
+    csv_path = tmp_path / "with_actions.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s1,0,A,asocial_bandit,0,0|1|2,1,1.0",
+                "s1,0,A,asocial_bandit,1,0|1|2,0,0.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    trial = dataset.subjects[0].blocks[0].trials[0]
+    input_event = trial.events[0]
+    assert input_event.payload["available_actions"] == (0, 1, 2)
+
+
+def test_load_csv_without_schema_id_uses_schema_argument(
+    tmp_path: Path,
+) -> None:
+    """Ensure omitting ``schema_id`` column fills it from the schema argument.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies schema_id is injected from the function argument.
+    """
+
+    csv_path = tmp_path / "no_schema_id.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,trial_index,available_actions,choice,reward",
+                "s1,0,A,0,0|1,1,1.0",
+                "s1,0,A,1,0|1,0,0.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    assert dataset.subjects[0].blocks[0].schema_id == "asocial_bandit"
+
+
+def test_load_csv_without_schema_id_and_available_actions(
+    tmp_path: Path,
+) -> None:
+    """Ensure both ``schema_id`` and ``available_actions`` can be omitted.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies both columns are inferred simultaneously.
+    """
+
+    csv_path = tmp_path / "minimal.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,trial_index,choice,reward,demonstrator_action,demonstrator_reward",
+                "s1,0,social,0,0,1.0,1,0.0",
+                "s1,0,social,1,1,0.0,2,1.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
+
+    block = dataset.subjects[0].blocks[0]
+    assert block.schema_id == "social_pre_choice"
+    trial = block.trials[0]
+    input_event = trial.events[0]
+    assert input_event.payload["available_actions"] == (0, 1, 2)
 
 
 def _fitting_view_signatures(

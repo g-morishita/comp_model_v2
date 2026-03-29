@@ -483,6 +483,51 @@ def save_dataset_to_csv(dataset: Dataset, *, schema: TrialSchema, path: str | Pa
                     )
 
 
+def _infer_available_actions(
+    rows: Sequence[Mapping[str | None, object]], *, is_social: bool
+) -> str:
+    """Infer ``available_actions`` from buffered CSV rows.
+
+    Collects every unique integer that appears in the ``choice`` column (and
+    ``demonstrator_action`` when ``is_social`` is true), then returns the
+    sorted union formatted as a pipe-delimited string (e.g. ``"0|1|2"``).
+
+    Parameters
+    ----------
+    rows
+        Buffered CSV rows (list of dicts from :class:`csv.DictReader`).
+    is_social
+        When true, also include values from the ``demonstrator_action`` column.
+
+    Returns
+    -------
+    str
+        Pipe-delimited available actions inferred from the data.
+
+    Raises
+    ------
+    ValueError
+        Raised when the rows are empty or action values are not integers.
+    """
+
+    action_columns = ["choice"]
+    if is_social:
+        action_columns.append("demonstrator_action")
+    actions: set[int] = set()
+    for row_number, row in enumerate(rows, start=2):
+        for col_name in action_columns:
+            raw_val = row.get(col_name)
+            if raw_val is None:
+                raise ValueError(f"Row {row_number}: missing '{col_name}' column")
+            try:
+                actions.add(int(raw_val))  # type: ignore[arg-type]
+            except (ValueError, TypeError) as error:
+                raise ValueError(f"Row {row_number}: '{col_name}' must be an integer") from error
+    if not actions:
+        raise ValueError("Cannot infer available_actions from an empty CSV file")
+    return _format_available_actions(tuple(sorted(actions)))
+
+
 def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
     """Load a dataset from a schema-specific trial CSV file.
 
@@ -512,13 +557,33 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
 
     with source.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
-        _validate_header_row(reader.fieldnames, expected_fields=converter.fieldnames)
-        for row_number, raw_row in enumerate(reader, start=2):
+        absent_optional = _validate_header_row(
+            reader.fieldnames,
+            expected_fields=converter.fieldnames,
+            optional_fields=frozenset({"available_actions", "schema_id"}),
+        )
+        infer_actions = "available_actions" in absent_optional
+        infer_schema_id = "schema_id" in absent_optional
+        buffered_rows = list(reader)
+        if infer_actions:
+            is_social = "demonstrator_action" in converter.fieldnames
+            inferred_available_actions = _infer_available_actions(
+                buffered_rows, is_social=is_social
+            )
+        else:
+            inferred_available_actions = None
+        effective_fields = tuple(f for f in converter.fieldnames if f not in absent_optional)
+
+        for row_number, raw_row in enumerate(buffered_rows, start=2):
             row = _normalize_input_row(
                 raw_row,
-                expected_fields=converter.fieldnames,
+                expected_fields=effective_fields,
                 row_number=row_number,
             )
+            if infer_actions:
+                row["available_actions"] = inferred_available_actions  # type: ignore[assignment]
+            if infer_schema_id:
+                row["schema_id"] = schema.schema_id
             subject_id = row["subject_id"]
             block_index = _parse_non_negative_int(row["block_index"], field_name="block_index")
             condition = row["condition"]
@@ -837,7 +902,8 @@ def _validate_header_row(
     fieldnames: Sequence[str] | None,
     *,
     expected_fields: tuple[str, ...],
-) -> None:
+    optional_fields: frozenset[str] = frozenset(),
+) -> frozenset[str]:
     """Validate a CSV header against a converter's declared columns.
 
     Parameters
@@ -846,11 +912,14 @@ def _validate_header_row(
         Header row returned by :class:`csv.DictReader`.
     expected_fields
         Exact field set required by the converter.
+    optional_fields
+        Field names that may be absent from the header without raising.
 
     Returns
     -------
-    None
-        This function raises on header mismatch.
+    frozenset[str]
+        Subset of ``optional_fields`` that were actually absent from the
+        header.
 
     Raises
     ------
@@ -863,12 +932,15 @@ def _validate_header_row(
         raise ValueError("CSV file is missing a header row")
     actual_fields = set(fieldnames)
     expected_field_set = set(expected_fields)
-    missing_fields = sorted(expected_field_set - actual_fields)
+    all_missing = expected_field_set - actual_fields
+    absent_optional = frozenset(all_missing & optional_fields)
+    required_missing = sorted(all_missing - optional_fields)
     unknown_fields = sorted(actual_fields - expected_field_set)
-    if missing_fields:
-        raise ValueError(f"Missing required columns: {missing_fields}")
+    if required_missing:
+        raise ValueError(f"Missing required columns: {required_missing}")
     if unknown_fields:
         raise ValueError(f"Unknown columns: {unknown_fields}")
+    return absent_optional
 
 
 def _normalize_input_row(
