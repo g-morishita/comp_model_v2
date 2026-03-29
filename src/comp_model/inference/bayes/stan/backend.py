@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 
 from comp_model.inference.bayes.result import BayesFitResult
+from comp_model.inference.exceptions import SamplingError
 
 if TYPE_CHECKING:
     from comp_model.data.schema import Dataset, SubjectData
@@ -129,19 +130,22 @@ def fit_stan(
     )
 
     with tempfile.TemporaryDirectory(prefix="comp_model_stan_") as tmpdir:
-        stan_fit = model.sample(
-            data=adapter.build_stan_data(data, schema, hierarchy, layout, prior_specs),
-            iter_warmup=resolved_config.n_warmup,
-            iter_sampling=resolved_config.n_samples,
-            chains=resolved_config.n_chains,
-            seed=resolved_config.seed,
-            adapt_delta=resolved_config.adapt_delta,
-            max_treedepth=resolved_config.max_treedepth,
-            show_console=resolved_config.show_console,
-            show_progress=resolved_config.show_progress,
-            refresh=resolved_config.refresh,
-            output_dir=tmpdir,
-        )
+        try:
+            stan_fit = model.sample(
+                data=adapter.build_stan_data(data, schema, hierarchy, layout, prior_specs),
+                iter_warmup=resolved_config.n_warmup,
+                iter_sampling=resolved_config.n_samples,
+                chains=resolved_config.n_chains,
+                seed=resolved_config.seed,
+                adapt_delta=resolved_config.adapt_delta,
+                max_treedepth=resolved_config.max_treedepth,
+                show_console=resolved_config.show_console,
+                show_progress=resolved_config.show_progress,
+                refresh=resolved_config.refresh,
+                output_dir=tmpdir,
+            )
+        except RuntimeError as exc:
+            raise SamplingError(str(exc), original=exc) from exc
 
         posterior_samples = {}
         for parameter_name in adapter.subject_param_names():

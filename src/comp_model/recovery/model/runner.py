@@ -19,6 +19,7 @@ from comp_model.data.schema import Block, Dataset, SubjectData
 from comp_model.inference.bayes.result import BayesFitResult
 from comp_model.inference.config import HierarchyStructure
 from comp_model.inference.dispatch import fit
+from comp_model.inference.exceptions import SamplingError
 from comp_model.recovery.model.criteria import (
     score_candidate_bayes,
     score_candidate_mle,
@@ -332,8 +333,10 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
     if max_workers is None:
         max_workers = min(os.cpu_count() or 1, len(jobs))
 
-    # scores[gen_name][rep_idx][cand_name] = score
-    scores: dict[str, dict[int, dict[str, float]]] = {}
+    # scores[gen_name][rep_idx][cand_name] = score | None
+    scores: dict[str, dict[int, dict[str, float | None]]] = {}
+    # Track (gen, rep) pairs where at least one candidate failed.
+    failed_pairs: set[tuple[str, int]] = set()
     total_jobs = len(jobs)
 
     log_dir = config.log_dir
@@ -370,6 +373,8 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
                     gen_name, rep_idx, cand_name = future_to_key[future]
                     score = future.result()
                     scores.setdefault(gen_name, {}).setdefault(rep_idx, {})[cand_name] = score
+                    if score is None:
+                        failed_pairs.add((gen_name, rep_idx))
                     pbar.update(1)
         else:
             cand_by_name = {c.name: c for c in config.candidate_models}
@@ -383,14 +388,25 @@ def run_model_recovery(config: ModelRecoveryConfig) -> ModelRecoveryResult:
                     config.criterion,
                 )
                 scores.setdefault(gen_name, {}).setdefault(rep_idx, {})[cand_name] = score
+                if score is None:
+                    failed_pairs.add((gen_name, rep_idx))
                 pbar.update(1)
 
     # ------------------------------------------------------------------
     # Assemble ReplicationResult in original (gen, rep) order
     # ------------------------------------------------------------------
+    if failed_pairs:
+        _logger.warning(
+            "%d replication(s) excluded due to sampling failures: %s",
+            len(failed_pairs),
+            sorted(failed_pairs),
+        )
+
     replications: list[ReplicationResult] = []
     for gen_name, rep_idx in gen_rep_order:
-        rep_scores = scores[gen_name][rep_idx]
+        if (gen_name, rep_idx) in failed_pairs:
+            continue
+        rep_scores = {k: v for k, v in scores[gen_name][rep_idx].items() if v is not None}
         winner, winner_score, second, delta = select_winner(rep_scores)
         replications.append(
             ReplicationResult(
@@ -453,7 +469,7 @@ def _fit_candidate_job(
     schema: Any,
     criterion: str,
     log_dir: Path | None = None,
-) -> float:
+) -> float | None:
     """Fit one candidate model to one dataset and return its score.
 
     This function is the unit of work submitted to the process pool.  It runs
@@ -507,25 +523,28 @@ def _fit_candidate_inner(
     dataset: Dataset,
     schema: Any,
     criterion: str,
-) -> float:
+) -> float | None:
     """Core fitting logic, separated to allow stdout/stderr redirection.
 
-    Returns ``float("-inf")`` when sampling fails so that the replication
-    is recorded as a worst-possible score instead of crashing the entire
-    model recovery run.
+    Returns
+    -------
+    float or None
+        The candidate score, or ``None`` when sampling fails.  A ``None``
+        signals that this ``(gen, rep)`` pair should be excluded from
+        results rather than biased with an artificial score.
     """
-
     try:
         return _fit_candidate_core(gen_name, rep_idx, cand, dataset, schema, criterion)
-    except RuntimeError as exc:
+    except SamplingError as exc:
         _logger.warning(
-            "Sampling failed for gen=%r cand=%r rep=%d: %s — returning -inf",
+            "Sampling failed for gen=%r cand=%r rep=%d: %s — "
+            "this replication will be excluded from results",
             gen_name,
             cand.name,
             rep_idx,
             exc,
         )
-        return float("-inf")
+        return None
 
 
 def _fit_candidate_core(
@@ -536,7 +555,28 @@ def _fit_candidate_core(
     schema: Any,
     criterion: str,
 ) -> float:
-    """Core fitting logic without error handling."""
+    """Run the actual fitting and scoring for a single candidate.
+
+    Parameters
+    ----------
+    gen_name
+        Name of the generating model.
+    rep_idx
+        Replication index.
+    cand
+        Candidate model specification.
+    dataset
+        Simulated dataset to fit.
+    schema
+        Trial schema.
+    criterion
+        Scoring criterion.
+
+    Returns
+    -------
+    float
+        Score for ``cand`` on ``dataset`` (higher = better).
+    """
 
     if criterion in ("aic", "bic", "log_likelihood"):
         mle_results: list[MleFitResult] = [
