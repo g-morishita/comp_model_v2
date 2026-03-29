@@ -483,8 +483,10 @@ def save_dataset_to_csv(dataset: Dataset, *, schema: TrialSchema, path: str | Pa
                     )
 
 
-def _infer_available_actions(path: Path, *, is_social: bool) -> str:
-    """Scan a CSV to infer ``available_actions`` from action columns.
+def _infer_available_actions(
+    rows: Sequence[Mapping[str | None, object]], *, is_social: bool
+) -> str:
+    """Infer ``available_actions`` from buffered CSV rows.
 
     Collects every unique integer that appears in the ``choice`` column (and
     ``demonstrator_action`` when ``is_social`` is true), then returns the
@@ -492,8 +494,8 @@ def _infer_available_actions(path: Path, *, is_social: bool) -> str:
 
     Parameters
     ----------
-    path
-        CSV file to scan.
+    rows
+        Buffered CSV rows (list of dicts from :class:`csv.DictReader`).
     is_social
         When true, also include values from the ``demonstrator_action`` column.
 
@@ -505,27 +507,22 @@ def _infer_available_actions(path: Path, *, is_social: bool) -> str:
     Raises
     ------
     ValueError
-        Raised when the file contains no data rows or action values are not
-        integers.
+        Raised when the rows are empty or action values are not integers.
     """
 
     action_columns = ["choice"]
     if is_social:
         action_columns.append("demonstrator_action")
     actions: set[int] = set()
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row_number, row in enumerate(reader, start=2):
-            for col_name in action_columns:
-                raw_val = row.get(col_name)
-                if raw_val is None:
-                    raise ValueError(f"Row {row_number}: missing '{col_name}' column")
-                try:
-                    actions.add(int(raw_val))
-                except ValueError as error:
-                    raise ValueError(
-                        f"Row {row_number}: '{col_name}' must be an integer"
-                    ) from error
+    for row_number, row in enumerate(rows, start=2):
+        for col_name in action_columns:
+            raw_val = row.get(col_name)
+            if raw_val is None:
+                raise ValueError(f"Row {row_number}: missing '{col_name}' column")
+            try:
+                actions.add(int(raw_val))  # type: ignore[arg-type]
+            except (ValueError, TypeError) as error:
+                raise ValueError(f"Row {row_number}: '{col_name}' must be an integer") from error
     if not actions:
         raise ValueError("Cannot infer available_actions from an empty CSV file")
     return _format_available_actions(tuple(sorted(actions)))
@@ -567,14 +564,17 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
         )
         infer_actions = "available_actions" in absent_optional
         infer_schema_id = "schema_id" in absent_optional
+        buffered_rows = list(reader)
         if infer_actions:
             is_social = "demonstrator_action" in converter.fieldnames
-            inferred_available_actions = _infer_available_actions(source, is_social=is_social)
+            inferred_available_actions = _infer_available_actions(
+                buffered_rows, is_social=is_social
+            )
         else:
             inferred_available_actions = None
         effective_fields = tuple(f for f in converter.fieldnames if f not in absent_optional)
 
-        for row_number, raw_row in enumerate(reader, start=2):
+        for row_number, raw_row in enumerate(buffered_rows, start=2):
             row = _normalize_input_row(
                 raw_row,
                 expected_fields=effective_fields,
