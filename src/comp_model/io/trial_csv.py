@@ -833,7 +833,7 @@ def _build_trial_from_schema(
                 payload = {"action": choice}
             else:
                 if demonstrator_choice is None:
-                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator action")
+                    raise ValueError(f"Schema {schema.schema_id!r} requires demonstrator choice")
                 payload = {"action": demonstrator_choice}
         elif step.phase == EventPhase.OUTCOME:
             if step.actor_id == "subject":
