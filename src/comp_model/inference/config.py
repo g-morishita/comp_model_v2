@@ -69,6 +69,12 @@ class InferenceConfig:
         Only used by the Bayesian backend. Parameters without an entry
         fall back to ``Normal(0, 2)`` on the unconstrained scale.
 
+        SD priors for hierarchical models can be configured with the
+        ``sd_`` prefix (e.g., ``"sd_alpha"``).  When omitted, SD priors
+        default to ``Normal(0, 1)``.  For condition-hierarchy delta SD
+        priors, use the ``_delta`` suffix (e.g., ``"sd_alpha_delta"``);
+        these fall back to the base SD prior, then to ``Normal(0, 1)``.
+
     Notes
     -----
     ``InferenceConfig`` selects the backend entry point only. Kernel semantics,

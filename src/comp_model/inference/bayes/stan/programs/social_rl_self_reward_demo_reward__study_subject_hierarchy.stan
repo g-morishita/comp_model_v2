@@ -32,14 +32,26 @@ data {
   real alpha_self_prior_p1;      // first hyperparameter of the alpha_self prior
   real alpha_self_prior_p2;      // second hyperparameter of the alpha_self prior
   real alpha_self_prior_p3;      // third hyperparameter of the alpha_self prior
+  int sd_alpha_self_prior_family;   // prior family code for the group-level alpha_self SD
+  real sd_alpha_self_prior_p1;      // first hyperparameter of the alpha_self SD prior
+  real sd_alpha_self_prior_p2;      // second hyperparameter of the alpha_self SD prior
+  real sd_alpha_self_prior_p3;      // third hyperparameter of the alpha_self SD prior
   int alpha_other_prior_family;  // prior family code for the group-level alpha_other mean
   real alpha_other_prior_p1;     // first hyperparameter of the alpha_other prior
   real alpha_other_prior_p2;     // second hyperparameter of the alpha_other prior
   real alpha_other_prior_p3;     // third hyperparameter of the alpha_other prior
+  int sd_alpha_other_prior_family;  // prior family code for the group-level alpha_other SD
+  real sd_alpha_other_prior_p1;     // first hyperparameter of the alpha_other SD prior
+  real sd_alpha_other_prior_p2;     // second hyperparameter of the alpha_other SD prior
+  real sd_alpha_other_prior_p3;     // third hyperparameter of the alpha_other SD prior
   int beta_prior_family;         // prior family code for the group-level beta mean
   real beta_prior_p1;            // first hyperparameter of the beta prior
   real beta_prior_p2;            // second hyperparameter of the beta prior
   real beta_prior_p3;            // third hyperparameter of the beta prior
+  int sd_beta_prior_family;         // prior family code for the group-level beta SD
+  real sd_beta_prior_p1;            // first hyperparameter of the beta SD prior
+  real sd_beta_prior_p2;            // second hyperparameter of the beta SD prior
+  real sd_beta_prior_p3;            // third hyperparameter of the beta SD prior
 }
 parameters {
   real mu_alpha_self_z;              // group-level mean of alpha_self in unconstrained space
@@ -66,15 +78,15 @@ model {
   array[N] vector[A] Q; // per-subject action-value vectors
 
   target += prior_lpdf(mu_alpha_self_z | alpha_self_prior_family, alpha_self_prior_p1, alpha_self_prior_p2, alpha_self_prior_p3);
-  sd_alpha_self_z ~ normal(0, 1);   // half-normal prior on group SD
+  target += prior_lpdf(sd_alpha_self_z | sd_alpha_self_prior_family, sd_alpha_self_prior_p1, sd_alpha_self_prior_p2, sd_alpha_self_prior_p3);   // configurable prior on group SD (constrained positive)
   raw_alpha_self_z ~ normal(0, 1);  // non-centred parameterisation
 
   target += prior_lpdf(mu_alpha_other_z | alpha_other_prior_family, alpha_other_prior_p1, alpha_other_prior_p2, alpha_other_prior_p3);
-  sd_alpha_other_z ~ normal(0, 1);
+  target += prior_lpdf(sd_alpha_other_z | sd_alpha_other_prior_family, sd_alpha_other_prior_p1, sd_alpha_other_prior_p2, sd_alpha_other_prior_p3);
   raw_alpha_other_z ~ normal(0, 1);
 
   target += prior_lpdf(mu_beta_z | beta_prior_family, beta_prior_p1, beta_prior_p2, beta_prior_p3);
-  sd_beta_z ~ normal(0, 1);
+  target += prior_lpdf(sd_beta_z | sd_beta_prior_family, sd_beta_prior_p1, sd_beta_prior_p2, sd_beta_prior_p3);
   raw_beta_z ~ normal(0, 1);
 
   for (n in 1:N) Q[n] = rep_vector(q_init, A); // initialise Q-values for all subjects

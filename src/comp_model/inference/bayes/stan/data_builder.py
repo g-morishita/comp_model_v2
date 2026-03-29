@@ -315,6 +315,78 @@ def add_prior_data(
         stan_data[f"{parameter.name}_prior_p3"] = p3
 
 
+def add_sd_prior_data(
+    stan_data: dict[str, Any],
+    kernel_spec: ModelKernelSpec,
+    prior_specs: dict[str, PriorSpec] | None = None,
+    *,
+    include_delta: bool = False,
+) -> None:
+    """Add standard-deviation prior hyperparameters to a Stan data dictionary.
+
+    Parameters
+    ----------
+    stan_data
+        Stan data dictionary to mutate.
+    kernel_spec
+        Kernel specification whose parameter names drive the export.
+    prior_specs
+        Optional mapping from prior name to prior specification.
+        SD priors are looked up with the ``sd_`` prefix (e.g.,
+        ``"sd_alpha"``).  Parameters without an entry fall back to
+        ``Normal(0, 1)`` on the unconstrained scale.
+    include_delta
+        When ``True``, also export SD priors for condition-hierarchy delta
+        parameters.  Delta SD priors are looked up as
+        ``"sd_{name}_delta"``; if absent, they fall back to the
+        base SD prior ``"sd_{name}"``, then to ``Normal(0, 1)``.
+
+    Returns
+    -------
+    None
+        This function mutates ``stan_data`` in-place.
+
+    Notes
+    -----
+    Each parameter exports a ``(family, p1, p2, p3)`` tuple consumed by the
+    shared ``prior_lpdf`` Stan function, prefixed with ``sd_``.  The default
+    prior is ``Normal(0, 1)`` — tighter than the parameter-level default of
+    ``Normal(0, 2)`` — because SD parameters typically require stronger
+    regularisation in hierarchical models.
+    """
+
+    priors = prior_specs or {}
+    default = (1, 0.0, 1.0, 0.0)  # Normal(0, 1)
+
+    for parameter in kernel_spec.parameter_specs:
+        sd_key = f"sd_{parameter.name}"
+        prior = priors.get(sd_key)
+        if prior is not None:
+            family_id, p1, p2, p3 = prior_spec_to_stan_data(prior.family, prior.kwargs)
+        else:
+            family_id, p1, p2, p3 = default
+        stan_data[f"{sd_key}_prior_family"] = family_id
+        stan_data[f"{sd_key}_prior_p1"] = p1
+        stan_data[f"{sd_key}_prior_p2"] = p2
+        stan_data[f"{sd_key}_prior_p3"] = p3
+
+        if include_delta:
+            delta_key = f"sd_{parameter.name}_delta"
+            delta_prior = priors.get(delta_key)
+            if delta_prior is not None:
+                family_id, p1, p2, p3 = prior_spec_to_stan_data(
+                    delta_prior.family, delta_prior.kwargs
+                )
+            elif prior is not None:
+                family_id, p1, p2, p3 = prior_spec_to_stan_data(prior.family, prior.kwargs)
+            else:
+                family_id, p1, p2, p3 = default
+            stan_data[f"{delta_key}_prior_family"] = family_id
+            stan_data[f"{delta_key}_prior_p1"] = p1
+            stan_data[f"{delta_key}_prior_p2"] = p2
+            stan_data[f"{delta_key}_prior_p3"] = p3
+
+
 def add_state_reset_data(stan_data: dict[str, Any], kernel_spec: ModelKernelSpec) -> None:
     """Add kernel state-reset metadata to a Stan data dictionary.
 

@@ -10,6 +10,7 @@ from comp_model.inference.bayes.stan.adapters.base import require_layout_for_con
 from comp_model.inference.bayes.stan.data_builder import (
     add_initial_value_data,
     add_prior_data,
+    add_sd_prior_data,
     add_state_reset_data,
     dataset_to_step_data,
     subject_to_step_data,
@@ -120,6 +121,10 @@ class AsocialRlAsymmetricStanAdapter:
             )
 
         add_prior_data(stan_data, kspec, prior_specs)
+        if hierarchy == HierarchyStructure.STUDY_SUBJECT:
+            add_sd_prior_data(stan_data, kspec, prior_specs)
+        elif hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
+            add_sd_prior_data(stan_data, kspec, prior_specs, include_delta=True)
         add_state_reset_data(stan_data, kspec)
         add_initial_value_data(stan_data, 0.5)
 

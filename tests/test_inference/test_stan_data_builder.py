@@ -7,12 +7,14 @@ from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
     add_prior_data,
+    add_sd_prior_data,
     add_state_reset_data,
     dataset_to_stan_data,
     dataset_to_step_data,
     subject_to_stan_data,
     subject_to_step_data,
 )
+from comp_model.inference.config import PriorSpec
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
 from comp_model.runtime.engine import SimulationConfig, simulate_dataset, simulate_subject
@@ -149,6 +151,62 @@ def test_condition_prior_and_reset_data_are_added() -> None:
     assert "alpha_prior_family" in stan_data
     assert "beta_prior_p2" in stan_data
     assert stan_data["reset_on_block"] == 1
+
+
+def test_add_sd_prior_data_exports_default_normal_priors() -> None:
+    """Ensure SD prior export defaults to Normal(0, 1) for hierarchical fits.
+
+    Returns
+    -------
+    None
+        This test asserts default SD prior metadata.
+    """
+
+    kernel = AsocialQLearningKernel()
+    stan_data: dict[str, int | float] = {}
+
+    add_sd_prior_data(stan_data, kernel.spec())
+
+    assert stan_data["sd_alpha_prior_family"] == 1
+    assert stan_data["sd_alpha_prior_p1"] == 0.0
+    assert stan_data["sd_alpha_prior_p2"] == 1.0
+    assert stan_data["sd_alpha_prior_p3"] == 0.0
+    assert stan_data["sd_beta_prior_family"] == 1
+    assert "sd_alpha_delta_prior_family" not in stan_data
+
+
+def test_add_sd_prior_data_exports_explicit_and_delta_fallback_priors() -> None:
+    """Ensure explicit SD priors and delta fallbacks are exported correctly.
+
+    Returns
+    -------
+    None
+        This test asserts custom SD prior metadata and delta fallback behavior.
+    """
+
+    kernel = AsocialQLearningKernel()
+    stan_data: dict[str, int | float] = {}
+    prior_specs = {
+        "sd_alpha": PriorSpec(family="cauchy", kwargs={"mu": 0.0, "sigma": 0.3}),
+        "sd_beta_delta": PriorSpec(
+            family="student_t",
+            kwargs={"mu": 0.0, "sigma": 0.2, "df": 4.0},
+        ),
+    }
+
+    add_sd_prior_data(stan_data, kernel.spec(), prior_specs, include_delta=True)
+
+    assert stan_data["sd_alpha_prior_family"] == 2
+    assert stan_data["sd_alpha_prior_p1"] == 0.0
+    assert stan_data["sd_alpha_prior_p2"] == 0.3
+    assert stan_data["sd_alpha_prior_p3"] == 0.0
+    assert stan_data["sd_alpha_delta_prior_family"] == 2
+    assert stan_data["sd_alpha_delta_prior_p2"] == 0.3
+    assert stan_data["sd_beta_prior_family"] == 1
+    assert stan_data["sd_beta_delta_prior_family"] == 3
+    assert stan_data["sd_beta_delta_prior_p1"] == 0.0
+    assert stan_data["sd_beta_delta_prior_p2"] == 0.2
+    assert stan_data["sd_beta_delta_prior_p3"] == 4.0
 
 
 def test_add_state_reset_data_exports_per_block_policy() -> None:
