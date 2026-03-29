@@ -8,6 +8,7 @@ package's backend-agnostic result container.
 from __future__ import annotations
 
 import importlib
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -126,30 +127,33 @@ def fit_stan(
         stan_file=stan_file,
         stanc_options={"include-paths": [functions_dir]},
     )
-    fit = model.sample(
-        data=adapter.build_stan_data(data, schema, hierarchy, layout, prior_specs),
-        iter_warmup=resolved_config.n_warmup,
-        iter_sampling=resolved_config.n_samples,
-        chains=resolved_config.n_chains,
-        seed=resolved_config.seed,
-        adapt_delta=resolved_config.adapt_delta,
-        max_treedepth=resolved_config.max_treedepth,
-        show_console=resolved_config.show_console,
-        show_progress=resolved_config.show_progress,
-        refresh=resolved_config.refresh,
-    )
 
-    posterior_samples = {}
-    for parameter_name in adapter.subject_param_names():
-        posterior_samples[parameter_name] = np.asarray(fit.stan_variable(parameter_name))
-    for parameter_name in adapter.population_param_names(hierarchy):
-        posterior_samples[parameter_name] = np.asarray(fit.stan_variable(parameter_name))
+    with tempfile.TemporaryDirectory(prefix="comp_model_stan_") as tmpdir:
+        stan_fit = model.sample(
+            data=adapter.build_stan_data(data, schema, hierarchy, layout, prior_specs),
+            iter_warmup=resolved_config.n_warmup,
+            iter_sampling=resolved_config.n_samples,
+            chains=resolved_config.n_chains,
+            seed=resolved_config.seed,
+            adapt_delta=resolved_config.adapt_delta,
+            max_treedepth=resolved_config.max_treedepth,
+            show_console=resolved_config.show_console,
+            show_progress=resolved_config.show_progress,
+            refresh=resolved_config.refresh,
+            output_dir=tmpdir,
+        )
 
-    log_lik = np.asarray(fit.stan_variable("log_lik"))
-    diagnostics = {
-        "n_divergences": int(fit.diagnose().count("divergent")),
-        "summary": fit.summary(),
-    }
+        posterior_samples = {}
+        for parameter_name in adapter.subject_param_names():
+            posterior_samples[parameter_name] = np.asarray(stan_fit.stan_variable(parameter_name))
+        for parameter_name in adapter.population_param_names(hierarchy):
+            posterior_samples[parameter_name] = np.asarray(stan_fit.stan_variable(parameter_name))
+
+        log_lik = np.asarray(stan_fit.stan_variable("log_lik"))
+        diagnostics = {
+            "n_divergences": int(stan_fit.diagnose().count("divergent")),
+            "summary": stan_fit.summary(),
+        }
 
     return BayesFitResult(
         model_id=adapter.kernel_spec().model_id,

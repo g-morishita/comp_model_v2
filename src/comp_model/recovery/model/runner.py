@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import importlib
+import logging
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -496,6 +497,9 @@ def _fit_candidate_job(
         return _fit_candidate_inner(gen_name, rep_idx, cand, dataset, schema, criterion)
 
 
+_logger = logging.getLogger(__name__)
+
+
 def _fit_candidate_inner(
     gen_name: str,
     rep_idx: int,
@@ -504,7 +508,35 @@ def _fit_candidate_inner(
     schema: Any,
     criterion: str,
 ) -> float:
-    """Core fitting logic, separated to allow stdout/stderr redirection."""
+    """Core fitting logic, separated to allow stdout/stderr redirection.
+
+    Returns ``float("-inf")`` when sampling fails so that the replication
+    is recorded as a worst-possible score instead of crashing the entire
+    model recovery run.
+    """
+
+    try:
+        return _fit_candidate_core(gen_name, rep_idx, cand, dataset, schema, criterion)
+    except RuntimeError as exc:
+        _logger.warning(
+            "Sampling failed for gen=%r cand=%r rep=%d: %s — returning -inf",
+            gen_name,
+            cand.name,
+            rep_idx,
+            exc,
+        )
+        return float("-inf")
+
+
+def _fit_candidate_core(
+    gen_name: str,
+    rep_idx: int,
+    cand: CandidateModelSpec,
+    dataset: Dataset,
+    schema: Any,
+    criterion: str,
+) -> float:
+    """Core fitting logic without error handling."""
 
     if criterion in ("aic", "bic", "log_likelihood"):
         mle_results: list[MleFitResult] = [
