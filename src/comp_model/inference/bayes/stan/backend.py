@@ -129,8 +129,8 @@ def fit_stan(
         stanc_options={"include-paths": [functions_dir]},
     )
 
-    with tempfile.TemporaryDirectory(prefix="comp_model_stan_") as tmpdir:
-        try:
+    try:
+        with tempfile.TemporaryDirectory(prefix="comp_model_stan_") as tmpdir:
             stan_fit = model.sample(
                 data=adapter.build_stan_data(data, schema, hierarchy, layout, prior_specs),
                 iter_warmup=resolved_config.n_warmup,
@@ -144,20 +144,24 @@ def fit_stan(
                 refresh=resolved_config.refresh,
                 output_dir=tmpdir,
             )
-        except RuntimeError as exc:
-            raise SamplingError(str(exc), original=exc) from exc
 
-        posterior_samples = {}
-        for parameter_name in adapter.subject_param_names():
-            posterior_samples[parameter_name] = np.asarray(stan_fit.stan_variable(parameter_name))
-        for parameter_name in adapter.population_param_names(hierarchy):
-            posterior_samples[parameter_name] = np.asarray(stan_fit.stan_variable(parameter_name))
+            posterior_samples = {}
+            for parameter_name in adapter.subject_param_names():
+                posterior_samples[parameter_name] = np.asarray(
+                    stan_fit.stan_variable(parameter_name)
+                )
+            for parameter_name in adapter.population_param_names(hierarchy):
+                posterior_samples[parameter_name] = np.asarray(
+                    stan_fit.stan_variable(parameter_name)
+                )
 
-        log_lik = np.asarray(stan_fit.stan_variable("log_lik"))
-        diagnostics = {
-            "n_divergences": int(stan_fit.diagnose().count("divergent")),
-            "summary": stan_fit.summary(),
-        }
+            log_lik = np.asarray(stan_fit.stan_variable("log_lik"))
+            diagnostics = {
+                "n_divergences": int(stan_fit.diagnose().count("divergent")),
+                "summary": stan_fit.summary(),
+            }
+    except (RuntimeError, OSError) as exc:
+        raise SamplingError(str(exc), original=exc) from exc
 
     return BayesFitResult(
         model_id=adapter.kernel_spec().model_id,
