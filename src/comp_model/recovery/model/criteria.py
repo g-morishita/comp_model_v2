@@ -179,16 +179,13 @@ def _loo_score(log_lik: np.ndarray) -> float:
 
     try:
         import arviz as az  # type: ignore[import-untyped]
-        import xarray as xr  # type: ignore[import-untyped]
     except ImportError as exc:
         raise ImportError(
             "The 'loo' criterion requires arviz. Install it with: pip install 'comp-model[stan]'"
         ) from exc
 
-    log_lik_da: Any = xr.DataArray(  # type: ignore[reportUnknownVariableType]
-        log_lik[np.newaxis, :, :],  # (chain=1, draw, obs)
-        dims=["chain", "draw", "obs"],
-    )
-    idata: Any = az.from_dict(log_likelihood={"obs": log_lik_da})  # type: ignore[reportUnknownVariableType]
-    loo_result: Any = az.loo(idata, var_name="obs")  # type: ignore[reportUnknownVariableType]
+    # arviz >=1.0: from_dict takes a single dict with group names as keys.
+    log_lik_arr = log_lik[np.newaxis, :, :]  # (chain=1, draw, obs)
+    dt: Any = az.from_dict({"log_likelihood": {"obs": log_lik_arr}})  # type: ignore[reportUnknownVariableType]
+    loo_result: Any = az.loo(dt, var_name="obs")  # type: ignore[reportUnknownVariableType]
     return float(loo_result.elpd_loo)
