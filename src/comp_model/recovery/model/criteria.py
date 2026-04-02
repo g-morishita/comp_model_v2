@@ -187,5 +187,8 @@ def _loo_score(log_lik: np.ndarray) -> float:
     # arviz >=1.0: from_dict takes a single dict with group names as keys.
     log_lik_arr = log_lik[np.newaxis, :, :]  # (chain=1, draw, obs)
     dt: Any = az.from_dict({"log_likelihood": {"obs": log_lik_arr}})  # type: ignore[reportUnknownVariableType]
-    loo_result: Any = az.loo(dt, var_name="obs")  # type: ignore[reportUnknownVariableType]
+    # reff=1.0 skips posterior-based ESS computation, which requires a
+    # posterior group we do not store.  With a single concatenated chain
+    # arviz would default to reff=1.0 anyway.
+    loo_result: Any = az.loo(dt, var_name="obs", reff=1.0)  # type: ignore[reportUnknownVariableType]
     return float(loo_result.elpd_loo)
