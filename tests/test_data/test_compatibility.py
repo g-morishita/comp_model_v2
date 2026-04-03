@@ -10,6 +10,7 @@ from comp_model.data.schema import EventPhase
 from comp_model.models.kernels import (
     AsocialQLearningKernel,
     AsocialRlAsymmetricKernel,
+    AsocialRlStickyKernel,
     SocialRlDemoMixtureKernel,
     SocialRlSelfRewardDemoActionMixtureKernel,
     SocialRlSelfRewardDemoMixtureKernel,
@@ -61,6 +62,15 @@ class TestAsocialKernelCompatibility:
     def test_asocial_asymmetric_accepts_any_schema(self, schema):
         """AsocialRlAsymmetricKernel passes on all schemas."""
         check_kernel_schema_compatibility(AsocialRlAsymmetricKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
+        [ASOCIAL_BANDIT_SCHEMA, SOCIAL_PRE_CHOICE_SCHEMA],
+        ids=["asocial", "social"],
+    )
+    def test_asocial_sticky_accepts_any_schema(self, schema):
+        """AsocialRlStickyKernel passes on all schemas."""
+        check_kernel_schema_compatibility(AsocialRlStickyKernel(), schema)
 
 
 # ---------------------------------------------------------------------------

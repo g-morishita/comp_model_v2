@@ -12,6 +12,9 @@ from comp_model.inference.bayes.stan.adapters.asocial_q_learning import (
 from comp_model.inference.bayes.stan.adapters.asocial_rl_asymmetric import (
     AsocialRlAsymmetricStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.asocial_rl_sticky import (
+    AsocialRlStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture import (
     SocialRlDemoMixtureStanAdapter,
 )
@@ -53,6 +56,18 @@ _ADAPTER_CASES: list[tuple[str, StanAdapter, set[str]]] = [
             "alpha_pos_delta_z",
             "alpha_neg_delta_z",
             "beta_delta_z",
+        },
+    ),
+    (
+        "asocial_rl_sticky",
+        AsocialRlStickyStanAdapter(),
+        {
+            "alpha_shared_z",
+            "beta_shared_z",
+            "stickiness_shared_z",
+            "alpha_delta_z",
+            "beta_delta_z",
+            "stickiness_delta_z",
         },
     ),
     (
