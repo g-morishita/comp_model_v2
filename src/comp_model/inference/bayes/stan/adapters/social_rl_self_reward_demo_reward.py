@@ -174,24 +174,16 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
         -------
         tuple[str, ...]
             Population-level parameter names. Returns an empty tuple for
-            SUBJECT_SHARED fits. For SUBJECT_BLOCK_CONDITION returns shared
-            and delta z-score parameters. For STUDY_SUBJECT returns
+            subject-only fits. For STUDY_SUBJECT returns
             group-level means, standard deviations, and population-scale
-            parameters. For STUDY_SUBJECT_BLOCK_CONDITION returns the full
-            set of study-level hyperparameters plus shared and delta
-            z-scores.
+            parameters. For STUDY_SUBJECT_BLOCK_CONDITION returns the
+            study-level hyperparameters plus population-scale parameters.
         """
-        if hierarchy == HierarchyStructure.SUBJECT_SHARED:
+        if hierarchy in (
+            HierarchyStructure.SUBJECT_SHARED,
+            HierarchyStructure.SUBJECT_BLOCK_CONDITION,
+        ):
             return ()
-        if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
-            return (
-                "alpha_self_shared_z",
-                "alpha_other_shared_z",
-                "beta_shared_z",
-                "alpha_self_delta_z",
-                "alpha_other_delta_z",
-                "beta_delta_z",
-            )
         if hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
             return (
                 "mu_alpha_self_shared_z",
@@ -206,12 +198,6 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
                 "sd_alpha_other_delta_z",
                 "mu_beta_delta_z",
                 "sd_beta_delta_z",
-                "alpha_self_shared_z",
-                "alpha_other_shared_z",
-                "beta_shared_z",
-                "alpha_self_delta_z",
-                "alpha_other_delta_z",
-                "beta_delta_z",
                 "alpha_self_pop",
                 "alpha_other_pop",
                 "beta_pop",
@@ -230,3 +216,38 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
             "alpha_other_pop",
             "beta_pop",
         )
+
+    def extra_posterior_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
+        """Return additional non-population posterior variable names.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Additional conditioned z-score variables that should still be
+            extracted from Stan fits.
+        """
+
+        if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
+            return (
+                "alpha_self_shared_z",
+                "alpha_other_shared_z",
+                "beta_shared_z",
+                "alpha_self_delta_z",
+                "alpha_other_delta_z",
+                "beta_delta_z",
+            )
+        if hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
+            return (
+                "alpha_self_shared_z",
+                "alpha_other_shared_z",
+                "beta_shared_z",
+                "alpha_self_delta_z",
+                "alpha_other_delta_z",
+                "beta_delta_z",
+            )
+        return ()

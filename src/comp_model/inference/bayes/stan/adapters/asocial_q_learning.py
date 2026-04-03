@@ -167,19 +167,15 @@ class AsocialQLearningStanAdapter:
         Returns
         -------
         tuple[str, ...]
-            Population-level parameter names. Subject-shared fits have no
+            Population-level parameter names. Subject-only fits have no
             separate population-level outputs.
         """
 
-        if hierarchy == HierarchyStructure.SUBJECT_SHARED:
+        if hierarchy in (
+            HierarchyStructure.SUBJECT_SHARED,
+            HierarchyStructure.SUBJECT_BLOCK_CONDITION,
+        ):
             return ()
-        if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
-            return (
-                "alpha_shared_z",
-                "beta_shared_z",
-                "alpha_delta_z",
-                "beta_delta_z",
-            )
         if hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
             return (
                 "mu_alpha_shared_z",
@@ -190,13 +186,40 @@ class AsocialQLearningStanAdapter:
                 "sd_alpha_delta_z",
                 "mu_beta_delta_z",
                 "sd_beta_delta_z",
-                "alpha_shared_z",
-                "beta_shared_z",
-                "alpha_delta_z",
-                "beta_delta_z",
                 "alpha_pop",
                 "beta_pop",
                 "alpha_shared_pop",
                 "beta_shared_pop",
             )
         return ("mu_alpha_z", "sd_alpha_z", "mu_beta_z", "sd_beta_z", "alpha_pop", "beta_pop")
+
+    def extra_posterior_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
+        """Return additional non-population posterior variable names.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Additional conditioned z-score variables that should still be
+            extracted from Stan fits.
+        """
+
+        if hierarchy == HierarchyStructure.SUBJECT_BLOCK_CONDITION:
+            return (
+                "alpha_shared_z",
+                "beta_shared_z",
+                "alpha_delta_z",
+                "beta_delta_z",
+            )
+        if hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
+            return (
+                "alpha_shared_z",
+                "beta_shared_z",
+                "alpha_delta_z",
+                "beta_delta_z",
+            )
+        return ()
