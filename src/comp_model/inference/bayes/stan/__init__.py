@@ -3,6 +3,7 @@
 from comp_model.inference.bayes.stan.adapters import (
     AsocialQLearningStanAdapter,
     AsocialRlAsymmetricStanAdapter,
+    AsocialRlStickyStanAdapter,
     SocialRlDemoMixtureStanAdapter,
     SocialRlSelfRewardDemoActionMixtureStanAdapter,
     SocialRlSelfRewardDemoMixtureStanAdapter,
@@ -28,6 +29,7 @@ __all__ = (
     "DEFAULT_STAN_FIT_CONFIG",
     "AsocialQLearningStanAdapter",
     "AsocialRlAsymmetricStanAdapter",
+    "AsocialRlStickyStanAdapter",
     "SocialRlDemoMixtureStanAdapter",
     "SocialRlSelfRewardDemoActionMixtureStanAdapter",
     "SocialRlSelfRewardDemoMixtureStanAdapter",

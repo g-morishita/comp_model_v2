@@ -93,6 +93,11 @@ class TestRequiredSocialFields:
                 id="asocial_rl_asymmetric",
             ),
             pytest.param(
+                "AsocialRlStickyKernel",
+                frozenset(),
+                id="asocial_rl_sticky",
+            ),
+            pytest.param(
                 "SocialRlSelfRewardDemoRewardKernel",
                 frozenset({"action", "reward"}),
                 id="social_self_reward_demo_reward",
@@ -150,6 +155,7 @@ class TestRequiredSocialFields:
         [
             "AsocialQLearningKernel",
             "AsocialRlAsymmetricKernel",
+            "AsocialRlStickyKernel",
         ],
     )
     def test_asocial_kernels_unset_requires_social(self, kernel_cls: str) -> None:

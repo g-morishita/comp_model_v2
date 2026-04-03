@@ -14,6 +14,9 @@ from comp_model.inference.bayes.stan.adapters.asocial_q_learning import (
 from comp_model.inference.bayes.stan.adapters.asocial_rl_asymmetric import (
     AsocialRlAsymmetricStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.asocial_rl_sticky import (
+    AsocialRlStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture import (
     SocialRlDemoMixtureStanAdapter,
 )
@@ -32,6 +35,7 @@ from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward 
 from comp_model.inference.config import HierarchyStructure
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
+from comp_model.models.kernels.asocial_rl_sticky import AsocialRlStickyKernel
 from comp_model.runtime.engine import SimulationConfig, simulate_dataset
 from comp_model.tasks.schemas import ASOCIAL_BANDIT_SCHEMA, SOCIAL_PRE_CHOICE_SCHEMA
 from comp_model.tasks.spec import BlockSpec, TaskSpec
@@ -61,6 +65,39 @@ def _asocial_dataset(include_conditions: bool) -> Dataset:
     task = TaskSpec(task_id="hierarchical-sd-priors", blocks=tuple(blocks))
     kernel = AsocialQLearningKernel()
     params = kernel.parse_params({"alpha": 0.0, "beta": 1.0})
+    return simulate_dataset(
+        task=task,
+        env_factory=lambda: StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
+        kernel=kernel,
+        params_per_subject={"s1": params, "s2": params},
+        config=SimulationConfig(seed=23),
+    )
+
+
+def _asocial_sticky_dataset(include_conditions: bool) -> Dataset:
+    """Create a small asocial sticky dataset for hierarchical adapter tests."""
+
+    blocks = [
+        BlockSpec(
+            condition="baseline",
+            n_trials=2,
+            schema=ASOCIAL_BANDIT_SCHEMA,
+            metadata={"n_actions": 2},
+        )
+    ]
+    if include_conditions:
+        blocks.append(
+            BlockSpec(
+                condition="social",
+                n_trials=2,
+                schema=ASOCIAL_BANDIT_SCHEMA,
+                metadata={"n_actions": 2},
+            )
+        )
+
+    task = TaskSpec(task_id="hierarchical-sd-priors-sticky", blocks=tuple(blocks))
+    kernel = AsocialRlStickyKernel()
+    params = kernel.parse_params({"alpha": 0.0, "beta": 1.0, "stickiness": 0.0})
     return simulate_dataset(
         task=task,
         env_factory=lambda: StationaryBanditEnvironment(n_actions=2, reward_probs=(0.8, 0.2)),
@@ -198,7 +235,18 @@ def _social_dataset(include_conditions: bool) -> Dataset:
 
 
 _ASOCIAL_ADAPTER_CASES = [
-    ("asocial_q_learning", AsocialQLearningStanAdapter(), _asocial_dataset, ASOCIAL_BANDIT_SCHEMA),
+    (
+        "asocial_q_learning",
+        AsocialQLearningStanAdapter(),
+        _asocial_dataset,
+        ASOCIAL_BANDIT_SCHEMA,
+    ),
+    (
+        "asocial_rl_sticky",
+        AsocialRlStickyStanAdapter(),
+        _asocial_sticky_dataset,
+        ASOCIAL_BANDIT_SCHEMA,
+    ),
     (
         "asocial_rl_asymmetric",
         AsocialRlAsymmetricStanAdapter(),

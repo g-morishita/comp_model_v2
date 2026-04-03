@@ -6,6 +6,11 @@ from comp_model.models.kernels.asocial_rl_asymmetric import (
     AsocialRlAsymmetricParams,
     AsocialRlAsymmetricState,
 )
+from comp_model.models.kernels.asocial_rl_sticky import (
+    AsocialRlStickyKernel,
+    AsocialRlStickyParams,
+    AsocialRlStickyState,
+)
 from comp_model.models.kernels.base import (
     ModelKernel,
     ModelKernelSpec,
@@ -44,6 +49,9 @@ __all__ = [
     "AsocialRlAsymmetricKernel",
     "AsocialRlAsymmetricParams",
     "AsocialRlAsymmetricState",
+    "AsocialRlStickyKernel",
+    "AsocialRlStickyParams",
+    "AsocialRlStickyState",
     "ModelKernel",
     "ModelKernelSpec",
     "ParameterSpec",
