@@ -104,7 +104,14 @@ class SocialRlSelfRewardDemoMixtureStickyKernel(
 
     @classmethod
     def spec(cls) -> ModelKernelSpec:
-        """Return the kernel specification for the sticky mixture model."""
+        """Return the kernel specification for the sticky mixture model.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Specification declaring six free parameters, their transforms,
+            and that this model requires both demonstrator action and reward.
+        """
 
         return ModelKernelSpec(
             model_id="social_rl_self_reward_demo_mixture_sticky",
@@ -150,7 +157,18 @@ class SocialRlSelfRewardDemoMixtureStickyKernel(
         )
 
     def parse_params(self, raw: dict[str, float]) -> SocialRlSelfRewardDemoMixtureStickyParams:
-        """Convert raw optimiser values into interpretable model parameters."""
+        """Convert raw optimiser values into interpretable model parameters.
+
+        Parameters
+        ----------
+        raw
+            Dictionary of unconstrained parameter values keyed by parameter name.
+
+        Returns
+        -------
+        SocialRlSelfRewardDemoMixtureStickyParams
+            Parameter object with all values mapped onto their natural scales.
+        """
 
         transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
         return SocialRlSelfRewardDemoMixtureStickyParams(
@@ -169,7 +187,25 @@ class SocialRlSelfRewardDemoMixtureStickyKernel(
         n_actions: int,
         params: SocialRlSelfRewardDemoMixtureStickyParams,
     ) -> SocialRlSelfRewardDemoMixtureStickyState:
-        """Create the agent's initial belief state."""
+        """Create the agent's initial belief state.
+
+        ``v_outcome`` is initialised to ``v_outcome_init`` and
+        ``v_tendency`` starts uniform over actions. The stickiness memory is
+        unset until the first self-generated update is observed.
+
+        Parameters
+        ----------
+        n_actions
+            Number of available actions.
+        params
+            Parsed kernel parameters. Unused for initialisation.
+
+        Returns
+        -------
+        SocialRlSelfRewardDemoMixtureStickyState
+            Initial state with neutral outcome values, uniform action
+            tendencies, and no previous self action.
+        """
 
         del params
         return SocialRlSelfRewardDemoMixtureStickyState(
@@ -184,7 +220,28 @@ class SocialRlSelfRewardDemoMixtureStickyKernel(
         view: DecisionTrialView,
         params: SocialRlSelfRewardDemoMixtureStickyParams,
     ) -> tuple[float, ...]:
-        """Compute choice probabilities with an added perseveration term."""
+        """Compute choice probabilities with an added perseveration term.
+
+        The outcome and action-tendency systems are combined via
+        ``w_imitation`` and scaled by ``beta``. If the current action matches
+        ``state.last_self_action``, its logit receives an additive
+        ``stickiness`` bonus before the softmax.
+
+        Parameters
+        ----------
+        state
+            Current latent state containing outcome values, action tendencies,
+            and the most recent self-chosen action if one exists.
+        view
+            Trial observation including the currently available actions.
+        params
+            Parsed kernel parameters on their natural scales.
+
+        Returns
+        -------
+        tuple[float, ...]
+            Probability of each action in ``view.available_actions``.
+        """
 
         logits: list[float] = []
         for action in view.available_actions:
@@ -204,7 +261,30 @@ class SocialRlSelfRewardDemoMixtureStickyKernel(
         view: DecisionTrialView,
         params: SocialRlSelfRewardDemoMixtureStickyParams,
     ) -> SocialRlSelfRewardDemoMixtureStickyState:
-        """Update latent state from self and social observations."""
+        """Update latent state from self and social observations.
+
+        Self updates apply a Rescorla-Wagner outcome update to
+        ``v_outcome[action]`` and store that action in ``last_self_action``.
+        Social updates apply the demonstrator reward update to ``v_outcome``
+        and shift ``v_tendency`` toward the demonstrator's chosen action,
+        while preserving the previous self-action memory.
+
+        Parameters
+        ----------
+        state
+            Current latent state before processing the event.
+        view
+            Trial observation containing either a self update or a social
+            observation.
+        params
+            Parsed kernel parameters on their natural scales.
+
+        Returns
+        -------
+        SocialRlSelfRewardDemoMixtureStickyState
+            Updated state after applying the appropriate self or social
+            learning rule.
+        """
 
         updated_v_outcome = list(state.v_outcome)
         updated_v_tendency = list(state.v_tendency)

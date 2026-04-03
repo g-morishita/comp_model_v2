@@ -1,4 +1,9 @@
-"""Stan adapter for the sticky social self-reward + demo-mixture RL kernel."""
+"""Stan adapter for the sticky social self-reward + demo-mixture RL kernel.
+
+This adapter translates subject- or dataset-level task records into the Stan
+data layouts required by the four hierarchy variants of
+``social_rl_self_reward_demo_mixture_sticky``.
+"""
 
 from __future__ import annotations
 
@@ -27,15 +32,37 @@ if TYPE_CHECKING:
 
 
 class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
-    """Stan adapter for the sticky social self-reward + demo-mixture RL kernel."""
+    """Stan adapter for the sticky social self-reward + demo-mixture RL kernel.
+
+    The adapter exposes the kernel spec, resolves hierarchy-specific Stan
+    programs, builds Stan data with social observations included, and declares
+    the parameter names expected back from Stan fits.
+    """
 
     def kernel_spec(self) -> ModelKernelSpec:
-        """Return the kernel specification served by this adapter."""
+        """Return the kernel specification served by this adapter.
+
+        Returns
+        -------
+        ModelKernelSpec
+            Kernel spec for ``social_rl_self_reward_demo_mixture_sticky``.
+        """
 
         return SocialRlSelfRewardDemoMixtureStickyKernel.spec()
 
     def stan_program_path(self, hierarchy: HierarchyStructure) -> str:
-        """Return the Stan program path for the requested hierarchy."""
+        """Return the Stan program path for the requested hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy variant whose Stan program should be used.
+
+        Returns
+        -------
+        str
+            Absolute path to the matching Stan program file.
+        """
 
         programs_dir = Path(__file__).resolve().parent.parent / "programs"
         filename = f"{self.kernel_spec().model_id}__{hierarchy.value}.stan"
@@ -50,7 +77,30 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         prior_specs: dict[str, PriorSpec] | None = None,
         kernel: SocialRlSelfRewardDemoMixtureStickyKernel | None = None,
     ) -> dict[str, Any]:
-        """Build Stan data for the sticky social self-reward + demo-mixture programs."""
+        """Build Stan data for the sticky social self-reward + demo-mixture programs.
+
+        Parameters
+        ----------
+        data
+            Subject-level or dataset-level behavioral observations.
+        schema
+            Trial schema describing how the task events should be extracted.
+        hierarchy
+            Requested parameter-sharing hierarchy.
+        layout
+            Shared-plus-delta condition layout for condition-aware hierarchies.
+        prior_specs
+            Optional prior overrides keyed by parameter name.
+        kernel
+            Optional kernel instance used to supply initial values.
+
+        Returns
+        -------
+        dict[str, Any]
+            Stan data dictionary containing extracted task events, prior
+            hyperparameters, reset flags, initial values, and condition
+            metadata where applicable.
+        """
 
         require_layout_for_condition_hierarchy(hierarchy, layout)
         if kernel is None:
@@ -97,7 +147,14 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         return stan_data
 
     def subject_param_names(self) -> tuple[str, ...]:
-        """Return subject-level parameter names extracted from Stan fits."""
+        """Return subject-level parameter names extracted from Stan fits.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Subject-level parameter names in the order expected by the
+            extraction utilities.
+        """
 
         return (
             "alpha_self",
@@ -109,7 +166,20 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         )
 
     def population_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
-        """Return population-level parameter names for the hierarchy."""
+        """Return population-level parameter names for the hierarchy.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy variant whose population outputs should be extracted.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Population-level parameter names emitted by the corresponding Stan
+            program. Subject-shared fits return an empty tuple because they do
+            not include population parameters.
+        """
 
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
             return ()
