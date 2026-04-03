@@ -135,8 +135,8 @@ model {
     // SOCIAL UPDATE: update T from demonstrator action
     if (step_social_action[e] > 0) {
       int sa = step_social_action[e];
-      T[n] = (1 - alpha_other_action[n]) * T[n];
-      T[n][sa] = T[n][sa] + alpha_other_action[n];
+      T[n] = (1 - alpha_other_action[n]) * T[n];                                         // decay all action tendencies toward 0
+      T[n][sa] = T[n][sa] + alpha_other_action[n];                                        // chosen action gets the toward-1 increment
     }
   }
 }
@@ -172,8 +172,8 @@ generated quantities {
       // SOCIAL UPDATE
       if (step_social_action[e] > 0) {
         int sa = step_social_action[e];
-        T[n] = (1 - alpha_other_action[n]) * T[n];
-        T[n][sa] = T[n][sa] + alpha_other_action[n];
+        T[n] = (1 - alpha_other_action[n]) * T[n];                                         // decay all action tendencies toward 0
+        T[n][sa] = T[n][sa] + alpha_other_action[n];                                        // chosen action gets the toward-1 increment
       }
     }
   }

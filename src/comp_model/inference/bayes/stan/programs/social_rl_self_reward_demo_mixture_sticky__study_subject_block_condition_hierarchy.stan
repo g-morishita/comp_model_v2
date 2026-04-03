@@ -285,8 +285,8 @@ model {
     if (step_social_action[e] > 0) {
       int sa = step_social_action[e];
       Q[n][sa] = Q[n][sa] + alpha_other_outcome[n][cc] * (step_social_reward[e] - Q[n][sa]);
-      T[n] = (1 - alpha_other_action[n][cc]) * T[n];
-      T[n][sa] = T[n][sa] + alpha_other_action[n][cc];
+      T[n] = (1 - alpha_other_action[n][cc]) * T[n];                                     // decay all action tendencies toward 0
+      T[n][sa] = T[n][sa] + alpha_other_action[n][cc];                                    // chosen action gets the toward-1 increment
     }
   }
 }
@@ -340,8 +340,8 @@ generated quantities {
       if (step_social_action[e] > 0) {
         int sa = step_social_action[e];
         Q[n][sa] = Q[n][sa] + alpha_other_outcome[n][cc] * (step_social_reward[e] - Q[n][sa]);
-        T[n] = (1 - alpha_other_action[n][cc]) * T[n];
-        T[n][sa] = T[n][sa] + alpha_other_action[n][cc];
+        T[n] = (1 - alpha_other_action[n][cc]) * T[n];                                     // decay all action tendencies toward 0
+        T[n][sa] = T[n][sa] + alpha_other_action[n][cc];                                    // chosen action gets the toward-1 increment
       }
     }
   }
