@@ -28,10 +28,15 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from functools import cache
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from comp_model.data.extractors import DecisionTrialView
+    from comp_model.models.kernels.transforms import Transform
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +209,31 @@ class ModelKernel(ABC, Generic[StateT, ParamsT]):
         """
 
         ...
+
+    @classmethod
+    @cache
+    def _parameter_transforms(cls) -> Mapping[str, Transform]:
+        """Return cached parameter transforms keyed by parameter name.
+
+        The parameter metadata returned by :meth:`spec` is static for a given
+        kernel class, so transform lookup is cached per class rather than being
+        rebuilt on every :meth:`parse_params` call.
+
+        Returns
+        -------
+        Mapping[str, Transform]
+            Read-only mapping from parameter name to the shared transform
+            object declared by the kernel specification.
+        """
+
+        from comp_model.models.kernels.transforms import get_transform
+
+        return MappingProxyType(
+            {
+                parameter.name: get_transform(parameter.transform_id)
+                for parameter in cls.spec().parameter_specs
+            }
+        )
 
     @abstractmethod
     def parse_params(self, raw: dict[str, float]) -> ParamsT:

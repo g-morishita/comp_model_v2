@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 
 from comp_model.models.kernels.base import ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
-from comp_model.models.kernels.transforms import get_transform
 
 if TYPE_CHECKING:
     from comp_model.data.extractors import DecisionTrialView
@@ -133,7 +132,7 @@ class AsocialRlAsymmetricKernel(ModelKernel[AsocialRlAsymmetricState, AsocialRlA
             Typed parameter object after applying the shared transform registry.
         """
 
-        transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
+        transforms = self._parameter_transforms()
         return AsocialRlAsymmetricParams(
             alpha_pos=transforms["alpha_pos"].forward(raw["alpha_pos"]),
             alpha_neg=transforms["alpha_neg"].forward(raw["alpha_neg"]),

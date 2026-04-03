@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING
 
 from comp_model.models.kernels.base import ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
-from comp_model.models.kernels.transforms import get_transform
 
 if TYPE_CHECKING:
     from comp_model.data.extractors import DecisionTrialView
@@ -149,7 +148,7 @@ class AsocialQLearningKernel(ModelKernel[QState, QParams]):
             ready for use in ``action_probabilities`` and ``update``.
         """
 
-        transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
+        transforms = self._parameter_transforms()
         return QParams(
             alpha=transforms["alpha"].forward(raw["alpha"]),
             beta=transforms["beta"].forward(raw["beta"]),

@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING
 
 from comp_model.models.kernels.base import ModelKernel, ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.probabilities import stable_softmax
-from comp_model.models.kernels.transforms import get_transform
 
 if TYPE_CHECKING:
     from comp_model.data.extractors import DecisionTrialView
@@ -177,7 +176,7 @@ class SocialRlSelfRewardDemoRewardKernel(
             Parameter object with all three parameters on their natural scales.
         """
 
-        transforms = {ps.name: get_transform(ps.transform_id) for ps in self.spec().parameter_specs}
+        transforms = self._parameter_transforms()
         return SocialRlSelfRewardDemoRewardParams(
             alpha_self=transforms["alpha_self"].forward(raw["alpha_self"]),
             alpha_other=transforms["alpha_other"].forward(raw["alpha_other"]),
