@@ -58,6 +58,8 @@ model {
       if (last_self_choice > 0) u[last_self_choice] += stickiness;
       for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
       target += categorical_logit_lpmf(step_choice[e] | u);
+      // Preserve the previous choice even when the trial omits feedback.
+      last_self_choice = step_choice[e];
     }
     if (step_update_action[e] > 0) {
       int a = step_update_action[e];
@@ -84,6 +86,8 @@ generated quantities {
         if (last_self_choice > 0) u[last_self_choice] += stickiness;
         for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
         log_lik[d] = categorical_logit_lpmf(step_choice[e] | u);
+        // Preserve the previous choice even when the trial omits feedback.
+        last_self_choice = step_choice[e];
       }
       if (step_update_action[e] > 0) {
         int a = step_update_action[e];
