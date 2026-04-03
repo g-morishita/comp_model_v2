@@ -11,6 +11,9 @@ from comp_model.inference.bayes.stan.adapters.base import StanAdapter
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture import (
     SocialRlDemoMixtureStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_demo_reward import (
+    SocialRlDemoRewardStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_action_mixture import (
     SocialRlSelfRewardDemoActionMixtureStanAdapter,
 )
@@ -29,6 +32,7 @@ __all__ = (
     "AsocialRlAsymmetricStanAdapter",
     "AsocialRlStickyStanAdapter",
     "SocialRlDemoMixtureStanAdapter",
+    "SocialRlDemoRewardStanAdapter",
     "SocialRlSelfRewardDemoActionMixtureStanAdapter",
     "SocialRlSelfRewardDemoMixtureStanAdapter",
     "SocialRlSelfRewardDemoMixtureStickyStanAdapter",
