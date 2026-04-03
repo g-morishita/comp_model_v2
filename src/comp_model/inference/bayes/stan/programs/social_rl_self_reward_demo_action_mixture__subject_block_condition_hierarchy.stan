@@ -121,8 +121,8 @@ model {
     if (step_social_action[e] > 0) {
       int sa = step_social_action[e];
       int cc = step_condition[e];
-      T[sa] = T[sa] + alpha_other_action[cc] * (1 - T[sa]);                                // chosen action tendency toward 1
-      for (a in 1:A) if (sa != a) T[a] = T[a] + alpha_other_action[cc] * (0 - T[a]);     // unchosen toward 0
+      T = (1 - alpha_other_action[cc]) * T;
+      T[sa] = T[sa] + alpha_other_action[cc];
     }
   }
 }
@@ -157,8 +157,8 @@ generated quantities {
       if (step_social_action[e] > 0) {
         int sa = step_social_action[e];
         int cc = step_condition[e];
-        T[sa] = T[sa] + alpha_other_action[cc] * (1 - T[sa]);
-        for (a in 1:A) if (sa != a) T[a] = T[a] + alpha_other_action[cc] * (0 - T[a]);
+        T = (1 - alpha_other_action[cc]) * T;
+        T[sa] = T[sa] + alpha_other_action[cc];
       }
     }
   }

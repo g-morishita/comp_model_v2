@@ -172,8 +172,8 @@ model {
     if (step_social_action[e] > 0) {
       int sa = step_social_action[e];
       Q[n][sa] = Q[n][sa] + alpha_other_outcome[n] * (step_social_reward[e] - Q[n][sa]);
-      T[n][sa] = T[n][sa] + alpha_other_action[n] * (1 - T[n][sa]);
-      for (a in 1:A) if (sa != a) T[n][a] = T[n][a] + alpha_other_action[n] * (0 - T[n][a]);
+      T[n] = (1 - alpha_other_action[n]) * T[n];
+      T[n][sa] = T[n][sa] + alpha_other_action[n];
     }
   }
 }
@@ -214,8 +214,8 @@ generated quantities {
       if (step_social_action[e] > 0) {
         int sa = step_social_action[e];
         Q[n][sa] = Q[n][sa] + alpha_other_outcome[n] * (step_social_reward[e] - Q[n][sa]);
-        T[n][sa] = T[n][sa] + alpha_other_action[n] * (1 - T[n][sa]);
-        for (a in 1:A) if (sa != a) T[n][a] = T[n][a] + alpha_other_action[n] * (0 - T[n][a]);
+        T[n] = (1 - alpha_other_action[n]) * T[n];
+        T[n][sa] = T[n][sa] + alpha_other_action[n];
       }
     }
   }
