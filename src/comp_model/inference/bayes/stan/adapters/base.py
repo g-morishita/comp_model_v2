@@ -132,3 +132,21 @@ class StanAdapter(Protocol):
         """
 
         ...
+
+    def extra_posterior_param_names(self, hierarchy: HierarchyStructure) -> tuple[str, ...]:
+        """Return additional non-population Stan variables to extract.
+
+        Parameters
+        ----------
+        hierarchy
+            Hierarchy structure targeted by the Stan program.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Additional posterior variable names that should be included in the
+            fit result even though they are not subject-level constrained
+            parameters or population-level outputs.
+        """
+
+        ...

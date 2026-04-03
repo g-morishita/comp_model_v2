@@ -146,11 +146,14 @@ def fit_stan(
             )
 
             posterior_samples = {}
-            for parameter_name in adapter.subject_param_names():
-                posterior_samples[parameter_name] = np.asarray(
-                    stan_fit.stan_variable(parameter_name)
-                )
-            for parameter_name in adapter.population_param_names(hierarchy):
+            posterior_param_names = (
+                *adapter.subject_param_names(),
+                *adapter.population_param_names(hierarchy),
+                *adapter.extra_posterior_param_names(hierarchy),
+            )
+            for parameter_name in posterior_param_names:
+                if parameter_name in posterior_samples:
+                    continue
                 posterior_samples[parameter_name] = np.asarray(
                     stan_fit.stan_variable(parameter_name)
                 )
