@@ -23,6 +23,9 @@ from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_action_
 from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_mixture import (
     SocialRlSelfRewardDemoMixtureStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_mixture_sticky import (
+    SocialRlSelfRewardDemoMixtureStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward import (
     SocialRlSelfRewardDemoRewardStanAdapter,
 )
@@ -226,6 +229,12 @@ _SOCIAL_ADAPTER_CASES = [
     (
         "social_rl_self_reward_demo_mixture",
         SocialRlSelfRewardDemoMixtureStanAdapter(),
+        _social_dataset,
+        SOCIAL_PRE_CHOICE_SCHEMA,
+    ),
+    (
+        "social_rl_self_reward_demo_mixture_sticky",
+        SocialRlSelfRewardDemoMixtureStickyStanAdapter(),
         _social_dataset,
         SOCIAL_PRE_CHOICE_SCHEMA,
     ),
