@@ -69,6 +69,12 @@ class InferenceConfig:
         Only used by the Bayesian backend. Parameters without an entry
         fall back to ``Normal(0, 2)`` on the unconstrained scale.
 
+        Condition-delta mean priors for conditioned study hierarchies can
+        be configured with the ``_delta`` suffix (e.g.,
+        ``"alpha_delta"``). When omitted, these priors default to
+        ``Normal(0, 1)`` on the unconstrained scale so the existing
+        zero-centered delta regularisation is preserved.
+
         SD priors for hierarchical models can be configured with the
         ``sd_`` prefix (e.g., ``"sd_alpha"``).  When omitted, SD priors
         default to ``Normal(0, 1)``.  For condition-hierarchy delta SD

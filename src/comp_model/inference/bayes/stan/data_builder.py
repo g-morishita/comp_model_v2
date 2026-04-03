@@ -315,6 +315,54 @@ def add_prior_data(
         stan_data[f"{parameter.name}_prior_p3"] = p3
 
 
+def add_delta_prior_data(
+    stan_data: dict[str, Any],
+    kernel_spec: ModelKernelSpec,
+    prior_specs: dict[str, PriorSpec] | None = None,
+) -> None:
+    """Add condition-delta mean prior hyperparameters to a Stan data dictionary.
+
+    Parameters
+    ----------
+    stan_data
+        Stan data dictionary to mutate.
+    kernel_spec
+        Kernel specification whose parameter names drive the export.
+    prior_specs
+        Optional mapping from prior name to prior specification.
+        Delta priors are looked up with the ``_delta`` suffix (e.g.,
+        ``"alpha_delta"``). Parameters without an entry fall back to
+        ``Normal(0, 1)`` on the unconstrained scale.
+
+    Returns
+    -------
+    None
+        This function mutates ``stan_data`` in-place.
+
+    Notes
+    -----
+    Each parameter exports a ``(family, p1, p2, p3)`` tuple consumed by the
+    shared ``prior_lpdf`` Stan function, suffixed with ``_delta``. The
+    tighter ``Normal(0, 1)`` default preserves the existing zero-centered
+    regularisation used for conditioned hierarchy delta means.
+    """
+
+    priors = prior_specs or {}
+    default = (1, 0.0, 1.0, 0.0)  # Normal(0, 1)
+
+    for parameter in kernel_spec.parameter_specs:
+        delta_key = f"{parameter.name}_delta"
+        prior = priors.get(delta_key)
+        if prior is not None:
+            family_id, p1, p2, p3 = prior_spec_to_stan_data(prior.family, prior.kwargs)
+        else:
+            family_id, p1, p2, p3 = default
+        stan_data[f"{delta_key}_prior_family"] = family_id
+        stan_data[f"{delta_key}_prior_p1"] = p1
+        stan_data[f"{delta_key}_prior_p2"] = p2
+        stan_data[f"{delta_key}_prior_p3"] = p3
+
+
 def add_sd_prior_data(
     stan_data: dict[str, Any],
     kernel_spec: ModelKernelSpec,

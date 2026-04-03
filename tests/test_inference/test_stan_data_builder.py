@@ -6,6 +6,7 @@ from comp_model.data.schema import Block, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
+    add_delta_prior_data,
     add_prior_data,
     add_sd_prior_data,
     add_state_reset_data,
@@ -173,6 +174,49 @@ def test_add_sd_prior_data_exports_default_normal_priors() -> None:
     assert stan_data["sd_alpha_prior_p3"] == 0.0
     assert stan_data["sd_beta_prior_family"] == 1
     assert "sd_alpha_delta_prior_family" not in stan_data
+
+
+def test_add_delta_prior_data_exports_default_normal_priors() -> None:
+    """Ensure delta-mean prior export defaults to Normal(0, 1)."""
+
+    kernel = AsocialQLearningKernel()
+    stan_data: dict[str, int | float] = {}
+
+    add_delta_prior_data(stan_data, kernel.spec())
+
+    assert stan_data["alpha_delta_prior_family"] == 1
+    assert stan_data["alpha_delta_prior_p1"] == 0.0
+    assert stan_data["alpha_delta_prior_p2"] == 1.0
+    assert stan_data["alpha_delta_prior_p3"] == 0.0
+    assert stan_data["beta_delta_prior_family"] == 1
+    assert stan_data["beta_delta_prior_p1"] == 0.0
+    assert stan_data["beta_delta_prior_p2"] == 1.0
+    assert stan_data["beta_delta_prior_p3"] == 0.0
+
+
+def test_add_delta_prior_data_exports_explicit_priors() -> None:
+    """Ensure explicit delta-mean priors are exported correctly."""
+
+    kernel = AsocialQLearningKernel()
+    stan_data: dict[str, int | float] = {}
+    prior_specs = {
+        "alpha_delta": PriorSpec(family="cauchy", kwargs={"mu": 0.0, "sigma": 0.3}),
+        "beta_delta": PriorSpec(
+            family="student_t",
+            kwargs={"mu": 0.0, "sigma": 0.2, "df": 4.0},
+        ),
+    }
+
+    add_delta_prior_data(stan_data, kernel.spec(), prior_specs)
+
+    assert stan_data["alpha_delta_prior_family"] == 2
+    assert stan_data["alpha_delta_prior_p1"] == 0.0
+    assert stan_data["alpha_delta_prior_p2"] == 0.3
+    assert stan_data["alpha_delta_prior_p3"] == 0.0
+    assert stan_data["beta_delta_prior_family"] == 3
+    assert stan_data["beta_delta_prior_p1"] == 0.0
+    assert stan_data["beta_delta_prior_p2"] == 0.2
+    assert stan_data["beta_delta_prior_p3"] == 4.0
 
 
 def test_add_sd_prior_data_exports_explicit_and_delta_fallback_priors() -> None:

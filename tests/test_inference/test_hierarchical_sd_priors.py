@@ -312,9 +312,14 @@ def test_study_subject_adapters_export_sd_prior_keys(
         f"sd_{parameter.name}_delta_prior_family"
         for parameter in adapter.kernel_spec().parameter_specs
     }
+    unexpected_mean_delta = {
+        f"{parameter.name}_delta_prior_family"
+        for parameter in adapter.kernel_spec().parameter_specs
+    }
 
     assert expected.issubset(stan_data)
     assert unexpected_delta.isdisjoint(stan_data)
+    assert unexpected_mean_delta.isdisjoint(stan_data)
 
 
 @pytest.mark.parametrize(
@@ -322,12 +327,12 @@ def test_study_subject_adapters_export_sd_prior_keys(
     [(case[1], case[2], case[3]) for case in _ASOCIAL_ADAPTER_CASES + _SOCIAL_ADAPTER_CASES],
     ids=[case[0] for case in _ASOCIAL_ADAPTER_CASES + _SOCIAL_ADAPTER_CASES],
 )
-def test_study_subject_condition_adapters_export_shared_and_delta_sd_prior_keys(
+def test_study_subject_condition_adapters_export_shared_and_delta_prior_keys(
     adapter: Any,
     dataset_factory: Any,
     schema: Any,
 ) -> None:
-    """Ensure study+condition hierarchical adapters export shared and delta SD priors."""
+    """Ensure study+condition hierarchical adapters export delta mean and SD priors."""
 
     dataset = dataset_factory(True)
     layout = SharedDeltaLayout(
@@ -350,6 +355,11 @@ def test_study_subject_condition_adapters_export_shared_and_delta_sd_prior_keys(
         f"sd_{parameter.name}_delta_prior_family"
         for parameter in adapter.kernel_spec().parameter_specs
     }
+    expected_mean_delta = {
+        f"{parameter.name}_delta_prior_family"
+        for parameter in adapter.kernel_spec().parameter_specs
+    }
 
     assert expected_shared.issubset(stan_data)
     assert expected_delta.issubset(stan_data)
+    assert expected_mean_delta.issubset(stan_data)

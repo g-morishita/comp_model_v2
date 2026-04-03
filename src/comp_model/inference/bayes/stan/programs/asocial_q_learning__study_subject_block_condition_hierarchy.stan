@@ -32,10 +32,18 @@ data {
   real alpha_prior_p1;      // first hyperparameter of the alpha prior
   real alpha_prior_p2;      // second hyperparameter of the alpha prior
   real alpha_prior_p3;      // third hyperparameter of the alpha prior
+  int alpha_delta_prior_family;   // prior family code for the group-level alpha delta means
+  real alpha_delta_prior_p1;      // first hyperparameter of the alpha delta prior
+  real alpha_delta_prior_p2;      // second hyperparameter of the alpha delta prior
+  real alpha_delta_prior_p3;      // third hyperparameter of the alpha delta prior
   int beta_prior_family;    // prior family code for the group-level shared beta mean
   real beta_prior_p1;       // first hyperparameter of the beta prior
   real beta_prior_p2;       // second hyperparameter of the beta prior
   real beta_prior_p3;       // third hyperparameter of the beta prior
+  int beta_delta_prior_family;    // prior family code for the group-level beta delta means
+  real beta_delta_prior_p1;       // first hyperparameter of the beta delta prior
+  real beta_delta_prior_p2;       // second hyperparameter of the beta delta prior
+  real beta_delta_prior_p3;       // third hyperparameter of the beta delta prior
   int sd_alpha_prior_family;   // prior family code for the group-level shared alpha SD
   real sd_alpha_prior_p1;      // first hyperparameter of the shared alpha SD prior
   real sd_alpha_prior_p2;      // second hyperparameter of the shared alpha SD prior
@@ -117,10 +125,12 @@ model {
   raw_beta_shared_z ~ normal(0, 1);
 
   // Priors: deltas
-  mu_alpha_delta_z ~ normal(0, 1);   // regularising prior on group-level delta means
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_alpha_delta_z[d] | alpha_delta_prior_family, alpha_delta_prior_p1, alpha_delta_prior_p2, alpha_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_alpha_delta_z[d] | sd_alpha_delta_prior_family, sd_alpha_delta_prior_p1, sd_alpha_delta_prior_p2, sd_alpha_delta_prior_p3);
-  mu_beta_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_beta_delta_z[d] | beta_delta_prior_family, beta_delta_prior_p1, beta_delta_prior_p2, beta_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_beta_delta_z[d] | sd_beta_delta_prior_family, sd_beta_delta_prior_p1, sd_beta_delta_prior_p2, sd_beta_delta_prior_p3);
   for (d in 1:(C - 1)) {
