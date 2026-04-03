@@ -110,6 +110,7 @@ def test_social_demo_reward_adapter_builds_subject_stan_data() -> None:
     """The adapter should export social step data and the expected priors."""
 
     adapter = SocialRlDemoRewardStanAdapter()
+    kernel = SocialRlDemoRewardKernel()
     subject = _social_subject()
 
     stan_data = adapter.build_stan_data(
@@ -126,7 +127,7 @@ def test_social_demo_reward_adapter_builds_subject_stan_data() -> None:
     assert "alpha_other_prior_family" in stan_data
     assert "beta_prior_family" in stan_data
     assert "alpha_self_prior_family" not in stan_data
-    assert stan_data["q_init"] == 0.5
+    assert stan_data["q_init"] == kernel.q_init
     assert "reset_on_block" in stan_data
 
 

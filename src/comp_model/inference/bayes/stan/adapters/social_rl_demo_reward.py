@@ -52,6 +52,7 @@ class SocialRlDemoRewardStanAdapter:
 
         require_layout_for_condition_hierarchy(hierarchy, layout)
         kspec = self.kernel_spec()
+        kernel = SocialRlDemoRewardKernel()
 
         condition_map: dict[str, int] | None = None
         if layout is not None and hierarchy in (
@@ -84,7 +85,7 @@ class SocialRlDemoRewardStanAdapter:
             add_delta_prior_data(stan_data, kspec, prior_specs)
             add_sd_prior_data(stan_data, kspec, prior_specs, include_delta=True)
         add_state_reset_data(stan_data, kspec)
-        add_initial_value_data(stan_data, 0.5)
+        add_initial_value_data(stan_data, kernel.q_init)
 
         if layout is not None and condition_map is not None:
             stan_data["C"] = len(layout.conditions)
