@@ -1,9 +1,4 @@
-"""Stan adapter for the sticky social self-reward + demo-mixture RL kernel.
-
-This adapter translates subject- or dataset-level task records into the Stan
-data layouts required by the four hierarchy variants of
-``social_rl_self_reward_demo_mixture_sticky``.
-"""
+"""Stan adapter for the sticky social self-reward + demo-mixture RL kernel."""
 
 from __future__ import annotations
 
@@ -34,9 +29,24 @@ if TYPE_CHECKING:
 class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
     """Stan adapter for the sticky social self-reward + demo-mixture RL kernel.
 
-    The adapter exposes the kernel spec, resolves hierarchy-specific Stan
-    programs, builds Stan data with social observations included, and declares
-    the parameter names expected back from Stan fits.
+    Connects the ``SocialRlSelfRewardDemoMixtureStickyKernel`` to Stan
+    programs that support subject_shared, subject_block_condition_hierarchy,
+    study_subject_hierarchy, and study_subject_block_condition_hierarchy
+    variants.
+
+    The kernel maintains the same two learning systems as the non-sticky
+    mixture model and adds a previous-choice perseveration effect:
+
+    - ``v_outcome``: updated by self reward and demonstrator reward
+      (``alpha_self``, ``alpha_other_outcome``).
+    - ``v_tendency``: updated by demonstrator action frequency
+      (``alpha_other_action``).
+    - ``last_self_action``: contributes an additive ``stickiness`` bonus at
+      decision time.
+
+    At decision time the learned systems are mixed via ``w_imitation`` and
+    scaled by ``beta`` before the stickiness term is applied to the previous
+    self-chosen action.
     """
 
     def kernel_spec(self) -> ModelKernelSpec:
@@ -61,7 +71,12 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         Returns
         -------
         str
-            Absolute path to the matching Stan program file.
+            Absolute path to the Stan program file.
+
+        Notes
+        -----
+        Program filenames follow ``{model_id}__{hierarchy.value}.stan``
+        inside the adapter's sibling ``programs`` directory.
         """
 
         programs_dir = Path(__file__).resolve().parent.parent / "programs"
@@ -97,9 +112,21 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         Returns
         -------
         dict[str, Any]
-            Stan data dictionary containing extracted task events, prior
-            hyperparameters, reset flags, initial values, and condition
-            metadata where applicable.
+            Stan-ready data dictionary passed directly to CmdStanPy.
+
+        Notes
+        -----
+        Assembles step-stream data with social observations
+        (``include_social=True``), prior hyperparameters, state-reset flags,
+        and initial value data. Condition indices are added for
+        condition-aware hierarchies (SUBJECT_BLOCK_CONDITION and
+        STUDY_SUBJECT_BLOCK_CONDITION) when a layout is provided.
+
+        The ``v_outcome`` system is initialised to ``kernel.v_outcome_init``
+        (written as ``v_outcome_init`` in the Stan data block). The
+        ``v_tendency`` system is initialised to ``1 / A`` and the
+        previous-self-choice state is initialised to ``0`` inside each Stan
+        program, so neither requires a separate data entry.
         """
 
         require_layout_for_condition_hierarchy(hierarchy, layout)
@@ -152,8 +179,9 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         Returns
         -------
         tuple[str, ...]
-            Subject-level parameter names in the order expected by the
-            extraction utilities.
+            Subject-level parameter names: ``alpha_self``,
+            ``alpha_other_outcome``, ``alpha_other_action``,
+            ``w_imitation``, ``beta``, and ``stickiness``.
         """
 
         return (
@@ -176,9 +204,13 @@ class SocialRlSelfRewardDemoMixtureStickyStanAdapter:
         Returns
         -------
         tuple[str, ...]
-            Population-level parameter names emitted by the corresponding Stan
-            program. Subject-shared fits return an empty tuple because they do
-            not include population parameters.
+            Population-level parameter names. Returns an empty tuple for
+            SUBJECT_SHARED fits. For SUBJECT_BLOCK_CONDITION returns shared
+            and delta z-score parameters for all six model parameters. For
+            STUDY_SUBJECT returns group-level means, standard deviations, and
+            population-scale parameters. For STUDY_SUBJECT_BLOCK_CONDITION
+            returns the full set of study-level hyperparameters plus shared
+            and delta z-scores.
         """
 
         if hierarchy == HierarchyStructure.SUBJECT_SHARED:
