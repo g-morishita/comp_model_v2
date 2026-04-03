@@ -90,7 +90,7 @@ model {
   }
 }
 generated quantities {
-  vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for LOO-CV
+  vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for WAIC model comparison
   {
     array[N] vector[A] Q;
     for (n in 1:N) Q[n] = rep_vector(q_init, A);

@@ -54,7 +54,7 @@ class CandidateModelSpec:
     inference_config
         Inference configuration. The ``backend`` field determines which
         scoring criteria are valid (``"mle"`` for AIC/BIC/log_likelihood,
-        ``"stan"`` for waic/loo).
+        ``"stan"`` for WAIC).
     adapter
         Optional Stan adapter required when ``inference_config.backend == "stan"``.
     layout
@@ -92,7 +92,7 @@ class ModelRecoveryConfig:
     criterion
         Model selection criterion.  MLE criteria (``"aic"``, ``"bic"``,
         ``"log_likelihood"``) require candidates with ``backend="mle"``.
-        Bayesian criteria (``"waic"``, ``"loo"``) require ``backend="stan"``.
+        Bayesian criteria (``"waic"``) require ``backend="stan"``.
     demonstrator_kernel
         Optional demonstrator kernel for social tasks. Used during
         simulation to generate demonstrator behaviour.
@@ -122,7 +122,7 @@ class ModelRecoveryConfig:
     task: TaskSpec
     env_factory: Callable[[], Environment]
     schema: TrialSchema
-    criterion: Literal["aic", "bic", "log_likelihood", "waic", "loo"] = "aic"
+    criterion: Literal["aic", "bic", "log_likelihood", "waic"] = "aic"
     demonstrator_kernel: ModelKernel[Any, Any] | None = None
     demonstrator_params: Any | None = None
     condition_demonstrator_params: dict[str, Any] | None = None

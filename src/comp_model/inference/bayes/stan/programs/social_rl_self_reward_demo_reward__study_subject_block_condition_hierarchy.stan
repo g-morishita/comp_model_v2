@@ -211,7 +211,7 @@ model {
   }
 }
 generated quantities {
-  vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for LOO-CV
+  vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for WAIC model comparison
   vector<lower=0,upper=1>[C] alpha_self_pop;  // group-mean alpha_self for every condition
   vector<lower=0,upper=1>[C] alpha_other_pop; // group-mean alpha_other for every condition
   vector<lower=0>[C] beta_pop;                // group-mean beta for every condition
