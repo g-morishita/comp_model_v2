@@ -18,6 +18,7 @@ from comp_model.inference.bayes.stan.backend import (
 )
 from comp_model.inference.bayes.stan.data_builder import (
     add_condition_data,
+    add_delta_prior_data,
     add_prior_data,
     add_sd_prior_data,
     add_state_reset_data,
@@ -38,6 +39,7 @@ __all__ = (
     "StanAdapter",
     "StanFitConfig",
     "add_condition_data",
+    "add_delta_prior_data",
     "add_prior_data",
     "add_sd_prior_data",
     "add_state_reset_data",

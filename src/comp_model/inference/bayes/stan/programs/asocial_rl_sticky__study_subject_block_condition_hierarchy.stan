@@ -28,14 +28,26 @@ data {
   real alpha_prior_p1;
   real alpha_prior_p2;
   real alpha_prior_p3;
+  int alpha_delta_prior_family;
+  real alpha_delta_prior_p1;
+  real alpha_delta_prior_p2;
+  real alpha_delta_prior_p3;
   int beta_prior_family;
   real beta_prior_p1;
   real beta_prior_p2;
   real beta_prior_p3;
+  int beta_delta_prior_family;
+  real beta_delta_prior_p1;
+  real beta_delta_prior_p2;
+  real beta_delta_prior_p3;
   int stickiness_prior_family;
   real stickiness_prior_p1;
   real stickiness_prior_p2;
   real stickiness_prior_p3;
+  int stickiness_delta_prior_family;
+  real stickiness_delta_prior_p1;
+  real stickiness_delta_prior_p2;
+  real stickiness_delta_prior_p3;
   int sd_alpha_prior_family;
   real sd_alpha_prior_p1;
   real sd_alpha_prior_p2;
@@ -136,13 +148,16 @@ model {
   target += prior_lpdf(sd_stickiness_shared_z | sd_stickiness_prior_family, sd_stickiness_prior_p1, sd_stickiness_prior_p2, sd_stickiness_prior_p3);
   raw_stickiness_shared_z ~ normal(0, 1);
 
-  mu_alpha_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_alpha_delta_z[d] | alpha_delta_prior_family, alpha_delta_prior_p1, alpha_delta_prior_p2, alpha_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_alpha_delta_z[d] | sd_alpha_delta_prior_family, sd_alpha_delta_prior_p1, sd_alpha_delta_prior_p2, sd_alpha_delta_prior_p3);
-  mu_beta_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_beta_delta_z[d] | beta_delta_prior_family, beta_delta_prior_p1, beta_delta_prior_p2, beta_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_beta_delta_z[d] | sd_beta_delta_prior_family, sd_beta_delta_prior_p1, sd_beta_delta_prior_p2, sd_beta_delta_prior_p3);
-  mu_stickiness_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_stickiness_delta_z[d] | stickiness_delta_prior_family, stickiness_delta_prior_p1, stickiness_delta_prior_p2, stickiness_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_stickiness_delta_z[d] | sd_stickiness_delta_prior_family, sd_stickiness_delta_prior_p1, sd_stickiness_delta_prior_p2, sd_stickiness_delta_prior_p3);
 

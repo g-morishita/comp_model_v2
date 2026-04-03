@@ -36,14 +36,26 @@ data {
   real alpha_self_prior_p1;      // first hyperparameter of the alpha_self prior
   real alpha_self_prior_p2;      // second hyperparameter of the alpha_self prior
   real alpha_self_prior_p3;      // third hyperparameter of the alpha_self prior
+  int alpha_self_delta_prior_family;   // prior family code for the group-level alpha_self delta means
+  real alpha_self_delta_prior_p1;      // first hyperparameter of the alpha_self delta prior
+  real alpha_self_delta_prior_p2;      // second hyperparameter of the alpha_self delta prior
+  real alpha_self_delta_prior_p3;      // third hyperparameter of the alpha_self delta prior
   int alpha_other_prior_family;  // prior family code for the group-level shared alpha_other mean
   real alpha_other_prior_p1;     // first hyperparameter of the alpha_other prior
   real alpha_other_prior_p2;     // second hyperparameter of the alpha_other prior
   real alpha_other_prior_p3;     // third hyperparameter of the alpha_other prior
+  int alpha_other_delta_prior_family;  // prior family code for the group-level alpha_other delta means
+  real alpha_other_delta_prior_p1;     // first hyperparameter of the alpha_other delta prior
+  real alpha_other_delta_prior_p2;     // second hyperparameter of the alpha_other delta prior
+  real alpha_other_delta_prior_p3;     // third hyperparameter of the alpha_other delta prior
   int beta_prior_family;         // prior family code for the group-level shared beta mean
   real beta_prior_p1;            // first hyperparameter of the beta prior
   real beta_prior_p2;            // second hyperparameter of the beta prior
   real beta_prior_p3;            // third hyperparameter of the beta prior
+  int beta_delta_prior_family;         // prior family code for the group-level beta delta means
+  real beta_delta_prior_p1;            // first hyperparameter of the beta delta prior
+  real beta_delta_prior_p2;            // second hyperparameter of the beta delta prior
+  real beta_delta_prior_p3;            // third hyperparameter of the beta delta prior
   int sd_alpha_self_prior_family;   // prior family code for the group-level shared alpha_self SD
   real sd_alpha_self_prior_p1;      // first hyperparameter of the shared alpha_self SD prior
   real sd_alpha_self_prior_p2;      // second hyperparameter of the shared alpha_self SD prior
@@ -150,13 +162,16 @@ model {
   raw_beta_shared_z ~ normal(0, 1);
 
   // Priors: deltas
-  mu_alpha_self_delta_z ~ normal(0, 1);   // regularising prior on group-level delta means
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_alpha_self_delta_z[d] | alpha_self_delta_prior_family, alpha_self_delta_prior_p1, alpha_self_delta_prior_p2, alpha_self_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_alpha_self_delta_z[d] | sd_alpha_self_delta_prior_family, sd_alpha_self_delta_prior_p1, sd_alpha_self_delta_prior_p2, sd_alpha_self_delta_prior_p3);
-  mu_alpha_other_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_alpha_other_delta_z[d] | alpha_other_delta_prior_family, alpha_other_delta_prior_p1, alpha_other_delta_prior_p2, alpha_other_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_alpha_other_delta_z[d] | sd_alpha_other_delta_prior_family, sd_alpha_other_delta_prior_p1, sd_alpha_other_delta_prior_p2, sd_alpha_other_delta_prior_p3);
-  mu_beta_delta_z ~ normal(0, 1);
+  for (d in 1:(C - 1))
+    target += prior_lpdf(mu_beta_delta_z[d] | beta_delta_prior_family, beta_delta_prior_p1, beta_delta_prior_p2, beta_delta_prior_p3);
   for (d in 1:(C - 1))
     target += prior_lpdf(sd_beta_delta_z[d] | sd_beta_delta_prior_family, sd_beta_delta_prior_p1, sd_beta_delta_prior_p2, sd_beta_delta_prior_p3);
   for (d in 1:(C - 1)) {

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from comp_model.data.schema import Dataset, SubjectData
 from comp_model.inference.bayes.stan.adapters.base import require_layout_for_condition_hierarchy
 from comp_model.inference.bayes.stan.data_builder import (
+    add_delta_prior_data,
     add_initial_value_data,
     add_prior_data,
     add_sd_prior_data,
@@ -141,6 +142,7 @@ class SocialRlSelfRewardDemoRewardStanAdapter:
         if hierarchy == HierarchyStructure.STUDY_SUBJECT:
             add_sd_prior_data(stan_data, kspec, prior_specs)
         elif hierarchy == HierarchyStructure.STUDY_SUBJECT_BLOCK_CONDITION:
+            add_delta_prior_data(stan_data, kspec, prior_specs)
             add_sd_prior_data(stan_data, kspec, prior_specs, include_delta=True)
         add_state_reset_data(stan_data, kspec)
         add_initial_value_data(stan_data, 0.5)
