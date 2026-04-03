@@ -7,6 +7,7 @@ import pytest
 
 from comp_model.models.kernels.base import ModelKernelSpec, ParameterSpec
 from comp_model.models.kernels.social_rl_demo_mixture import SocialRlDemoMixtureKernel
+from comp_model.models.kernels.social_rl_demo_reward import SocialRlDemoRewardKernel
 from comp_model.models.kernels.social_rl_self_reward_demo_action_mixture import (
     SocialRlSelfRewardDemoActionMixtureKernel,
 )
@@ -98,6 +99,11 @@ class TestRequiredSocialFields:
                 id="asocial_rl_sticky",
             ),
             pytest.param(
+                "SocialRlDemoRewardKernel",
+                frozenset({"action", "reward"}),
+                id="social_demo_reward",
+            ),
+            pytest.param(
                 "SocialRlSelfRewardDemoRewardKernel",
                 frozenset({"action", "reward"}),
                 id="social_self_reward_demo_reward",
@@ -136,6 +142,7 @@ class TestRequiredSocialFields:
         "kernel_cls",
         [
             "SocialRlSelfRewardDemoRewardKernel",
+            "SocialRlDemoRewardKernel",
             "SocialRlSelfRewardDemoMixtureKernel",
             "SocialRlSelfRewardDemoMixtureStickyKernel",
             "SocialRlDemoMixtureKernel",
@@ -171,6 +178,7 @@ class TestRequiredSocialFields:
     "kernel_cls",
     [
         SocialRlSelfRewardDemoRewardKernel,
+        SocialRlDemoRewardKernel,
         SocialRlDemoMixtureKernel,
         SocialRlSelfRewardDemoActionMixtureKernel,
         SocialRlSelfRewardDemoMixtureKernel,
@@ -189,6 +197,11 @@ def test_social_kernel_transform_lookup_is_cached_per_class(kernel_cls: type[Any
 @pytest.mark.parametrize(
     ("kernel", "raw"),
     [
+        pytest.param(
+            SocialRlDemoRewardKernel(),
+            {"alpha_other": -0.3, "beta": 1.2},
+            id="social_demo_reward",
+        ),
         pytest.param(
             SocialRlSelfRewardDemoRewardKernel(),
             {"alpha_self": 0.1, "alpha_other": -0.3, "beta": 1.2},
