@@ -1,8 +1,25 @@
 """Tests for kernel metadata structures."""
 
+from dataclasses import asdict
+from typing import Any
+
 import pytest
 
 from comp_model.models.kernels.base import ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.social_rl_demo_mixture import SocialRlDemoMixtureKernel
+from comp_model.models.kernels.social_rl_self_reward_demo_action_mixture import (
+    SocialRlSelfRewardDemoActionMixtureKernel,
+)
+from comp_model.models.kernels.social_rl_self_reward_demo_mixture import (
+    SocialRlSelfRewardDemoMixtureKernel,
+)
+from comp_model.models.kernels.social_rl_self_reward_demo_mixture_sticky import (
+    SocialRlSelfRewardDemoMixtureStickyKernel,
+)
+from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
+    SocialRlSelfRewardDemoRewardKernel,
+)
+from comp_model.models.kernels.transforms import get_transform
 
 
 def test_parameter_spec_captures_bounds() -> None:
@@ -142,3 +159,90 @@ class TestRequiredSocialFields:
         cls = getattr(kernels_mod, kernel_cls)
         spec = cls.spec()
         assert spec.requires_social is False
+
+
+@pytest.mark.parametrize(
+    "kernel_cls",
+    [
+        SocialRlSelfRewardDemoRewardKernel,
+        SocialRlDemoMixtureKernel,
+        SocialRlSelfRewardDemoActionMixtureKernel,
+        SocialRlSelfRewardDemoMixtureKernel,
+        SocialRlSelfRewardDemoMixtureStickyKernel,
+    ],
+)
+def test_social_kernel_transform_lookup_is_cached_per_class(kernel_cls: type[Any]) -> None:
+    """Social kernels should reuse one transform map per kernel class."""
+
+    first = kernel_cls._parameter_transforms()
+    second = kernel_cls()._parameter_transforms()
+
+    assert first is second
+
+
+@pytest.mark.parametrize(
+    ("kernel", "raw"),
+    [
+        pytest.param(
+            SocialRlSelfRewardDemoRewardKernel(),
+            {"alpha_self": 0.1, "alpha_other": -0.3, "beta": 1.2},
+            id="social_self_reward_demo_reward",
+        ),
+        pytest.param(
+            SocialRlDemoMixtureKernel(),
+            {
+                "alpha_other_outcome": 0.2,
+                "alpha_other_action": -0.4,
+                "w_imitation": 0.7,
+                "beta": 1.1,
+            },
+            id="social_demo_mixture",
+        ),
+        pytest.param(
+            SocialRlSelfRewardDemoActionMixtureKernel(),
+            {
+                "alpha_self": -0.2,
+                "alpha_other_action": 0.4,
+                "w_imitation": -0.6,
+                "beta": 0.8,
+            },
+            id="social_self_reward_demo_action_mixture",
+        ),
+        pytest.param(
+            SocialRlSelfRewardDemoMixtureKernel(),
+            {
+                "alpha_self": 0.3,
+                "alpha_other_outcome": -0.2,
+                "alpha_other_action": 0.1,
+                "w_imitation": -0.5,
+                "beta": 1.4,
+            },
+            id="social_self_reward_demo_mixture",
+        ),
+        pytest.param(
+            SocialRlSelfRewardDemoMixtureStickyKernel(),
+            {
+                "alpha_self": -0.1,
+                "alpha_other_outcome": 0.6,
+                "alpha_other_action": -0.7,
+                "w_imitation": 0.2,
+                "beta": 1.3,
+                "stickiness": -0.9,
+            },
+            id="social_self_reward_demo_mixture_sticky",
+        ),
+    ],
+)
+def test_social_kernel_parse_params_matches_declared_transforms(
+    kernel: Any,
+    raw: dict[str, float],
+) -> None:
+    """Social-kernel parameter parsing should preserve declared transform semantics."""
+
+    params = kernel.parse_params(raw)
+    expected = {
+        parameter.name: get_transform(parameter.transform_id).forward(raw[parameter.name])
+        for parameter in kernel.spec().parameter_specs
+    }
+
+    assert asdict(params) == expected
