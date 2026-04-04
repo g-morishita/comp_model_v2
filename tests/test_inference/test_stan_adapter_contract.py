@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from comp_model.inference.bayes.stan.adapters import (
+    SocialRlSelfRewardDemoActionMixtureStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.asocial_q_learning import (
     AsocialQLearningStanAdapter,
 )
@@ -102,6 +105,22 @@ _ADAPTER_CASES: list[tuple[str, StanAdapter, set[str]]] = [
             "alpha_other_action_delta_z",
             "w_imitation_delta_z",
             "beta_delta_z",
+        },
+    ),
+    (
+        "social_rl_self_reward_demo_action_mixture_sticky",
+        SocialRlSelfRewardDemoActionMixtureStickyStanAdapter(),
+        {
+            "alpha_self_shared_z",
+            "alpha_other_action_shared_z",
+            "w_imitation_shared_z",
+            "beta_shared_z",
+            "stickiness_shared_z",
+            "alpha_self_delta_z",
+            "alpha_other_action_delta_z",
+            "w_imitation_delta_z",
+            "beta_delta_z",
+            "stickiness_delta_z",
         },
     ),
     (

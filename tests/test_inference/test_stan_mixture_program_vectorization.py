@@ -6,6 +6,13 @@ from pathlib import Path
 
 _PROGRAMS_DIR = Path(__file__).resolve().parents[2] / "src/comp_model/inference/bayes/stan/programs"
 _MIXTURE_PROGRAMS = sorted(_PROGRAMS_DIR.glob("social_rl_*mixture*.stan"))
+_EXPECTED_MIXTURE_FAMILIES = {
+    "social_rl_demo_mixture",
+    "social_rl_self_reward_demo_action_mixture",
+    "social_rl_self_reward_demo_action_mixture_sticky",
+    "social_rl_self_reward_demo_mixture",
+    "social_rl_self_reward_demo_mixture_sticky",
+}
 
 
 def _expected_vectorized_lines(program_name: str) -> tuple[str, str]:
@@ -37,7 +44,10 @@ def _expected_vectorized_lines(program_name: str) -> tuple[str, str]:
 def test_all_mixture_programs_use_vectorized_action_tendency_updates() -> None:
     """Mixture-family Stan programs should use the shared vectorized tendency update."""
 
-    assert len(_MIXTURE_PROGRAMS) == 16
+    assert {
+        program.name.split("__")[0] for program in _MIXTURE_PROGRAMS
+    } == _EXPECTED_MIXTURE_FAMILIES
+    assert len(_MIXTURE_PROGRAMS) == len(_EXPECTED_MIXTURE_FAMILIES) * 4
 
     for program in _MIXTURE_PROGRAMS:
         source = program.read_text()
