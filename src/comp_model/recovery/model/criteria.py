@@ -6,7 +6,7 @@ All scoring functions return values on a **higher-is-better** scale so that
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from comp_model.inference.mle.optimize import MleFitResult
 
 MleCriterion = Literal["aic", "bic", "log_likelihood"]
-BayesCriterion = Literal["waic", "loo"]
+BayesCriterion = Literal["waic"]
 AnyMleCriterion = MleCriterion
 AnyBayesCriterion = BayesCriterion
 
@@ -61,7 +61,7 @@ def score_candidate_bayes(
         Bayesian fit result containing posterior log-likelihood draws.
     criterion
         ``"waic"`` uses the Watanabe-Akaike Information Criterion computed
-        from ``result.log_lik``; ``"loo"`` uses PSIS-LOO via ``arviz``.
+        from ``result.log_lik``.
 
     Returns
     -------
@@ -70,8 +70,6 @@ def score_candidate_bayes(
 
     Raises
     ------
-    ImportError
-        If ``criterion == "loo"`` and ``arviz`` is not installed.
     ValueError
         If an unknown criterion is supplied.
     """
@@ -82,11 +80,9 @@ def score_candidate_bayes(
             f"BayesFitResult.log_lik must be 2-D (draws x obs), got shape {log_lik.shape}"
         )
 
-    if criterion == "waic":
-        return _waic_score(log_lik)
-    if criterion == "loo":
-        return _loo_score(log_lik)
-    raise ValueError(f"Unknown Bayesian criterion: {criterion!r}")
+    if criterion != "waic":
+        raise ValueError(f"Unknown Bayesian criterion: {criterion!r}")
+    return _waic_score(log_lik)
 
 
 def select_winner(scores: dict[str, float]) -> tuple[str, float, str | None, float | None]:
@@ -156,39 +152,3 @@ def _waic_score(log_lik: np.ndarray) -> float:
     p_waic = float(np.sum(np.var(log_lik, axis=0, ddof=1)))
 
     return lppd - p_waic
-
-
-def _loo_score(log_lik: np.ndarray) -> float:
-    """Compute PSIS-LOO elpd score (higher = better) via arviz.
-
-    Parameters
-    ----------
-    log_lik
-        Array of shape ``(draws, observations)``.
-
-    Returns
-    -------
-    float
-        ``elpd_loo`` from ``arviz.loo`` (higher is better).
-
-    Raises
-    ------
-    ImportError
-        If ``arviz`` is not installed.
-    """
-
-    try:
-        import arviz as az  # type: ignore[import-untyped]
-        import xarray as xr  # type: ignore[import-untyped]
-    except ImportError as exc:
-        raise ImportError(
-            "The 'loo' criterion requires arviz. Install it with: pip install 'comp-model[stan]'"
-        ) from exc
-
-    log_lik_da: Any = xr.DataArray(  # type: ignore[reportUnknownVariableType]
-        log_lik[np.newaxis, :, :],  # (chain=1, draw, obs)
-        dims=["chain", "draw", "obs"],
-    )
-    idata: Any = az.from_dict(log_likelihood={"obs": log_lik_da})  # type: ignore[reportUnknownVariableType]
-    loo_result: Any = az.loo(idata, var_name="obs")  # type: ignore[reportUnknownVariableType]
-    return float(loo_result.elpd_loo)

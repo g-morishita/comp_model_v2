@@ -591,7 +591,7 @@ def _fit_candidate_core(
         ]
         return score_candidate_mle(mle_results, criterion)  # type: ignore[arg-type]
 
-    if criterion in ("waic", "loo"):
+    if criterion == "waic":
         result = fit(
             cand.inference_config,
             cand.kernel,

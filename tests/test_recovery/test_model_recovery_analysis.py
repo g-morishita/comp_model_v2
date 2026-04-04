@@ -124,6 +124,10 @@ class TestWaicScore:
         with pytest.raises(ValueError, match="2-D"):
             score_candidate_bayes(_make_bayes_result(np.zeros((100,))), "waic")
 
+    def test_unknown_bayes_criterion_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown Bayesian criterion"):
+            score_candidate_bayes(_make_bayes_result(np.zeros((100, 5))), "unsupported")  # type: ignore[arg-type]
+
 
 # ---------------------------------------------------------------------------
 # criteria: select_winner

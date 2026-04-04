@@ -127,7 +127,7 @@ model {
   }
 }
 generated quantities {
-  vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for LOO-CV
+  vector[D] log_lik = rep_vector(0.0, D); // per-decision log-likelihood for WAIC model comparison
   {
     vector[A] Q = rep_vector(q_init, A); // local copy of Q-values for this forward pass
     vector[A] T = rep_vector(1.0 / A, A); // local copy of action tendencies

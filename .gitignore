@@ -4,6 +4,7 @@ comp_model_v3_plan.md
 .pytest_cache/
 .ruff_cache/
 .venv/
+uv.lock
 __pycache__/
 # compiled Stan binaries under test directory (no extension = compiled binary)
 tests/test_inference/stan/condition_reconstruction
