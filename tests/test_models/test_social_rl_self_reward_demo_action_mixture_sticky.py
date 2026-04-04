@@ -114,3 +114,62 @@ def test_action_probabilities_favor_previous_own_choice_with_positive_stickiness
     probs = kernel.action_probabilities(state, view, params)
 
     assert probs[0] > probs[1]
+
+
+def test_self_update_without_feedback_still_refreshes_last_self_action() -> None:
+    """No-feedback self trials should preserve stickiness memory without crashing."""
+
+    kernel = SocialRlSelfRewardDemoActionMixtureStickyKernel()
+    params = kernel.parse_params(
+        {
+            "alpha_self": 0.0,
+            "alpha_other_action": 0.0,
+            "w_imitation": 0.0,
+            "beta": 1.0,
+            "stickiness": 0.0,
+        }
+    )
+    state = kernel.initial_state(2, params)
+
+    no_feedback_view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
+        reward=None,
+    )
+    updated = kernel.update(state, no_feedback_view, params)
+
+    assert updated.last_self_action == 1
+    assert updated.v_outcome == state.v_outcome
+
+
+def test_self_timeout_trial_preserves_existing_last_self_action() -> None:
+    """Timeout self trials should not crash or overwrite the previous own choice."""
+
+    kernel = SocialRlSelfRewardDemoActionMixtureStickyKernel()
+    params = kernel.parse_params(
+        {
+            "alpha_self": 0.0,
+            "alpha_other_action": 0.0,
+            "w_imitation": 0.0,
+            "beta": 1.0,
+            "stickiness": 0.0,
+        }
+    )
+    state = kernel.initial_state(2, params)
+    state.last_self_action = 0
+
+    timeout_view = DecisionTrialView(
+        trial_index=1,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=None,
+        reward=None,
+    )
+    updated = kernel.update(state, timeout_view, params)
+
+    assert updated.last_self_action == 0
+    assert updated.v_outcome == state.v_outcome

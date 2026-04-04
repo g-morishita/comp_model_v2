@@ -163,18 +163,25 @@ class SocialRlSelfRewardDemoActionMixtureStickyKernel(
         view: DecisionTrialView,
         params: SocialRlSelfRewardDemoActionMixtureStickyParams,
     ) -> SocialRlSelfRewardDemoActionMixtureStickyState:
-        """Update both value systems and the previous-own-choice state."""
+        """Update both value systems and the previous-own-choice state.
+
+        Self rows update ``v_outcome`` only when both an action and reward are
+        present, but they still refresh ``last_self_action`` whenever the
+        subject actually made a choice. This keeps the stickiness state aligned
+        with no-feedback trials and subject timeouts.
+        """
 
         updated_v_outcome = list(state.v_outcome)
         updated_v_tendency = list(state.v_tendency)
         last_self_action = state.last_self_action
 
         if view.actor_id == view.learner_id:
-            assert view.action is not None and view.reward is not None
-            updated_v_outcome[view.action] += params.alpha_self * (
-                view.reward - updated_v_outcome[view.action]
-            )
-            last_self_action = view.action
+            if view.action is not None:
+                if view.reward is not None:
+                    updated_v_outcome[view.action] += params.alpha_self * (
+                        view.reward - updated_v_outcome[view.action]
+                    )
+                last_self_action = view.action
         else:
             if view.action is not None:
                 for action in range(len(updated_v_tendency)):
