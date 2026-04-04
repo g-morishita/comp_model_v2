@@ -128,7 +128,8 @@ class SocialRlDemoActionBiasStickyKernel(
             if view.action is not None:
                 last_self_action = view.action
         else:
-            last_demo_action = view.action
+            if view.action is not None:
+                last_demo_action = view.action
 
         return SocialRlDemoActionBiasStickyState(
             last_demo_action=last_demo_action,

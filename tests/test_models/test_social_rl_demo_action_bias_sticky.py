@@ -104,3 +104,25 @@ def test_self_timeout_preserves_existing_self_choice_memory() -> None:
 
     assert updated.last_self_action == 0
     assert updated.last_demo_action == state.last_demo_action
+
+
+def test_social_timeout_preserves_existing_demo_action_memory() -> None:
+    """Timeout social trials should not overwrite the previous demo choice."""
+
+    kernel = SocialRlDemoActionBiasStickyKernel()
+    params = kernel.parse_params({"demo_bias": 0.0, "stickiness": 0.0})
+    state = kernel.initial_state(2, params)
+    state.last_demo_action = 1
+
+    timeout_view = DecisionTrialView(
+        trial_index=1,
+        available_actions=(0, 1),
+        actor_id="demonstrator",
+        learner_id="subject",
+        action=None,
+        reward=None,
+    )
+    updated = kernel.update(state, timeout_view, params)
+
+    assert updated.last_demo_action == 1
+    assert updated.last_self_action == state.last_self_action
