@@ -39,6 +39,9 @@ from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_mixture
 from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward import (
     SocialRlSelfRewardDemoRewardStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward_sticky import (
+    SocialRlSelfRewardDemoRewardStickyStanAdapter,
+)
 from comp_model.inference.config import HierarchyStructure
 
 if TYPE_CHECKING:
@@ -189,6 +192,20 @@ _ADAPTER_CASES: list[tuple[str, StanAdapter, set[str]]] = [
             "alpha_self_delta_z",
             "alpha_other_delta_z",
             "beta_delta_z",
+        },
+    ),
+    (
+        "social_rl_self_reward_demo_reward_sticky",
+        SocialRlSelfRewardDemoRewardStickyStanAdapter(),
+        {
+            "alpha_self_shared_z",
+            "alpha_other_shared_z",
+            "beta_shared_z",
+            "stickiness_shared_z",
+            "alpha_self_delta_z",
+            "alpha_other_delta_z",
+            "beta_delta_z",
+            "stickiness_delta_z",
         },
     ),
 ]

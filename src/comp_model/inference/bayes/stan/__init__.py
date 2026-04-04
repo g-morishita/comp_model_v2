@@ -12,6 +12,7 @@ from comp_model.inference.bayes.stan.adapters import (
     SocialRlSelfRewardDemoMixtureStanAdapter,
     SocialRlSelfRewardDemoMixtureStickyStanAdapter,
     SocialRlSelfRewardDemoRewardStanAdapter,
+    SocialRlSelfRewardDemoRewardStickyStanAdapter,
     StanAdapter,
 )
 from comp_model.inference.bayes.stan.backend import (
@@ -42,6 +43,7 @@ __all__ = (
     "SocialRlSelfRewardDemoMixtureStanAdapter",
     "SocialRlSelfRewardDemoMixtureStickyStanAdapter",
     "SocialRlSelfRewardDemoRewardStanAdapter",
+    "SocialRlSelfRewardDemoRewardStickyStanAdapter",
     "StanAdapter",
     "StanFitConfig",
     "add_condition_data",

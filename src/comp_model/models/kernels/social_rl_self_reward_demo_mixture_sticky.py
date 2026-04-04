@@ -263,6 +263,24 @@ class SocialRlSelfRewardDemoMixtureStickyKernel(
             logits.append(logit)
         return stable_softmax(logits)
 
+    def observe_decision(
+        self,
+        state: SocialRlSelfRewardDemoMixtureStickyState,
+        view: DecisionTrialView,
+        params: SocialRlSelfRewardDemoMixtureStickyParams,
+    ) -> SocialRlSelfRewardDemoMixtureStickyState:
+        """Store the participant's most recent own choice at decision time."""
+
+        del params
+        if view.actor_id != view.learner_id or view.action is None:
+            return state
+
+        return SocialRlSelfRewardDemoMixtureStickyState(
+            v_outcome=list(state.v_outcome),
+            v_tendency=list(state.v_tendency),
+            last_self_action=view.action,
+        )
+
     def update(
         self,
         state: SocialRlSelfRewardDemoMixtureStickyState,

@@ -189,6 +189,12 @@ class ModelKernel(ABC, Generic[StateT, ParamsT]):
     - :meth:`parse_params` — converts raw numerical values from the optimiser
       into the structured parameter object the model expects.
 
+    Models can also optionally override :meth:`observe_decision` when they
+    need to update latent state immediately after a choice is made, before any
+    later outcome or UPDATE event. This is useful for stickiness or
+    perseveration terms that depend on the most recent own action even on
+    schemas without self-feedback.
+
     Kernels are deliberately kept narrow: they only ever see a compact summary
     of one decision trial (:class:`~comp_model.data.extractors.DecisionTrialView`).
     They never inspect raw event logs, trial schemas, or fitting-backend
@@ -353,3 +359,39 @@ class ModelKernel(ABC, Generic[StateT, ParamsT]):
         """
 
         ...
+
+    def observe_decision(
+        self,
+        state: StateT,
+        view: DecisionTrialView,
+        params: ParamsT,
+    ) -> StateT:
+        """Optionally update latent state immediately after an observed choice.
+
+        Most kernels do not need any decision-time state change, because their
+        learning happens only on later UPDATE events. Those models can use this
+        default no-op implementation unchanged.
+
+        Kernels with explicit choice-history state, such as stickiness models,
+        can override this hook to keep their latent state aligned on schemas
+        where a subject makes a decision but no self UPDATE event follows.
+
+        Parameters
+        ----------
+        state
+            The participant's latent state before the decision is recorded.
+        view
+            A compact summary of the observed decision, including the chosen
+            action when available.
+        params
+            Parsed kernel parameters.
+
+        Returns
+        -------
+        StateT
+            Updated latent state after the decision-time side effects have
+            been applied.
+        """
+
+        del view, params
+        return state

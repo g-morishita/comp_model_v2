@@ -41,6 +41,9 @@ from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_mixture
 from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward import (
     SocialRlSelfRewardDemoRewardStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_self_reward_demo_reward_sticky import (
+    SocialRlSelfRewardDemoRewardStickyStanAdapter,
+)
 from comp_model.inference.config import HierarchyStructure
 from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
@@ -280,6 +283,12 @@ _SOCIAL_ADAPTER_CASES = [
     (
         "social_rl_self_reward_demo_reward",
         SocialRlSelfRewardDemoRewardStanAdapter(),
+        _social_dataset,
+        SOCIAL_PRE_CHOICE_SCHEMA,
+    ),
+    (
+        "social_rl_self_reward_demo_reward_sticky",
+        SocialRlSelfRewardDemoRewardStickyStanAdapter(),
         _social_dataset,
         SOCIAL_PRE_CHOICE_SCHEMA,
     ),
