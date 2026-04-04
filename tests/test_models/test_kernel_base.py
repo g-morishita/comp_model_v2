@@ -14,6 +14,9 @@ from comp_model.models.kernels.social_rl_demo_reward_sticky import (
 from comp_model.models.kernels.social_rl_self_reward_demo_action_mixture import (
     SocialRlSelfRewardDemoActionMixtureKernel,
 )
+from comp_model.models.kernels.social_rl_self_reward_demo_action_mixture_sticky import (
+    SocialRlSelfRewardDemoActionMixtureStickyKernel,
+)
 from comp_model.models.kernels.social_rl_self_reward_demo_mixture import (
     SocialRlSelfRewardDemoMixtureKernel,
 )
@@ -136,6 +139,11 @@ class TestRequiredSocialFields:
                 frozenset({"action"}),
                 id="social_self_reward_demo_action_mixture",
             ),
+            pytest.param(
+                "SocialRlSelfRewardDemoActionMixtureStickyKernel",
+                frozenset({"action"}),
+                id="social_self_reward_demo_action_mixture_sticky",
+            ),
         ],
     )
     def test_required_social_fields(self, kernel_cls: str, expected: frozenset[str]) -> None:
@@ -156,6 +164,7 @@ class TestRequiredSocialFields:
             "SocialRlSelfRewardDemoMixtureStickyKernel",
             "SocialRlDemoMixtureKernel",
             "SocialRlSelfRewardDemoActionMixtureKernel",
+            "SocialRlSelfRewardDemoActionMixtureStickyKernel",
         ],
     )
     def test_social_kernels_set_requires_social(self, kernel_cls: str) -> None:
@@ -191,6 +200,7 @@ class TestRequiredSocialFields:
         SocialRlDemoRewardStickyKernel,
         SocialRlDemoMixtureKernel,
         SocialRlSelfRewardDemoActionMixtureKernel,
+        SocialRlSelfRewardDemoActionMixtureStickyKernel,
         SocialRlSelfRewardDemoMixtureKernel,
         SocialRlSelfRewardDemoMixtureStickyKernel,
     ],
@@ -241,6 +251,17 @@ def test_social_kernel_transform_lookup_is_cached_per_class(kernel_cls: type[Any
                 "beta": 0.8,
             },
             id="social_self_reward_demo_action_mixture",
+        ),
+        pytest.param(
+            SocialRlSelfRewardDemoActionMixtureStickyKernel(),
+            {
+                "alpha_self": -0.2,
+                "alpha_other_action": 0.4,
+                "w_imitation": -0.6,
+                "beta": 0.8,
+                "stickiness": -0.5,
+            },
+            id="social_self_reward_demo_action_mixture_sticky",
         ),
         pytest.param(
             SocialRlSelfRewardDemoMixtureKernel(),

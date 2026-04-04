@@ -15,6 +15,7 @@ from comp_model.models.kernels import (
     SocialRlDemoRewardKernel,
     SocialRlDemoRewardStickyKernel,
     SocialRlSelfRewardDemoActionMixtureKernel,
+    SocialRlSelfRewardDemoActionMixtureStickyKernel,
     SocialRlSelfRewardDemoMixtureKernel,
     SocialRlSelfRewardDemoMixtureStickyKernel,
     SocialRlSelfRewardDemoRewardKernel,
@@ -136,6 +137,14 @@ class TestSocialKernelOnAsocialSchema:
         with pytest.raises(ValueError, match="requires social information"):
             check_kernel_schema_compatibility(
                 SocialRlSelfRewardDemoActionMixtureKernel(),
+                ASOCIAL_BANDIT_SCHEMA,
+            )
+
+    def test_self_reward_demo_action_mixture_sticky_on_asocial_raises(self) -> None:
+        """SocialRlSelfRewardDemoActionMixtureStickyKernel fails on asocial schema."""
+        with pytest.raises(ValueError, match="requires social information"):
+            check_kernel_schema_compatibility(
+                SocialRlSelfRewardDemoActionMixtureStickyKernel(),
                 ASOCIAL_BANDIT_SCHEMA,
             )
 
@@ -312,12 +321,36 @@ class TestActionOnlyKernelCompatibility:
 
     @pytest.mark.parametrize(
         "schema",
+        [
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+        ],
+        ids=["pre_choice_action_only", "post_outcome_action_only"],
+    )
+    def test_self_reward_demo_action_mixture_sticky_on_action_only_passes(self, schema) -> None:
+        """SocialRlSelfRewardDemoActionMixtureStickyKernel passes on action-only schemas."""
+        check_kernel_schema_compatibility(SocialRlSelfRewardDemoActionMixtureStickyKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
         [SOCIAL_PRE_CHOICE_SCHEMA, SOCIAL_POST_OUTCOME_SCHEMA],
         ids=["pre_choice", "post_outcome"],
     )
     def test_self_reward_demo_action_mixture_on_full_observation_passes(self, schema) -> None:
         """SocialRlSelfRewardDemoActionMixtureKernel passes on full-observation schemas."""
         check_kernel_schema_compatibility(SocialRlSelfRewardDemoActionMixtureKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
+        [SOCIAL_PRE_CHOICE_SCHEMA, SOCIAL_POST_OUTCOME_SCHEMA],
+        ids=["pre_choice", "post_outcome"],
+    )
+    def test_self_reward_demo_action_mixture_sticky_on_full_observation_passes(
+        self,
+        schema,
+    ) -> None:
+        """SocialRlSelfRewardDemoActionMixtureStickyKernel passes on full-observation schemas."""
+        check_kernel_schema_compatibility(SocialRlSelfRewardDemoActionMixtureStickyKernel(), schema)
 
 
 # ---------------------------------------------------------------------------
