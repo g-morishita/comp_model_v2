@@ -219,6 +219,21 @@ def simulate_subject(
                     )
                     action = available_actions[action_index]
                     choices[actor] = action
+                    decision_view = DecisionTrialView(
+                        trial_index=trial_index,
+                        available_actions=available_actions,
+                        actor_id=actor,
+                        learner_id=actor,
+                        action=action,
+                    )
+                    if actor == "subject":
+                        states["subject"] = kernel.observe_decision(
+                            cast("StateT", states["subject"]), decision_view, params
+                        )
+                    elif demonstrator_kernel is not None and demonstrator_params is not None:
+                        states["demonstrator"] = demonstrator_kernel.observe_decision(
+                            states["demonstrator"], decision_view, demonstrator_params
+                        )
                     trial_events.append(
                         Event(
                             phase=EventPhase.DECISION,
