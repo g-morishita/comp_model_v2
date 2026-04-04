@@ -13,6 +13,7 @@ from comp_model.models.kernels import (
     AsocialRlStickyKernel,
     SocialRlDemoActionBiasStickyKernel,
     SocialRlDemoMixtureKernel,
+    SocialRlDemoMixtureStickyKernel,
     SocialRlDemoRewardKernel,
     SocialRlDemoRewardStickyKernel,
     SocialRlSelfRewardDemoActionMixtureKernel,
@@ -150,6 +151,14 @@ class TestSocialKernelOnAsocialSchema:
                 ASOCIAL_BANDIT_SCHEMA,
             )
 
+    def test_demo_mixture_no_self_reward_sticky_on_asocial_raises(self) -> None:
+        """SocialRlDemoMixtureStickyKernel fails on asocial schema."""
+        with pytest.raises(ValueError, match="requires social information"):
+            check_kernel_schema_compatibility(
+                SocialRlDemoMixtureStickyKernel(),
+                ASOCIAL_BANDIT_SCHEMA,
+            )
+
     def test_self_reward_demo_action_mixture_on_asocial_raises(self) -> None:
         """SocialRlSelfRewardDemoActionMixtureKernel fails on asocial schema."""
         with pytest.raises(ValueError, match="requires social information"):
@@ -266,6 +275,19 @@ class TestSocialKernelOnActionOnlySchema:
         with pytest.raises(ValueError, match=r"Missing.*reward"):
             check_kernel_schema_compatibility(SocialRlDemoMixtureKernel(), schema)
 
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+        ],
+        ids=["pre_choice_action_only", "post_outcome_action_only"],
+    )
+    def test_demo_mixture_no_self_reward_sticky_on_action_only_raises(self, schema) -> None:
+        """SocialRlDemoMixtureStickyKernel needs reward, action-only lacks it."""
+        with pytest.raises(ValueError, match=r"Missing.*reward"):
+            check_kernel_schema_compatibility(SocialRlDemoMixtureStickyKernel(), schema)
+
 
 # ---------------------------------------------------------------------------
 # Social kernel + full-observation schema — must pass
@@ -340,6 +362,15 @@ class TestSocialKernelOnFullObservationSchema:
     def test_demo_mixture_no_self_reward_on_full_observation_passes(self, schema) -> None:
         """SocialRlDemoMixtureKernel is compatible with full-observation schemas."""
         check_kernel_schema_compatibility(SocialRlDemoMixtureKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
+        [SOCIAL_PRE_CHOICE_SCHEMA, SOCIAL_POST_OUTCOME_SCHEMA],
+        ids=["pre_choice", "post_outcome"],
+    )
+    def test_demo_mixture_no_self_reward_sticky_on_full_observation_passes(self, schema) -> None:
+        """SocialRlDemoMixtureStickyKernel is compatible with full-observation schemas."""
+        check_kernel_schema_compatibility(SocialRlDemoMixtureStickyKernel(), schema)
 
 
 # ---------------------------------------------------------------------------

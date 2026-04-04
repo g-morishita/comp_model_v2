@@ -24,6 +24,9 @@ from comp_model.inference.bayes.stan.adapters.asocial_rl_sticky import (
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture import (
     SocialRlDemoMixtureStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture_sticky import (
+    SocialRlDemoMixtureStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_reward import (
     SocialRlDemoRewardStanAdapter,
 )
@@ -317,6 +320,12 @@ _SOCIAL_ADAPTER_CASES = [
     (
         "social_rl_demo_mixture",
         SocialRlDemoMixtureStanAdapter(),
+        _social_dataset,
+        SOCIAL_PRE_CHOICE_SCHEMA,
+    ),
+    (
+        "social_rl_demo_mixture_sticky",
+        SocialRlDemoMixtureStickyStanAdapter(),
         _social_dataset,
         SOCIAL_PRE_CHOICE_SCHEMA,
     ),
