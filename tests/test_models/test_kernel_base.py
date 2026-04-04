@@ -6,6 +6,9 @@ from typing import Any
 import pytest
 
 from comp_model.models.kernels.base import ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.social_rl_demo_action_bias_sticky import (
+    SocialRlDemoActionBiasStickyKernel,
+)
 from comp_model.models.kernels.social_rl_demo_mixture import SocialRlDemoMixtureKernel
 from comp_model.models.kernels.social_rl_demo_reward import SocialRlDemoRewardKernel
 from comp_model.models.kernels.social_rl_demo_reward_sticky import (
@@ -108,6 +111,11 @@ class TestRequiredSocialFields:
                 id="asocial_rl_sticky",
             ),
             pytest.param(
+                "SocialRlDemoActionBiasStickyKernel",
+                frozenset({"action"}),
+                id="social_demo_action_bias_sticky",
+            ),
+            pytest.param(
                 "SocialRlDemoRewardKernel",
                 frozenset({"action", "reward"}),
                 id="social_demo_reward",
@@ -165,6 +173,7 @@ class TestRequiredSocialFields:
     @pytest.mark.parametrize(
         "kernel_cls",
         [
+            "SocialRlDemoActionBiasStickyKernel",
             "SocialRlSelfRewardDemoRewardKernel",
             "SocialRlSelfRewardDemoRewardStickyKernel",
             "SocialRlDemoRewardKernel",
@@ -204,6 +213,7 @@ class TestRequiredSocialFields:
 @pytest.mark.parametrize(
     "kernel_cls",
     [
+        SocialRlDemoActionBiasStickyKernel,
         SocialRlSelfRewardDemoRewardKernel,
         SocialRlSelfRewardDemoRewardStickyKernel,
         SocialRlDemoRewardKernel,
@@ -227,6 +237,14 @@ def test_social_kernel_transform_lookup_is_cached_per_class(kernel_cls: type[Any
 @pytest.mark.parametrize(
     ("kernel", "raw"),
     [
+        pytest.param(
+            SocialRlDemoActionBiasStickyKernel(),
+            {
+                "demo_bias": 0.3,
+                "stickiness": -0.5,
+            },
+            id="social_demo_action_bias_sticky",
+        ),
         pytest.param(
             SocialRlDemoRewardKernel(),
             {"alpha_other": -0.3, "beta": 1.2},

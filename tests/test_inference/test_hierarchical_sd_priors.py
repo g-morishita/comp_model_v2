@@ -9,6 +9,7 @@ import pytest
 from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.adapters import (
+    SocialRlDemoActionBiasStickyStanAdapter,
     SocialRlSelfRewardDemoActionMixtureStickyStanAdapter,
 )
 from comp_model.inference.bayes.stan.adapters.asocial_q_learning import (
@@ -49,7 +50,11 @@ from comp_model.models.condition.shared_delta import SharedDeltaLayout
 from comp_model.models.kernels.asocial_q_learning import AsocialQLearningKernel
 from comp_model.models.kernels.asocial_rl_sticky import AsocialRlStickyKernel
 from comp_model.runtime.engine import SimulationConfig, simulate_dataset
-from comp_model.tasks.schemas import ASOCIAL_BANDIT_SCHEMA, SOCIAL_PRE_CHOICE_SCHEMA
+from comp_model.tasks.schemas import (
+    ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_SCHEMA,
+)
 from comp_model.tasks.spec import BlockSpec, TaskSpec
 
 
@@ -195,14 +200,19 @@ def _social_trial(
     )
 
 
-def _social_subject(subject_id: str, include_conditions: bool) -> SubjectData:
+def _social_subject(
+    subject_id: str,
+    include_conditions: bool,
+    *,
+    schema_id: str = "social_pre_choice",
+) -> SubjectData:
     """Create a small social subject for hierarchical adapter tests."""
 
     blocks = [
         Block(
             block_index=0,
             condition="baseline",
-            schema_id="social_pre_choice",
+            schema_id=schema_id,
             trials=(
                 _social_trial(
                     0,
@@ -219,7 +229,7 @@ def _social_subject(subject_id: str, include_conditions: bool) -> SubjectData:
             Block(
                 block_index=1,
                 condition="social",
-                schema_id="social_pre_choice",
+                schema_id=schema_id,
                 trials=(
                     _social_trial(
                         0,
@@ -235,15 +245,21 @@ def _social_subject(subject_id: str, include_conditions: bool) -> SubjectData:
     return SubjectData(subject_id=subject_id, blocks=tuple(blocks))
 
 
-def _social_dataset(include_conditions: bool) -> Dataset:
+def _social_dataset(include_conditions: bool, *, schema_id: str = "social_pre_choice") -> Dataset:
     """Create a small social dataset for hierarchical adapter tests."""
 
     return Dataset(
         subjects=(
-            _social_subject("social-s1", include_conditions),
-            _social_subject("social-s2", include_conditions),
+            _social_subject("social-s1", include_conditions, schema_id=schema_id),
+            _social_subject("social-s2", include_conditions, schema_id=schema_id),
         )
     )
+
+
+def _social_action_only_dataset(include_conditions: bool) -> Dataset:
+    """Create a small action-only social dataset for hierarchical adapter tests."""
+
+    return _social_dataset(include_conditions, schema_id="social_pre_choice_action_only")
 
 
 _ASOCIAL_ADAPTER_CASES = [
@@ -268,6 +284,12 @@ _ASOCIAL_ADAPTER_CASES = [
 ]
 
 _SOCIAL_ADAPTER_CASES = [
+    (
+        "social_rl_demo_action_bias_sticky",
+        SocialRlDemoActionBiasStickyStanAdapter(),
+        _social_action_only_dataset,
+        SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    ),
     (
         "social_rl_demo_reward",
         SocialRlDemoRewardStanAdapter(),
