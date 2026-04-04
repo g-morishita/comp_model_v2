@@ -8,6 +8,7 @@ _PROGRAMS_DIR = Path(__file__).resolve().parents[2] / "src/comp_model/inference/
 _MIXTURE_PROGRAMS = sorted(_PROGRAMS_DIR.glob("social_rl_*mixture*.stan"))
 _EXPECTED_MIXTURE_FAMILIES = {
     "social_rl_demo_mixture",
+    "social_rl_demo_mixture_sticky",
     "social_rl_self_reward_demo_action_mixture",
     "social_rl_self_reward_demo_action_mixture_sticky",
     "social_rl_self_reward_demo_mixture",

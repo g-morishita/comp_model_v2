@@ -21,6 +21,9 @@ from comp_model.inference.bayes.stan.adapters.asocial_rl_sticky import (
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture import (
     SocialRlDemoMixtureStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture_sticky import (
+    SocialRlDemoMixtureStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_reward import (
     SocialRlDemoRewardStanAdapter,
 )
@@ -94,6 +97,22 @@ _ADAPTER_CASES: list[tuple[str, StanAdapter, set[str]]] = [
             "alpha_other_action_delta_z",
             "w_imitation_delta_z",
             "beta_delta_z",
+        },
+    ),
+    (
+        "social_rl_demo_mixture_sticky",
+        SocialRlDemoMixtureStickyStanAdapter(),
+        {
+            "alpha_other_outcome_shared_z",
+            "alpha_other_action_shared_z",
+            "w_imitation_shared_z",
+            "beta_shared_z",
+            "stickiness_shared_z",
+            "alpha_other_outcome_delta_z",
+            "alpha_other_action_delta_z",
+            "w_imitation_delta_z",
+            "beta_delta_z",
+            "stickiness_delta_z",
         },
     ),
     (

@@ -21,6 +21,11 @@ from comp_model.models.kernels.social_rl_demo_mixture import (
     SocialRlDemoMixtureParams,
     SocialRlDemoMixtureState,
 )
+from comp_model.models.kernels.social_rl_demo_mixture_sticky import (
+    SocialRlDemoMixtureStickyKernel,
+    SocialRlDemoMixtureStickyParams,
+    SocialRlDemoMixtureStickyState,
+)
 from comp_model.models.kernels.social_rl_demo_reward import (
     SocialRlDemoRewardKernel,
     SocialRlDemoRewardParams,
@@ -80,6 +85,9 @@ __all__ = [
     "SocialRlDemoMixtureKernel",
     "SocialRlDemoMixtureParams",
     "SocialRlDemoMixtureState",
+    "SocialRlDemoMixtureStickyKernel",
+    "SocialRlDemoMixtureStickyParams",
+    "SocialRlDemoMixtureStickyState",
     "SocialRlDemoRewardKernel",
     "SocialRlDemoRewardParams",
     "SocialRlDemoRewardState",
