@@ -80,9 +80,9 @@ def score_candidate_bayes(
             f"BayesFitResult.log_lik must be 2-D (draws x obs), got shape {log_lik.shape}"
         )
 
-    if criterion == "waic":
-        return _waic_score(log_lik)
-    raise ValueError(f"Unknown Bayesian criterion: {criterion!r}")
+    if criterion != "waic":
+        raise ValueError(f"Unknown Bayesian criterion: {criterion!r}")
+    return _waic_score(log_lik)
 
 
 def select_winner(scores: dict[str, float]) -> tuple[str, float, str | None, float | None]:
