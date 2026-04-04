@@ -56,6 +56,11 @@ from comp_model.models.kernels.social_rl_self_reward_demo_reward import (
     SocialRlSelfRewardDemoRewardParams,
     SocialRlSelfRewardDemoRewardState,
 )
+from comp_model.models.kernels.social_rl_self_reward_demo_reward_sticky import (
+    SocialRlSelfRewardDemoRewardStickyKernel,
+    SocialRlSelfRewardDemoRewardStickyParams,
+    SocialRlSelfRewardDemoRewardStickyState,
+)
 from comp_model.models.kernels.transforms import TRANSFORM_REGISTRY, Transform, get_transform
 
 __all__ = [
@@ -96,6 +101,9 @@ __all__ = [
     "SocialRlSelfRewardDemoRewardKernel",
     "SocialRlSelfRewardDemoRewardParams",
     "SocialRlSelfRewardDemoRewardState",
+    "SocialRlSelfRewardDemoRewardStickyKernel",
+    "SocialRlSelfRewardDemoRewardStickyParams",
+    "SocialRlSelfRewardDemoRewardStickyState",
     "Transform",
     "get_transform",
 ]
