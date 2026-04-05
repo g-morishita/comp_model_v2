@@ -25,9 +25,11 @@ from comp_model.io import (
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
     SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+    SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
     SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
     SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
@@ -89,6 +91,10 @@ def test_save_and_load_dataset_round_trip_preserves_fitting_views(tmp_path: Path
             SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
             _make_social_pre_choice_no_self_outcome_dataset(),
         ),
+        (
+            SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
+            _make_social_pre_choice_demo_learns_dataset(),
+        ),
         (SOCIAL_POST_OUTCOME_SCHEMA, _make_social_post_outcome_dataset()),
         (
             SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
@@ -100,6 +106,10 @@ def test_save_and_load_dataset_round_trip_preserves_fitting_views(tmp_path: Path
         (
             SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
             _make_social_post_outcome_no_self_outcome_dataset(),
+        ),
+        (
+            SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
+            _make_social_post_outcome_demo_learns_dataset(),
         ),
     )
 
@@ -266,6 +276,71 @@ def test_load_action_only_schema_keeps_social_reward_hidden_from_subject(
 
         assert len(subject_social_updates) == 1
         assert subject_social_updates[0].reward is None
+
+
+def test_load_social_pre_choice_demo_learns_preserves_demo_feedback_to_both_agents(
+    tmp_path: Path,
+) -> None:
+    """Ensure pre-choice demo-learns reconstruction preserves both update sides.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test inspects the canonical demo-facing and subject-facing update
+        payloads after CSV round-trip.
+    """
+
+    dataset = _make_social_pre_choice_demo_learns_dataset()
+    csv_path = tmp_path / "social_pre_choice_demo_learns.csv"
+
+    save_dataset_to_csv(dataset, schema=SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA, path=csv_path)
+    loaded_dataset = load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA)
+
+    trial = loaded_dataset.subjects[0].blocks[0].trials[0]
+    assert len(trial.events) == 10
+    assert trial.events[4].actor_id == "demonstrator"
+    assert trial.events[4].payload == {"choice": 0, "reward": 1.0}
+    assert trial.events[9].actor_id == "subject"
+    assert trial.events[9].payload == {"choice": 1, "reward": 0.0}
+
+
+def test_load_social_post_outcome_demo_learns_preserves_demo_feedback_to_both_agents(
+    tmp_path: Path,
+) -> None:
+    """Ensure post-outcome demo-learns reconstruction preserves both update sides.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test inspects the canonical demo-facing and subject-facing update
+        payloads after CSV round-trip.
+    """
+
+    dataset = _make_social_post_outcome_demo_learns_dataset()
+    csv_path = tmp_path / "social_post_outcome_demo_learns.csv"
+
+    save_dataset_to_csv(dataset, schema=SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA, path=csv_path)
+    loaded_dataset = load_dataset_from_csv(
+        csv_path,
+        schema=SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
+    )
+
+    trial = loaded_dataset.subjects[0].blocks[0].trials[0]
+    assert len(trial.events) == 10
+    assert trial.events[4].actor_id == "subject"
+    assert trial.events[4].payload == {"choice": 0, "reward": 1.0}
+    assert trial.events[9].actor_id == "demonstrator"
+    assert trial.events[9].payload == {"choice": 1, "reward": 0.0}
 
 
 def test_save_no_self_outcome_schema_writes_blank_subject_reward(tmp_path: Path) -> None:
@@ -1101,6 +1176,204 @@ def _make_social_post_outcome_no_self_outcome_dataset() -> Dataset:
                                     Event(
                                         phase=EventPhase.UPDATE,
                                         event_index=6,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"choice": 1, "reward": 0.0},
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _make_social_pre_choice_demo_learns_dataset() -> Dataset:
+    """Create a small pre-choice demo-learns dataset for CSV tests.
+
+    Returns
+    -------
+    Dataset
+        Dataset with one subject and one bidirectional demonstrator-first
+        social block.
+    """
+
+    return Dataset(
+        subjects=(
+            SubjectData(
+                subject_id="s1",
+                blocks=(
+                    Block(
+                        block_index=0,
+                        condition="social_pre_demo_learns",
+                        schema_id="social_pre_choice_demo_learns",
+                        trials=(
+                            Trial(
+                                trial_index=0,
+                                events=(
+                                    Event(
+                                        phase=EventPhase.INPUT,
+                                        event_index=0,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"available_actions": (0, 1)},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.DECISION,
+                                        event_index=1,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"action": 0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.OUTCOME,
+                                        event_index=2,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=3,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"choice": 0, "reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=4,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"choice": 0, "reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.INPUT,
+                                        event_index=5,
+                                        node_id="main",
+                                        payload={"available_actions": (0, 1)},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.DECISION,
+                                        event_index=6,
+                                        node_id="main",
+                                        payload={"action": 1},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.OUTCOME,
+                                        event_index=7,
+                                        node_id="main",
+                                        payload={"reward": 0.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=8,
+                                        node_id="main",
+                                        payload={"choice": 1, "reward": 0.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=9,
+                                        node_id="main",
+                                        actor_id="subject",
+                                        payload={"choice": 1, "reward": 0.0},
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _make_social_post_outcome_demo_learns_dataset() -> Dataset:
+    """Create a small post-outcome demo-learns dataset for CSV tests.
+
+    Returns
+    -------
+    Dataset
+        Dataset with one subject and one bidirectional subject-first social
+        block.
+    """
+
+    return Dataset(
+        subjects=(
+            SubjectData(
+                subject_id="s1",
+                blocks=(
+                    Block(
+                        block_index=0,
+                        condition="social_post_demo_learns",
+                        schema_id="social_post_outcome_demo_learns",
+                        trials=(
+                            Trial(
+                                trial_index=0,
+                                events=(
+                                    Event(
+                                        phase=EventPhase.INPUT,
+                                        event_index=0,
+                                        node_id="main",
+                                        payload={"available_actions": (0, 1)},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.DECISION,
+                                        event_index=1,
+                                        node_id="main",
+                                        payload={"action": 0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.OUTCOME,
+                                        event_index=2,
+                                        node_id="main",
+                                        payload={"reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=3,
+                                        node_id="main",
+                                        payload={"choice": 0, "reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=4,
+                                        node_id="main",
+                                        actor_id="subject",
+                                        payload={"choice": 0, "reward": 1.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.INPUT,
+                                        event_index=5,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"available_actions": (0, 1)},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.DECISION,
+                                        event_index=6,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"action": 1},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.OUTCOME,
+                                        event_index=7,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"reward": 0.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=8,
+                                        node_id="main",
+                                        actor_id="demonstrator",
+                                        payload={"choice": 1, "reward": 0.0},
+                                    ),
+                                    Event(
+                                        phase=EventPhase.UPDATE,
+                                        event_index=9,
                                         node_id="main",
                                         actor_id="demonstrator",
                                         payload={"choice": 1, "reward": 0.0},

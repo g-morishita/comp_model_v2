@@ -28,9 +28,11 @@ from comp_model.data import (
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
     SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+    SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
     SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
     SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
@@ -269,10 +271,10 @@ class _SocialTrialCsvConverter:
 
     Notes
     -----
-    Pre-choice, post-outcome, action-only, and no-self-outcome schemas all
-    flatten to the same social row shape. The bound schema still matters
-    because it decides which canonical events exist and whether the subject's
-    own ``reward`` cell should contain a float or remain empty.
+    Pre-choice, post-outcome, action-only, no-self-outcome, and bidirectional
+    schemas all flatten to the same social row shape. The bound schema still
+    matters because it decides which canonical events exist and whether the
+    subject's own ``reward`` cell should contain a float or remain empty.
     """
 
     schema: TrialSchema
@@ -1367,9 +1369,11 @@ def _register_builtin_converters() -> None:
         _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA),
     )
     for converter in builtin_converters:
         if converter.schema_id not in _TRIAL_CSV_CONVERTERS:
