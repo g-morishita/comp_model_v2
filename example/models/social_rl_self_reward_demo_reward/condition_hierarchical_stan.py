@@ -216,6 +216,8 @@ print(
     f"{'shifted true':>14} {'shifted post':>14}"
 )
 print("-" * 84)
+baseline_index = layout.conditions.index("baseline")
+shifted_index = layout.conditions.index("shifted")
 for name in param_names:
     transform = next(
         get_transform(parameter.transform_id)
@@ -227,12 +229,13 @@ for name in param_names:
         pop_params[f"mu_{name}_shared_z"] + pop_params[f"mu_{name}_delta_z__shifted"]
     )
     population_samples = np.asarray(result.posterior_samples[f"{name}_pop"])
-    if population_samples.ndim == 1:
-        baseline_post = float(np.mean(population_samples))
-        shifted_post = float(np.mean(population_samples))
-    else:
-        baseline_post = float(np.mean(population_samples[:, 0]))
-        shifted_post = float(np.mean(population_samples[:, 1]))
+    if population_samples.ndim != 2 or population_samples.shape[1] != len(layout.conditions):
+        raise RuntimeError(
+            f"Expected {name}_pop to have shape (draws, {len(layout.conditions)}) "
+            "for a two-condition hierarchical fit."
+        )
+    baseline_post = float(np.mean(population_samples[:, baseline_index]))
+    shifted_post = float(np.mean(population_samples[:, shifted_index]))
     print(
         f"{name:<24} {baseline_true:>14.3f} {baseline_post:>14.3f} "
         f"{shifted_true:>14.3f} {shifted_post:>14.3f}"
