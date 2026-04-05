@@ -1,9 +1,11 @@
 """Schema-specific CSV converters for fitting-oriented trial tables.
 
-This module provides a registry of trial-level CSV converters keyed by
-``TrialSchema.schema_id``. Each converter owns its explicit columns and knows
-how to flatten one canonical trial into a fitting-oriented CSV row and rebuild
-that row back into the current canonical event sequence for the same schema.
+Each converter owns one flat CSV row contract for a specific
+``TrialSchema.schema_id``. Export collapses the canonical event sequence for
+one trial into that row shape; import performs the inverse reconstruction using
+the schema's declared event order. Social schemas intentionally share one row
+shape even when they differ in timing or whether the subject receives an
+outcome, so some cells may be intentionally blank for certain schemas.
 """
 
 from __future__ import annotations
@@ -26,8 +28,12 @@ from comp_model.data import (
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
     SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+    SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA,
+    SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA,
+    SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
 )
@@ -46,6 +52,8 @@ _COMMON_FIELDNAMES = (
     "choice",
     "reward",
 )
+# Social schemas keep one stable header across variants. Schemas without a
+# subject outcome still include the ``reward`` column, but export it as "".
 _SOCIAL_FIELDNAMES = (*_COMMON_FIELDNAMES, "demonstrator_choice", "demonstrator_reward")
 
 
@@ -259,12 +267,14 @@ class _AsocialBanditTrialCsvConverter:
 
 @dataclass(frozen=True, slots=True)
 class _SocialTrialCsvConverter:
-    """Trial-row CSV converter shared by all social schemas.
+    """Trial-row CSV converter shared by one-choice social schemas.
 
-    Both pre-choice and post-outcome social schemas export the same flat
-    columns; only the canonical event order differs, which is fully determined
-    by the bound ``schema``.  A single converter class is therefore sufficient
-    for every social schema variant.
+    Notes
+    -----
+    Pre-choice, post-outcome, action-only, no-self-outcome, and bidirectional
+    schemas all flatten to the same social row shape. The bound schema still
+    matters because it decides which canonical events exist and whether the
+    subject's own ``reward`` cell should contain a float or remain empty.
     """
 
     schema: TrialSchema
@@ -309,10 +319,16 @@ class _SocialTrialCsvConverter:
         Returns
         -------
         dict[str, str]
-            String-valued CSV row for the social schema.
+            String-valued CSV row for the social schema. Schemas without a
+            subject outcome serialize ``reward`` as ``""``.
         """
 
         view = _extract_single_view(trial, self.schema)
+        subject_reward = (
+            _require_reward(view.reward, self.schema_id, trial.trial_index)
+            if self.schema.has_subject_reward
+            else None
+        )
         return {
             **_build_common_row(
                 subject_id=subject_id,
@@ -322,7 +338,7 @@ class _SocialTrialCsvConverter:
                 trial_index=trial.trial_index,
                 available_actions=view.available_actions,
                 choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
-                reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
+                reward=subject_reward,
             ),
             "demonstrator_choice": str(
                 _require_social_action(view.social_action, self.schema_id, trial.trial_index)
@@ -345,14 +361,21 @@ class _SocialTrialCsvConverter:
         Returns
         -------
         Trial
-            Canonical social trial rebuilt in schema order.
+            Canonical social trial rebuilt in schema order. Schemas without a
+            subject outcome accept ``reward=""`` and reconstruct no subject
+            OUTCOME or self-UPDATE event.
         """
 
         available_actions = _parse_available_actions(row["available_actions"])
         choice = _parse_int_field(row, "choice")
-        reward = _parse_float_field(row, "reward")
+        reward = _parse_optional_float_field(row, "reward")
         demonstrator_choice = _parse_int_field(row, "demonstrator_choice")
         demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
+        if self.schema.has_subject_reward:
+            if reward is None:
+                raise ValueError(f"Field 'reward' is required for schema {self.schema_id!r}")
+        elif reward is not None:
+            raise ValueError(f"Field 'reward' must be empty for schema {self.schema_id!r}")
         _validate_action_in_available_set(
             action=choice,
             available_actions=available_actions,
@@ -451,7 +474,8 @@ def save_dataset_to_csv(dataset: Dataset, *, schema: TrialSchema, path: str | Pa
     ------
     ValueError
         Raised when a trial does not match the schema or cannot be flattened by
-        the selected converter.
+        the selected converter. For schemas without a subject outcome, the
+        exported ``reward`` cell is left blank instead of fabricating one.
     """
 
     converter = get_trial_csv_converter(schema)
@@ -548,6 +572,7 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
     ValueError
         Raised when headers are invalid, block conditions conflict, duplicate
         trial keys appear, or rows cannot be reconstructed for ``schema``.
+        Schemas without a subject outcome require ``reward=""`` in each row.
     """
 
     converter = get_trial_csv_converter(schema)
@@ -564,6 +589,8 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
         )
         infer_actions = "available_actions" in absent_optional
         infer_schema_id = "schema_id" in absent_optional
+        # Optional columns can be inferred only after seeing the whole file, so
+        # we buffer rows once before reconstructing trials.
         buffered_rows = list(reader)
         if infer_actions:
             is_social = "demonstrator_choice" in converter.fieldnames
@@ -655,10 +682,10 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
 class _CombinedTrialView:
     """Merged per-trial data for CSV row converters.
 
-    Aggregates the subject's choice, reward, observation, and any observed
-    social information from all replay steps in one trial. This is an internal
-    helper used only by the CSV converters; it is not a ``DecisionTrialView``
-    because it conflates information from multiple distinct update events.
+    Aggregates the subject's choice, optional self reward, and observed social
+    information from every replay step in one trial. This is an internal helper
+    for flat CSV export, not a general decision view, because it intentionally
+    collapses multiple replay events into one row-shaped record.
     """
 
     trial_index: int
@@ -671,7 +698,7 @@ class _CombinedTrialView:
 
 
 def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialView:
-    """Extract the sole subject decision view expected by built-in row converters.
+    """Collapse one trial into the row-shaped view used by built-in converters.
 
     Parameters
     ----------
@@ -683,8 +710,8 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
     Returns
     -------
     _CombinedTrialView
-        Merged per-trial record combining the subject's choice, reward,
-        observation, and any observed social information.
+        Merged per-trial record combining the subject's choice, optional self
+        reward, observation, and any observed social information.
 
     Raises
     ------
@@ -701,18 +728,21 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
 
     for event_type, learner_id, view in replay_trial_steps(trial, schema):
         if event_type == EventPhase.DECISION and learner_id == "subject":
+            # The flat CSV row stores only the subject-facing decision state.
             choice = view.action
             available_actions = view.available_actions
             observation = dict(view.observation)
-        elif event_type == EventPhase.UPDATE and learner_id == "subject":
-            if view.actor_id == view.learner_id:
-                # Self-update: capture the subject's own reward.
-                if view.reward is not None:
-                    reward = view.reward
-            else:
-                # Social update: capture the observed action and reward.
+        elif event_type == EventPhase.UPDATE:
+            # Subject-owned reward can appear in self-updates and in
+            # demonstrator-facing updates for bidirectional schemas.
+            if view.actor_id == "subject" and view.reward is not None:
+                reward = view.reward
+            if view.actor_id == "demonstrator":
+                # Demonstrator reward must come from the actor's own update
+                # when the subject-facing social view intentionally hides it.
                 if view.action is not None:
                     social_action = view.action
+                if view.reward is not None:
                     social_reward = view.reward
 
     if choice is None:
@@ -739,7 +769,7 @@ def _build_common_row(
     trial_index: int,
     available_actions: tuple[int, ...],
     choice: int,
-    reward: float,
+    reward: float | None,
 ) -> dict[str, str]:
     """Build the shared CSV columns for one trial row.
 
@@ -760,7 +790,7 @@ def _build_common_row(
     choice
         Chosen action value.
     reward
-        Observed reward.
+        Observed reward, or ``None`` for schemas with no subject outcome.
 
     Returns
     -------
@@ -776,7 +806,7 @@ def _build_common_row(
         "trial_index": str(trial_index),
         "available_actions": _format_available_actions(available_actions),
         "choice": str(choice),
-        "reward": str(reward),
+        "reward": "" if reward is None else str(reward),
     }
 
 
@@ -786,7 +816,7 @@ def _build_trial_from_schema(
     trial_index: int,
     available_actions: tuple[int, ...],
     choice: int,
-    reward: float,
+    reward: float | None,
     demonstrator_observation: Mapping[str, Any] | None = None,
 ) -> Trial:
     """Build one canonical trial using the declared schema order.
@@ -802,7 +832,8 @@ def _build_trial_from_schema(
     choice
         Chosen action value.
     reward
-        Observed reward value.
+        Observed reward value, or ``None`` when the schema omits the subject's
+        own outcome entirely.
     demonstrator_observation
         Demonstrator observation payload for non-subject input events, if any.
 
@@ -826,6 +857,8 @@ def _build_trial_from_schema(
 
     events: list[Event] = []
     for step_index, step in enumerate(schema.steps):
+        # Reconstruction follows the schema verbatim: the row supplies values,
+        # while the schema decides which event types actually appear.
         if step.phase == EventPhase.INPUT:
             payload: dict[str, Any] = {"available_actions": available_actions}
         elif step.phase == EventPhase.DECISION:
@@ -837,6 +870,8 @@ def _build_trial_from_schema(
                 payload = {"action": demonstrator_choice}
         elif step.phase == EventPhase.OUTCOME:
             if step.actor_id == "subject":
+                if reward is None:
+                    raise ValueError(f"Schema {schema.schema_id!r} requires subject reward")
                 payload = {"reward": reward}
             else:
                 if demonstrator_reward is None:
@@ -845,6 +880,8 @@ def _build_trial_from_schema(
         elif step.phase == EventPhase.UPDATE:
             # Payload carries the actor's choice and reward for replay.
             if step.actor_id == "subject":
+                if reward is None:
+                    raise ValueError(f"Schema {schema.schema_id!r} requires subject reward")
                 payload = {"choice": choice, "reward": reward}
             else:
                 if demonstrator_choice is None or demonstrator_reward is None:
@@ -1136,6 +1173,32 @@ def _parse_float_field(row: Mapping[str, str], field_name: str) -> float:
         raise ValueError(f"Field {field_name!r} must be a float") from error
 
 
+def _parse_optional_float_field(row: Mapping[str, str], field_name: str) -> float | None:
+    """Parse a floating-point field that may be intentionally blank.
+
+    Parameters
+    ----------
+    row
+        Normalized CSV row.
+    field_name
+        Field name to parse.
+
+    Returns
+    -------
+    float | None
+        Parsed float value, or ``None`` when the cell is empty.
+
+    Raises
+    ------
+    ValueError
+        Raised when the field is non-empty but not a floating-point value.
+    """
+
+    if row[field_name] == "":
+        return None
+    return _parse_float_field(row, field_name)
+
+
 def _validate_action_in_available_set(
     *, action: int, available_actions: tuple[int, ...], field_name: str
 ) -> None:
@@ -1305,8 +1368,12 @@ def _register_builtin_converters() -> None:
         _AsocialBanditTrialCsvConverter(),
         _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_PRE_CHOICE_DEMO_LEARNS_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_SCHEMA),
         _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA),
+        _SocialTrialCsvConverter(SOCIAL_POST_OUTCOME_DEMO_LEARNS_SCHEMA),
     )
     for converter in builtin_converters:
         if converter.schema_id not in _TRIAL_CSV_CONVERTERS:
