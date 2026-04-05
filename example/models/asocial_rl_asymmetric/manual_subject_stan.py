@@ -3,6 +3,7 @@
 Model: asocial_rl_asymmetric
 """
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -36,8 +37,9 @@ except (RuntimeError, ValueError) as error:
         "Run `python -m cmdstanpy.install_cmdstan` first."
     ) from error
 
-if not (Path(cmdstan_path) / "bin" / "diagnose").exists():
-    raise RuntimeError(f"CmdStan at {cmdstan_path!r} is incomplete: missing `bin/diagnose`.")
+diagnose_name = "diagnose.exe" if os.name == "nt" else "diagnose"
+if not (Path(cmdstan_path) / "bin" / diagnose_name).exists():
+    raise RuntimeError(f"CmdStan at {cmdstan_path!r} is incomplete: missing `bin/{diagnose_name}`.")
 
 # Define the task
 N_ACTIONS = 2
