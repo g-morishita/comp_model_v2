@@ -1,11 +1,12 @@
 # Model Workflows
 
-Every model directory contains the same four fixed scripts:
+Every model directory contains the same fixed workflow scripts:
 
 - `manual_subject_mle.py`
 - `manual_subject_stan.py`
 - `flat_population_mle.py`
 - `hierarchical_population_stan.py`
+- `condition_hierarchical_stan.py`
 
 These scripts are intentionally explicit. They do not hide the workflow behind helper modules or model-selection flags.
 
@@ -14,6 +15,7 @@ These scripts are intentionally explicit. They do not hide the workflow behind h
 ```bash
 uv run python example/models/asocial_q_learning/manual_subject_mle.py
 uv run python example/models/asocial_q_learning/hierarchical_population_stan.py
+uv run python example/models/asocial_q_learning/condition_hierarchical_stan.py
 uv run python example/models/social_rl_demo_reward/flat_population_mle.py
 uv run python example/models/social_rl_demo_action_bias_sticky/manual_subject_stan.py
 ```

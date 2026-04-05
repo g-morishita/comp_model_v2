@@ -9,3 +9,5 @@ Start with [models/README.md](models/README.md).
 - older model-specific directories: lower-level references kept for backwards compatibility
 
 The new entry point is `example/models/` because the files are organized by exact model and workflow case.
+
+The per-model directories now include both single-condition and condition-aware Stan workflows.
