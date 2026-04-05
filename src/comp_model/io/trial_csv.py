@@ -324,7 +324,7 @@ class _SocialTrialCsvConverter:
         view = _extract_single_view(trial, self.schema)
         subject_reward = (
             _require_reward(view.reward, self.schema_id, trial.trial_index)
-            if _schema_has_subject_reward(self.schema)
+            if self.schema.has_subject_reward
             else None
         )
         return {
@@ -369,7 +369,7 @@ class _SocialTrialCsvConverter:
         reward = _parse_optional_float_field(row, "reward")
         demonstrator_choice = _parse_int_field(row, "demonstrator_choice")
         demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
-        if _schema_has_subject_reward(self.schema):
+        if self.schema.has_subject_reward:
             if reward is None:
                 raise ValueError(f"Field 'reward' is required for schema {self.schema_id!r}")
         elif reward is not None:
@@ -806,33 +806,6 @@ def _build_common_row(
         "choice": str(choice),
         "reward": "" if reward is None else str(reward),
     }
-
-
-def _schema_has_subject_reward(schema: TrialSchema) -> bool:
-    """Return whether the flat row must carry a subject reward value.
-
-    Parameters
-    ----------
-    schema
-        Schema whose subject-facing reward structure is being inspected.
-
-    Returns
-    -------
-    bool
-        ``True`` when reconstruction needs a concrete subject reward because
-        the schema contains a subject-owned reward-bearing event.
-
-    Notes
-    -----
-    The CSV row needs a concrete subject reward only when the canonical schema
-    contains a subject-owned reward-bearing event. Schemas without subject
-    OUTCOME/self-feedback intentionally serialize ``reward`` as empty.
-    """
-
-    return any(
-        step.actor_id == "subject" and step.phase in {EventPhase.OUTCOME, EventPhase.UPDATE}
-        for step in schema.steps
-    )
 
 
 def _build_trial_from_schema(

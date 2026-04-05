@@ -206,6 +206,23 @@ class TrialSchema:
             index for index, step in enumerate(self.steps) if step.phase == EventPhase.DECISION
         )
 
+    @property
+    def has_subject_reward(self) -> bool:
+        """Whether the schema contains a subject-owned reward-bearing step.
+
+        Returns
+        -------
+        bool
+            ``True`` when the schema includes a subject ``OUTCOME`` or subject
+            ``UPDATE`` step that requires a concrete reward value during trial
+            reconstruction.
+        """
+
+        return any(
+            step.actor_id == "subject" and step.phase in {EventPhase.OUTCOME, EventPhase.UPDATE}
+            for step in self.steps
+        )
+
 
 # Standard solo learning trial.
 # Trial order: options appear → subject chooses → subject receives reward → beliefs updated.
