@@ -588,6 +588,113 @@ def test_load_social_pre_choice_missing_subject_choice_preserves_social_update(
     ]
 
 
+def test_save_dataset_to_csv_preserves_asocial_timeout_row(tmp_path: Path) -> None:
+    """Ensure exported asocial timeout trials keep blank subject fields.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test checks timeout export and reload behavior.
+    """
+
+    input_csv_path = tmp_path / "asocial_timeout_input.csv"
+    input_csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                "s1,0,A,asocial_bandit,0,0|1,,",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(input_csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    output_csv_path = tmp_path / "asocial_timeout_output.csv"
+    save_dataset_to_csv(dataset, schema=ASOCIAL_BANDIT_SCHEMA, path=output_csv_path)
+
+    with output_csv_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert rows == [
+        {
+            "subject_id": "s1",
+            "block_index": "0",
+            "condition": "A",
+            "schema_id": "asocial_bandit",
+            "trial_index": "0",
+            "available_actions": "0|1",
+            "choice": "",
+            "reward": "",
+        }
+    ]
+
+    reloaded = load_dataset_from_csv(output_csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+    assert reloaded.subjects[0].blocks[0].trials[0].events[1].payload["action"] is None
+
+
+def test_save_dataset_to_csv_preserves_social_timeout_row(tmp_path: Path) -> None:
+    """Ensure exported social timeout trials keep blank subject fields.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test checks timeout export while preserving demonstrator columns.
+    """
+
+    input_csv_path = tmp_path / "social_timeout_input.csv"
+    input_csv_path.write_text(
+        "\n".join(
+            [
+                (
+                    "subject_id,block_index,condition,schema_id,trial_index,"
+                    "available_actions,choice,reward,demonstrator_choice,demonstrator_reward"
+                ),
+                "s1,0,social,social_pre_choice,0,0|1,,,1,0.5",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(input_csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
+
+    output_csv_path = tmp_path / "social_timeout_output.csv"
+    save_dataset_to_csv(dataset, schema=SOCIAL_PRE_CHOICE_SCHEMA, path=output_csv_path)
+
+    with output_csv_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert rows == [
+        {
+            "subject_id": "s1",
+            "block_index": "0",
+            "condition": "social",
+            "schema_id": "social_pre_choice",
+            "trial_index": "0",
+            "available_actions": "0|1",
+            "choice": "",
+            "reward": "",
+            "demonstrator_choice": "1",
+            "demonstrator_reward": "0.5",
+        }
+    ]
+
+    reloaded = load_dataset_from_csv(output_csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
+    assert reloaded.subjects[0].blocks[0].trials[0].events[6].payload["action"] is None
+
+
 def test_load_dataset_from_csv_rejects_duplicate_trial_keys(tmp_path: Path) -> None:
     """Ensure duplicate subject-block-trial keys are rejected.
 

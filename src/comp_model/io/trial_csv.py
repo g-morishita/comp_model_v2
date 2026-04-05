@@ -222,6 +222,12 @@ class _AsocialBanditTrialCsvConverter:
         """
 
         view = _extract_single_view(trial, self.schema)
+        reward = _subject_reward_for_csv_export(
+            choice=view.choice,
+            reward=view.reward,
+            schema=self.schema,
+            trial_index=trial.trial_index,
+        )
         return _build_common_row(
             subject_id=subject_id,
             block_index=block_index,
@@ -229,8 +235,8 @@ class _AsocialBanditTrialCsvConverter:
             schema_id=schema_id,
             trial_index=trial.trial_index,
             available_actions=view.available_actions,
-            choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
-            reward=_require_reward(view.reward, self.schema_id, trial.trial_index),
+            choice=view.choice,
+            reward=reward,
         )
 
     def row_to_trial(self, row: Mapping[str, str], *, trial_index: int) -> Trial:
@@ -333,10 +339,11 @@ class _SocialTrialCsvConverter:
         """
 
         view = _extract_single_view(trial, self.schema)
-        subject_reward = (
-            _require_reward(view.reward, self.schema_id, trial.trial_index)
-            if self.schema.has_subject_reward
-            else None
+        subject_reward = _subject_reward_for_csv_export(
+            choice=view.choice,
+            reward=view.reward,
+            schema=self.schema,
+            trial_index=trial.trial_index,
         )
         return {
             **_build_common_row(
@@ -346,7 +353,7 @@ class _SocialTrialCsvConverter:
                 schema_id=schema_id,
                 trial_index=trial.trial_index,
                 available_actions=view.available_actions,
-                choice=_require_choice(view.choice, self.schema_id, trial.trial_index),
+                choice=view.choice,
                 reward=subject_reward,
             ),
             "demonstrator_choice": str(
@@ -708,7 +715,7 @@ class _CombinedTrialView:
 
     trial_index: int
     available_actions: tuple[int, ...]
-    choice: int
+    choice: int | None
     reward: float | None
     social_action: int | None
     social_reward: float | None
@@ -744,6 +751,14 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
     social_reward: float | None = None
     observation: dict[str, Any] = {}
 
+    for event, step in zip(trial.events, schema.steps, strict=True):
+        if step.phase == EventPhase.INPUT and step.actor_id == "subject":
+            available_actions = tuple(event.payload["available_actions"])
+            observation = dict(event.payload.get("observation", {}))
+        elif step.phase == EventPhase.DECISION and step.actor_id == "subject":
+            raw_action = event.payload["action"]
+            choice = None if raw_action is None else int(raw_action)
+
     for event_type, learner_id, view in replay_trial_steps(trial, schema):
         if event_type == EventPhase.DECISION and learner_id == "subject":
             # The flat CSV row stores only the subject-facing decision state.
@@ -751,6 +766,8 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
             available_actions = view.available_actions
             observation = dict(view.observation)
         elif event_type == EventPhase.UPDATE:
+            if learner_id == "subject" and view.available_actions:
+                available_actions = view.available_actions
             # Subject-owned reward can appear in self-updates and in
             # demonstrator-facing updates for bidirectional schemas.
             if view.actor_id == "subject" and view.reward is not None:
@@ -763,10 +780,6 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
                 if view.reward is not None:
                     social_reward = view.reward
 
-    if choice is None:
-        raise ValueError(
-            f"Schema {schema.schema_id!r} expected at least one subject action step, got none"
-        )
     return _CombinedTrialView(
         trial_index=trial.trial_index,
         available_actions=available_actions,
@@ -786,7 +799,7 @@ def _build_common_row(
     schema_id: str,
     trial_index: int,
     available_actions: tuple[int, ...],
-    choice: int,
+    choice: int | None,
     reward: float | None,
 ) -> dict[str, str]:
     """Build the shared CSV columns for one trial row.
@@ -806,7 +819,7 @@ def _build_common_row(
     available_actions
         Legal action values for the trial.
     choice
-        Chosen action value.
+        Chosen action value, or ``None`` for timeout-style subject rows.
     reward
         Observed reward, or ``None`` for schemas with no subject outcome.
 
@@ -823,7 +836,7 @@ def _build_common_row(
         "schema_id": schema_id,
         "trial_index": str(trial_index),
         "available_actions": _format_available_actions(available_actions),
-        "choice": str(choice),
+        "choice": "" if choice is None else str(choice),
         "reward": "" if reward is None else str(reward),
     }
 
@@ -1290,36 +1303,6 @@ def _validate_action_in_available_set(
         )
 
 
-def _require_choice(choice: int | None, schema_id: str, trial_index: int) -> int:
-    """Require a subject choice during CSV export.
-
-    Parameters
-    ----------
-    choice
-        Extracted subject choice.
-    schema_id
-        Schema identifier used in the error message.
-    trial_index
-        Trial index used in the error message.
-
-    Returns
-    -------
-    int
-        Concrete choice value.
-
-    Raises
-    ------
-    ValueError
-        Raised when the extracted trial has no subject choice.
-    """
-
-    if choice is None:
-        raise ValueError(
-            f"Schema {schema_id!r}, trial {trial_index}: subject choice is required for CSV export"
-        )
-    return choice
-
-
 def _require_reward(reward: float | None, schema_id: str, trial_index: int) -> float:
     """Require a reward value during CSV export.
 
@@ -1348,6 +1331,52 @@ def _require_reward(reward: float | None, schema_id: str, trial_index: int) -> f
             f"Schema {schema_id!r}, trial {trial_index}: reward is required for CSV export"
         )
     return reward
+
+
+def _subject_reward_for_csv_export(
+    *,
+    choice: int | None,
+    reward: float | None,
+    schema: TrialSchema,
+    trial_index: int,
+) -> float | None:
+    """Normalize the subject reward field when exporting one CSV row.
+
+    Parameters
+    ----------
+    choice
+        Subject choice extracted from the canonical trial, or ``None`` for a
+        timeout-style row.
+    reward
+        Subject reward extracted from the canonical trial.
+    schema
+        Trial schema driving export.
+    trial_index
+        Trial index used in error messages.
+
+    Returns
+    -------
+    float | None
+        Reward value to serialize, or ``None`` when the CSV row should leave
+        the reward cell blank.
+
+    Raises
+    ------
+    ValueError
+        Raised when a timeout row still carries a reward, or when a
+        reward-bearing schema has a concrete choice but no reward.
+    """
+
+    if choice is None:
+        if reward is not None:
+            raise ValueError(
+                f"Schema {schema.schema_id!r}, trial {trial_index}: timeout rows must not "
+                "carry a subject reward"
+            )
+        return None
+    if not schema.has_subject_reward:
+        return None
+    return _require_reward(reward, schema.schema_id, trial_index)
 
 
 def _require_social_action(action: int | None, schema_id: str, trial_index: int) -> int:
