@@ -24,8 +24,10 @@ from comp_model.io import (
 )
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
+    SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
     SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_POST_OUTCOME_SCHEMA,
+    SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
     SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
     SOCIAL_PRE_CHOICE_SCHEMA,
     TrialSchema,
@@ -77,10 +79,24 @@ def test_save_and_load_dataset_round_trip_preserves_fitting_views(tmp_path: Path
         (ASOCIAL_BANDIT_SCHEMA, _make_asocial_dataset()),
         (SOCIAL_PRE_CHOICE_SCHEMA, _make_social_pre_choice_dataset()),
         (
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            _dataset_with_schema_id(
+                _make_social_pre_choice_dataset(),
+                SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA.schema_id,
+            ),
+        ),
+        (
             SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA,
             _make_social_pre_choice_no_self_outcome_dataset(),
         ),
         (SOCIAL_POST_OUTCOME_SCHEMA, _make_social_post_outcome_dataset()),
+        (
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+            _dataset_with_schema_id(
+                _make_social_post_outcome_dataset(),
+                SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA.schema_id,
+            ),
+        ),
         (
             SOCIAL_POST_OUTCOME_NO_SELF_OUTCOME_SCHEMA,
             _make_social_post_outcome_no_self_outcome_dataset(),
@@ -618,6 +634,42 @@ def _make_asocial_dataset() -> Dataset:
                 ),
             ),
         ),
+    )
+
+
+def _dataset_with_schema_id(dataset: Dataset, schema_id: str) -> Dataset:
+    """Copy a dataset while replacing every block schema identifier.
+
+    Parameters
+    ----------
+    dataset
+        Source dataset whose trials should be preserved.
+    schema_id
+        Schema identifier to stamp onto every copied block.
+
+    Returns
+    -------
+    Dataset
+        Dataset with identical subjects, blocks, and trials except for the
+        replaced block ``schema_id`` values.
+    """
+
+    return Dataset(
+        subjects=tuple(
+            SubjectData(
+                subject_id=subject.subject_id,
+                blocks=tuple(
+                    Block(
+                        block_index=block.block_index,
+                        condition=block.condition,
+                        schema_id=schema_id,
+                        trials=block.trials,
+                    )
+                    for block in subject.blocks
+                ),
+            )
+            for subject in dataset.subjects
+        )
     )
 
 

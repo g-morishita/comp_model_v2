@@ -371,7 +371,7 @@ class _SocialTrialCsvConverter:
         demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
         if _schema_has_subject_reward(self.schema):
             if reward is None:
-                raise ValueError(f"Field 'reward' must be a float for schema {self.schema_id!r}")
+                raise ValueError(f"Field 'reward' is required for schema {self.schema_id!r}")
         elif reward is not None:
             raise ValueError(f"Field 'reward' must be empty for schema {self.schema_id!r}")
         _validate_action_in_available_set(
@@ -730,17 +730,17 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
             choice = view.action
             available_actions = view.available_actions
             observation = dict(view.observation)
-        elif event_type == EventPhase.UPDATE and learner_id == "subject":
-            if view.actor_id == view.learner_id:
-                # Self-update captures the subject's own outcome when the
-                # schema includes one.
-                if view.reward is not None:
-                    reward = view.reward
-            else:
-                # Social update contributes the demonstrator data that becomes
-                # the flat row's demonstrator columns.
+        elif event_type == EventPhase.UPDATE:
+            # Subject-owned reward can appear in self-updates and in
+            # demonstrator-facing updates for bidirectional schemas.
+            if view.actor_id == "subject" and view.reward is not None:
+                reward = view.reward
+            if view.actor_id == "demonstrator":
+                # Demonstrator reward must come from the actor's own update
+                # when the subject-facing social view intentionally hides it.
                 if view.action is not None:
                     social_action = view.action
+                if view.reward is not None:
                     social_reward = view.reward
 
     if choice is None:
