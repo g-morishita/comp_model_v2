@@ -170,6 +170,9 @@ def replay_trial_steps(
 
         elif step.phase == EventPhase.DECISION:
             if step.actor_id == "subject":
+                action = _coerce_optional_int(event.payload["action"], field_name="action")
+                if action is None:
+                    continue
                 input_event = actor_inputs["subject"]
                 yield (
                     EventPhase.DECISION,
@@ -179,7 +182,7 @@ def replay_trial_steps(
                         available_actions=tuple(input_event.payload["available_actions"]),
                         actor_id=step.actor_id,
                         learner_id=step.learner_id,
-                        action=int(event.payload["action"]),
+                        action=action,
                         reward=None,
                         observation=input_event.payload.get("observation", {}),
                     ),
@@ -192,8 +195,8 @@ def replay_trial_steps(
         elif step.phase == EventPhase.UPDATE:
             learner = step.learner_id
             actor = step.actor_id
-            actor_action = int(event.payload["choice"])
-            actor_reward = float(event.payload["reward"])
+            actor_action = _coerce_optional_int(event.payload["choice"], field_name="choice")
+            actor_reward = _coerce_optional_float(event.payload["reward"], field_name="reward")
 
             learner_input = actor_inputs.get(learner)
             available_actions: tuple[int, ...] = (
@@ -213,3 +216,63 @@ def replay_trial_steps(
             )
 
             yield (EventPhase.UPDATE, learner, view)
+
+
+def _coerce_optional_int(value: Any, *, field_name: str) -> int | None:
+    """Convert a payload value to ``int`` while allowing ``None``.
+
+    Parameters
+    ----------
+    value
+        Payload value to parse.
+    field_name
+        Field name used in error messages.
+
+    Returns
+    -------
+    int | None
+        Parsed integer, or ``None`` when the payload is missing by design.
+
+    Raises
+    ------
+    ValueError
+        Raised when a non-``None`` payload cannot be parsed as an integer.
+    """
+
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            f"Event payload field {field_name!r} must be an integer or None"
+        ) from error
+
+
+def _coerce_optional_float(value: Any, *, field_name: str) -> float | None:
+    """Convert a payload value to ``float`` while allowing ``None``.
+
+    Parameters
+    ----------
+    value
+        Payload value to parse.
+    field_name
+        Field name used in error messages.
+
+    Returns
+    -------
+    float | None
+        Parsed float, or ``None`` when the payload is missing by design.
+
+    Raises
+    ------
+    ValueError
+        Raised when a non-``None`` payload cannot be parsed as a float.
+    """
+
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Event payload field {field_name!r} must be a float or None") from error

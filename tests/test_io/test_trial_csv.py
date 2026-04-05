@@ -488,6 +488,106 @@ def test_load_no_self_outcome_rejects_non_empty_subject_reward(tmp_path: Path) -
         load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_NO_SELF_OUTCOME_SCHEMA)
 
 
+@pytest.mark.parametrize("missing_value", ("", "NA"))
+def test_load_dataset_from_csv_accepts_missing_asocial_choice_as_timeout(
+    tmp_path: Path,
+    missing_value: str,
+) -> None:
+    """Ensure blank/NA asocial choices load as timeout-style canonical events.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+    missing_value
+        Missing-value marker written into the ``choice`` and ``reward`` cells.
+
+    Returns
+    -------
+    None
+        This test checks canonical reconstruction and replay behavior.
+    """
+
+    csv_path = tmp_path / "asocial_timeout.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "subject_id,block_index,condition,schema_id,trial_index,available_actions,choice,reward",
+                f"s1,0,A,asocial_bandit,0,0|1,{missing_value},{missing_value}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=ASOCIAL_BANDIT_SCHEMA)
+
+    trial = dataset.subjects[0].blocks[0].trials[0]
+    assert trial.events[1].payload["action"] is None
+    assert trial.events[2].payload["reward"] is None
+    assert dict(trial.events[3].payload) == {"choice": None, "reward": None}
+
+    subject_steps = [
+        (event_type, view.action, view.reward)
+        for event_type, learner_id, view in replay_trial_steps(trial, ASOCIAL_BANDIT_SCHEMA)
+        if learner_id == "subject"
+    ]
+    assert subject_steps == [(EventPhase.UPDATE, None, None)]
+
+
+@pytest.mark.parametrize("missing_value", ("", "NA"))
+def test_load_social_pre_choice_missing_subject_choice_preserves_social_update(
+    tmp_path: Path,
+    missing_value: str,
+) -> None:
+    """Ensure timeout rows still replay demonstrator learning before self update.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+    missing_value
+        Missing-value marker written into the subject ``choice``/``reward`` cells.
+
+    Returns
+    -------
+    None
+        This test checks subject-facing replay behavior after CSV import.
+    """
+
+    csv_path = tmp_path / "social_pre_choice_timeout.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                (
+                    "subject_id,block_index,condition,schema_id,trial_index,"
+                    "available_actions,choice,reward,demonstrator_choice,demonstrator_reward"
+                ),
+                f"s1,0,social,social_pre_choice,0,0|1,{missing_value},{missing_value},1,0.5",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset_from_csv(csv_path, schema=SOCIAL_PRE_CHOICE_SCHEMA)
+
+    trial = dataset.subjects[0].blocks[0].trials[0]
+    assert trial.events[6].payload["action"] is None
+    assert trial.events[7].payload["reward"] is None
+    assert dict(trial.events[8].payload) == {"choice": None, "reward": None}
+
+    subject_steps = [
+        (event_type, view.actor_id, view.action, view.reward)
+        for event_type, learner_id, view in replay_trial_steps(trial, SOCIAL_PRE_CHOICE_SCHEMA)
+        if learner_id == "subject"
+    ]
+    assert subject_steps == [
+        (EventPhase.UPDATE, "demonstrator", 1, 0.5),
+        (EventPhase.UPDATE, "subject", None, None),
+    ]
+
+
 def test_load_dataset_from_csv_rejects_duplicate_trial_keys(tmp_path: Path) -> None:
     """Ensure duplicate subject-block-trial keys are rejected.
 

@@ -245,17 +245,25 @@ class _AsocialBanditTrialCsvConverter:
         Returns
         -------
         Trial
-            Canonical asocial trial in schema order.
+            Canonical asocial trial in schema order. Blank/NA ``choice`` and
+            ``reward`` cells are reconstructed as a timeout-style self event
+            with ``None`` payload values.
         """
 
         available_actions = _parse_available_actions(row["available_actions"])
-        choice = _parse_int_field(row, "choice")
-        reward = _parse_float_field(row, "reward")
-        _validate_action_in_available_set(
-            action=choice,
-            available_actions=available_actions,
-            field_name="choice",
-        )
+        choice = _parse_optional_int_field(row, "choice")
+        reward = _parse_optional_float_field(row, "reward")
+        if choice is None:
+            if reward is not None:
+                raise ValueError("Field 'reward' must be empty when 'choice' is missing")
+        else:
+            _validate_action_in_available_set(
+                action=choice,
+                available_actions=available_actions,
+                field_name="choice",
+            )
+            if reward is None:
+                raise ValueError("Field 'reward' must be a float when 'choice' is present")
         return _build_trial_from_schema(
             schema=self.schema,
             trial_index=trial_index,
@@ -363,24 +371,29 @@ class _SocialTrialCsvConverter:
         Trial
             Canonical social trial rebuilt in schema order. Schemas without a
             subject outcome accept ``reward=""`` and reconstruct no subject
-            OUTCOME or self-UPDATE event.
+            OUTCOME or self-UPDATE event. Blank/NA subject ``choice`` and
+            ``reward`` cells are reconstructed as a timeout-style subject row
+            while preserving demonstrator information.
         """
 
         available_actions = _parse_available_actions(row["available_actions"])
-        choice = _parse_int_field(row, "choice")
+        choice = _parse_optional_int_field(row, "choice")
         reward = _parse_optional_float_field(row, "reward")
         demonstrator_choice = _parse_int_field(row, "demonstrator_choice")
         demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
+        if choice is None and reward is not None:
+            raise ValueError("Field 'reward' must be empty when 'choice' is missing")
         if self.schema.has_subject_reward:
-            if reward is None:
-                raise ValueError(f"Field 'reward' is required for schema {self.schema_id!r}")
+            if choice is not None and reward is None:
+                raise ValueError(f"Field 'reward' must be a float for schema {self.schema_id!r}")
         elif reward is not None:
             raise ValueError(f"Field 'reward' must be empty for schema {self.schema_id!r}")
-        _validate_action_in_available_set(
-            action=choice,
-            available_actions=available_actions,
-            field_name="choice",
-        )
+        if choice is not None:
+            _validate_action_in_available_set(
+                action=choice,
+                available_actions=available_actions,
+                field_name="choice",
+            )
         _validate_action_in_available_set(
             action=demonstrator_choice,
             available_actions=available_actions,
@@ -543,6 +556,8 @@ def _infer_available_actions(
             raw_val = row.get(col_name)
             if raw_val is None:
                 raise ValueError(f"Row {row_number}: missing '{col_name}' column")
+            if isinstance(raw_val, str) and _is_missing_csv_value(raw_val):
+                continue
             try:
                 actions.add(int(raw_val))  # type: ignore[arg-type]
             except (ValueError, TypeError) as error:
@@ -573,6 +588,8 @@ def load_dataset_from_csv(path: str | Path, *, schema: TrialSchema) -> Dataset:
         Raised when headers are invalid, block conditions conflict, duplicate
         trial keys appear, or rows cannot be reconstructed for ``schema``.
         Schemas without a subject outcome require ``reward=""`` in each row.
+        Blank/NA subject ``choice`` cells are reconstructed as timeout-style
+        self events instead of being dropped.
     """
 
     converter = get_trial_csv_converter(schema)
@@ -815,7 +832,7 @@ def _build_trial_from_schema(
     schema: TrialSchema,
     trial_index: int,
     available_actions: tuple[int, ...],
-    choice: int,
+    choice: int | None,
     reward: float | None,
     demonstrator_observation: Mapping[str, Any] | None = None,
 ) -> Trial:
@@ -830,10 +847,10 @@ def _build_trial_from_schema(
     available_actions
         Legal actions for subject and demonstrator input events.
     choice
-        Chosen action value.
+        Chosen action value, or ``None`` for timeout-style subject rows.
     reward
         Observed reward value, or ``None`` when the schema omits the subject's
-        own outcome entirely.
+        own outcome entirely or the subject timed out.
     demonstrator_observation
         Demonstrator observation payload for non-subject input events, if any.
 
@@ -870,8 +887,6 @@ def _build_trial_from_schema(
                 payload = {"action": demonstrator_choice}
         elif step.phase == EventPhase.OUTCOME:
             if step.actor_id == "subject":
-                if reward is None:
-                    raise ValueError(f"Schema {schema.schema_id!r} requires subject reward")
                 payload = {"reward": reward}
             else:
                 if demonstrator_reward is None:
@@ -880,8 +895,6 @@ def _build_trial_from_schema(
         elif step.phase == EventPhase.UPDATE:
             # Payload carries the actor's choice and reward for replay.
             if step.actor_id == "subject":
-                if reward is None:
-                    raise ValueError(f"Schema {schema.schema_id!r} requires subject reward")
                 payload = {"choice": choice, "reward": reward}
             else:
                 if demonstrator_choice is None or demonstrator_reward is None:
@@ -1119,6 +1132,33 @@ def _parse_int_field(row: Mapping[str, str], field_name: str) -> int:
     return _parse_int_value(row[field_name], field_name=field_name)
 
 
+def _parse_optional_int_field(row: Mapping[str, str], field_name: str) -> int | None:
+    """Parse an integer field that may use a blank/NA marker.
+
+    Parameters
+    ----------
+    row
+        Normalized CSV row.
+    field_name
+        Field name to parse.
+
+    Returns
+    -------
+    int | None
+        Parsed integer value, or ``None`` when the cell is blank or marked as
+        missing.
+
+    Raises
+    ------
+    ValueError
+        Raised when the field is non-empty but not an integer.
+    """
+
+    if _is_missing_csv_value(row[field_name]):
+        return None
+    return _parse_int_field(row, field_name)
+
+
 def _parse_int_value(value: str, *, field_name: str) -> int:
     """Parse a raw string as an integer field value.
 
@@ -1174,7 +1214,7 @@ def _parse_float_field(row: Mapping[str, str], field_name: str) -> float:
 
 
 def _parse_optional_float_field(row: Mapping[str, str], field_name: str) -> float | None:
-    """Parse a floating-point field that may be intentionally blank.
+    """Parse a floating-point field that may use a blank/NA marker.
 
     Parameters
     ----------
@@ -1186,7 +1226,8 @@ def _parse_optional_float_field(row: Mapping[str, str], field_name: str) -> floa
     Returns
     -------
     float | None
-        Parsed float value, or ``None`` when the cell is empty.
+        Parsed float value, or ``None`` when the cell is blank or marked as
+        missing.
 
     Raises
     ------
@@ -1194,9 +1235,27 @@ def _parse_optional_float_field(row: Mapping[str, str], field_name: str) -> floa
         Raised when the field is non-empty but not a floating-point value.
     """
 
-    if row[field_name] == "":
+    if _is_missing_csv_value(row[field_name]):
         return None
     return _parse_float_field(row, field_name)
+
+
+def _is_missing_csv_value(value: str) -> bool:
+    """Return whether a CSV cell is using a common missing-value marker.
+
+    Parameters
+    ----------
+    value
+        Raw CSV cell value.
+
+    Returns
+    -------
+    bool
+        ``True`` when the cell is blank or contains a common NA token such as
+        ``"NA"`` or ``"NaN"``.
+    """
+
+    return value.strip().lower() in {"", "n/a", "na", "nan", "none", "null"}
 
 
 def _validate_action_in_available_set(
