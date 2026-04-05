@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from comp_model.data import (
     Block,
@@ -52,6 +52,7 @@ _COMMON_FIELDNAMES = (
     "choice",
     "reward",
 )
+_NA_MARKERS = frozenset({"", "n/a", "na", "nan", "none", "null"})
 # Social schemas keep one stable header across variants. Schemas without a
 # subject outcome still include the ``reward`` column, but export it as "".
 _SOCIAL_FIELDNAMES = (*_COMMON_FIELDNAMES, "demonstrator_choice", "demonstrator_reward")
@@ -556,7 +557,7 @@ def _infer_available_actions(
             raw_val = row.get(col_name)
             if raw_val is None:
                 raise ValueError(f"Row {row_number}: missing '{col_name}' column")
-            if isinstance(raw_val, str) and _is_missing_csv_value(raw_val):
+            if _is_missing_csv_value(cast("str", raw_val)):
                 continue
             try:
                 actions.add(int(raw_val))  # type: ignore[arg-type]
@@ -1255,7 +1256,7 @@ def _is_missing_csv_value(value: str) -> bool:
         ``"NA"`` or ``"NaN"``.
     """
 
-    return value.strip().lower() in {"", "n/a", "na", "nan", "none", "null"}
+    return value.strip().lower() in _NA_MARKERS
 
 
 def _validate_action_in_available_set(
