@@ -172,6 +172,102 @@ def test_load_social_post_outcome_reconstructs_demonstrator_after_outcome(
     assert trial.events[4].actor_id == "demonstrator"
 
 
+def test_save_action_only_schema_preserves_demonstrator_reward_in_csv(tmp_path: Path) -> None:
+    """Ensure action-only export keeps the demonstrator's latent reward in CSV.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test checks the serialized demonstrator reward cells directly.
+    """
+
+    cases = (
+        (
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            _dataset_with_schema_id(
+                _make_social_pre_choice_dataset(),
+                SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA.schema_id,
+            ),
+            "1.0",
+        ),
+        (
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+            _dataset_with_schema_id(
+                _make_social_post_outcome_dataset(),
+                SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA.schema_id,
+            ),
+            "0.0",
+        ),
+    )
+
+    for schema, dataset, expected_demo_reward in cases:
+        csv_path = tmp_path / f"{schema.schema_id}.csv"
+        save_dataset_to_csv(dataset, schema=schema, path=csv_path)
+
+        with csv_path.open("r", encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+
+        assert len(rows) == 1
+        assert rows[0]["demonstrator_reward"] == expected_demo_reward
+
+
+def test_load_action_only_schema_keeps_social_reward_hidden_from_subject(
+    tmp_path: Path,
+) -> None:
+    """Ensure action-only replay still hides reward after CSV round-trip.
+
+    Parameters
+    ----------
+    tmp_path
+        Temporary directory provided by pytest.
+
+    Returns
+    -------
+    None
+        This test verifies the subject-facing social update still has
+        ``reward is None`` after export and import.
+    """
+
+    cases = (
+        (
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            _dataset_with_schema_id(
+                _make_social_pre_choice_dataset(),
+                SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA.schema_id,
+            ),
+        ),
+        (
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+            _dataset_with_schema_id(
+                _make_social_post_outcome_dataset(),
+                SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA.schema_id,
+            ),
+        ),
+    )
+
+    for schema, dataset in cases:
+        csv_path = tmp_path / f"{schema.schema_id}.csv"
+        save_dataset_to_csv(dataset, schema=schema, path=csv_path)
+        loaded_dataset = load_dataset_from_csv(csv_path, schema=schema)
+
+        trial = loaded_dataset.subjects[0].blocks[0].trials[0]
+        subject_social_updates = [
+            view
+            for event_type, learner_id, view in replay_trial_steps(trial, schema)
+            if event_type == EventPhase.UPDATE
+            and learner_id == "subject"
+            and view.actor_id == "demonstrator"
+        ]
+
+        assert len(subject_social_updates) == 1
+        assert subject_social_updates[0].reward is None
+
+
 def test_save_no_self_outcome_schema_writes_blank_subject_reward(tmp_path: Path) -> None:
     """Ensure no-self-outcome schemas export an empty subject reward cell.
 
