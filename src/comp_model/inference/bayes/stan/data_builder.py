@@ -768,7 +768,8 @@ def _raw_steps_to_step_dict(
 
     Each replay step becomes one row in the Stan arrays, preserving the
     semantic ordering within each trial (e.g. social-update before choice
-    for PRE_CHOICE schemas).
+    for PRE_CHOICE schemas). Note that it is assumed that a learner is
+    subject. (`learner_id == "subject"`)
 
     Parameters
     ----------
@@ -803,6 +804,9 @@ def _raw_steps_to_step_dict(
 
     n_decisions = 0
     for idx, (block_id, cond_id, event_type, view) in enumerate(raw_steps):
+        assert view.learner_id == "subject", (
+            f"expected learner_id='subject', got {view.learner_id!r}"
+        )
         step_block[idx] = block_id
         step_condition[idx] = cond_id
         for action in view.available_actions:

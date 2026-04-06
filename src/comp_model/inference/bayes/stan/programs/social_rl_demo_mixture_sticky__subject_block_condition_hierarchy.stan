@@ -115,8 +115,6 @@ model {
       if (last_self_choice > 0) u[last_self_choice] += stickiness[cc];
       for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
       target += categorical_logit_lpmf(step_choice[e] | u);
-    }
-    if (step_update_action[e] > 0) {
       last_self_choice = step_update_action[e];
     }
     if (step_social_action[e] > 0) {
