@@ -84,9 +84,6 @@ model {
       target += categorical_logit_lpmf(step_choice[e] | u);
       last_self_choice[n] = step_choice[e];
     }
-    if (step_update_action[e] > 0) {
-      last_self_choice[n] = step_update_action[e];
-    }
     if (step_social_action[e] > 0) {
       last_demo_action[n] = step_social_action[e];
     }
@@ -119,9 +116,6 @@ generated quantities {
         for (a in 1:A) if (step_avail_mask[e][a] == 0) u[a] = negative_infinity();
         log_lik[d] = categorical_logit_lpmf(step_choice[e] | u);
         last_self_choice[n] = step_choice[e];
-      }
-      if (step_update_action[e] > 0) {
-        last_self_choice[n] = step_update_action[e];
       }
       if (step_social_action[e] > 0) {
         last_demo_action[n] = step_social_action[e];

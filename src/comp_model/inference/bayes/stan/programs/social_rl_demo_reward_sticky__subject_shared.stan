@@ -64,10 +64,6 @@ model {
       // Preserve the previous choice even when the trial omits feedback.
       last_self_choice = step_choice[e];
     }
-    // Self-outcome rows are ignored for learning but still refresh choice history.
-    if (step_update_action[e] > 0) {
-      last_self_choice = step_update_action[e];
-    }
     if (step_social_action[e] > 0) {
       int sa = step_social_action[e];
       Q[sa] = Q[sa] + alpha_other * (step_social_reward[e] - Q[sa]);
@@ -94,10 +90,6 @@ generated quantities {
         log_lik[d] = categorical_logit_lpmf(step_choice[e] | u);
         // Preserve the previous choice even when the trial omits feedback.
         last_self_choice = step_choice[e];
-      }
-      // Self-outcome rows are ignored for learning but still refresh choice history.
-      if (step_update_action[e] > 0) {
-        last_self_choice = step_update_action[e];
       }
       if (step_social_action[e] > 0) {
         int sa = step_social_action[e];
