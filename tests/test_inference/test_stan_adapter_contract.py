@@ -18,6 +18,9 @@ from comp_model.inference.bayes.stan.adapters.asocial_rl_asymmetric import (
 from comp_model.inference.bayes.stan.adapters.asocial_rl_sticky import (
     AsocialRlStickyStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_bias import (
+    SocialRlDemoActionBiasStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_bias_sticky import (
     SocialRlDemoActionBiasStickyStanAdapter,
 )
@@ -86,6 +89,14 @@ _ADAPTER_CASES: list[tuple[str, StanAdapter, set[str]]] = [
             "alpha_delta_z",
             "beta_delta_z",
             "stickiness_delta_z",
+        },
+    ),
+    (
+        "social_rl_demo_action_bias",
+        SocialRlDemoActionBiasStanAdapter(),
+        {
+            "demo_bias_shared_z",
+            "demo_bias_delta_z",
         },
     ),
     (

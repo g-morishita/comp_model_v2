@@ -9,6 +9,7 @@ import pytest
 from comp_model.data.schema import Block, Dataset, Event, EventPhase, SubjectData, Trial
 from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.adapters import (
+    SocialRlDemoActionBiasStanAdapter,
     SocialRlDemoActionBiasStickyStanAdapter,
     SocialRlSelfRewardDemoActionMixtureStickyStanAdapter,
 )
@@ -287,6 +288,12 @@ _ASOCIAL_ADAPTER_CASES = [
 ]
 
 _SOCIAL_ADAPTER_CASES = [
+    (
+        "social_rl_demo_action_bias",
+        SocialRlDemoActionBiasStanAdapter(),
+        _social_action_only_dataset,
+        SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    ),
     (
         "social_rl_demo_action_bias_sticky",
         SocialRlDemoActionBiasStickyStanAdapter(),
