@@ -11,6 +11,7 @@ from comp_model.models.kernels import (
     AsocialQLearningKernel,
     AsocialRlAsymmetricKernel,
     AsocialRlStickyKernel,
+    SocialRlDemoActionBiasKernel,
     SocialRlDemoActionBiasStickyKernel,
     SocialRlDemoMixtureKernel,
     SocialRlDemoMixtureStickyKernel,
@@ -100,6 +101,14 @@ class TestSocialKernelOnAsocialSchema:
         with pytest.raises(ValueError, match="requires social information"):
             check_kernel_schema_compatibility(
                 SocialRlDemoActionBiasStickyKernel(),
+                ASOCIAL_BANDIT_SCHEMA,
+            )
+
+    def test_demo_action_bias_kernel_on_asocial_raises(self) -> None:
+        """SocialRlDemoActionBiasKernel fails on asocial schema."""
+        with pytest.raises(ValueError, match="requires social information"):
+            check_kernel_schema_compatibility(
+                SocialRlDemoActionBiasKernel(),
                 ASOCIAL_BANDIT_SCHEMA,
             )
 
@@ -419,6 +428,18 @@ class TestActionOnlyKernelCompatibility:
 
     @pytest.mark.parametrize(
         "schema",
+        [
+            SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+            SOCIAL_POST_OUTCOME_ACTION_ONLY_SCHEMA,
+        ],
+        ids=["pre_choice_action_only", "post_outcome_action_only"],
+    )
+    def test_demo_action_bias_on_action_only_passes(self, schema) -> None:
+        """SocialRlDemoActionBiasKernel passes on action-only schemas."""
+        check_kernel_schema_compatibility(SocialRlDemoActionBiasKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
         [SOCIAL_PRE_CHOICE_SCHEMA, SOCIAL_POST_OUTCOME_SCHEMA],
         ids=["pre_choice", "post_outcome"],
     )
@@ -446,6 +467,15 @@ class TestActionOnlyKernelCompatibility:
     ) -> None:
         """SocialRlSelfRewardDemoActionMixtureStickyKernel passes on full-observation schemas."""
         check_kernel_schema_compatibility(SocialRlSelfRewardDemoActionMixtureStickyKernel(), schema)
+
+    @pytest.mark.parametrize(
+        "schema",
+        [SOCIAL_PRE_CHOICE_SCHEMA, SOCIAL_POST_OUTCOME_SCHEMA],
+        ids=["pre_choice", "post_outcome"],
+    )
+    def test_demo_action_bias_on_full_observation_passes(self, schema) -> None:
+        """SocialRlDemoActionBiasKernel passes on full-observation schemas."""
+        check_kernel_schema_compatibility(SocialRlDemoActionBiasKernel(), schema)
 
 
 # ---------------------------------------------------------------------------
