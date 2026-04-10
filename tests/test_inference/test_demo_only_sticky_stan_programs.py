@@ -8,6 +8,9 @@ from pathlib import Path
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_bias_sticky import (
     SocialRlDemoActionBiasStickyStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_sticky import (
+    SocialRlDemoActionStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture_sticky import (
     SocialRlDemoMixtureStickyStanAdapter,
 )
@@ -24,6 +27,7 @@ def test_demo_only_sticky_stan_programs_update_self_choice_on_decision_rows() ->
     """Demo-only sticky Stan programs must refresh stickiness state on choices."""
 
     adapters = (
+        SocialRlDemoActionStickyStanAdapter(),
         SocialRlDemoActionBiasStickyStanAdapter(),
         SocialRlDemoRewardStickyStanAdapter(),
         SocialRlDemoMixtureStickyStanAdapter(),

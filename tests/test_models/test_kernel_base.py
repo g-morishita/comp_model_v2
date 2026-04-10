@@ -6,11 +6,15 @@ from typing import Any
 import pytest
 
 from comp_model.models.kernels.base import ModelKernelSpec, ParameterSpec
+from comp_model.models.kernels.social_rl_demo_action import SocialRlDemoActionKernel
 from comp_model.models.kernels.social_rl_demo_action_bias import (
     SocialRlDemoActionBiasKernel,
 )
 from comp_model.models.kernels.social_rl_demo_action_bias_sticky import (
     SocialRlDemoActionBiasStickyKernel,
+)
+from comp_model.models.kernels.social_rl_demo_action_sticky import (
+    SocialRlDemoActionStickyKernel,
 )
 from comp_model.models.kernels.social_rl_demo_mixture import SocialRlDemoMixtureKernel
 from comp_model.models.kernels.social_rl_demo_mixture_sticky import (
@@ -122,6 +126,16 @@ class TestRequiredSocialFields:
                 id="social_demo_action_bias",
             ),
             pytest.param(
+                "SocialRlDemoActionKernel",
+                frozenset({"action"}),
+                id="social_demo_action",
+            ),
+            pytest.param(
+                "SocialRlDemoActionStickyKernel",
+                frozenset({"action"}),
+                id="social_demo_action_sticky",
+            ),
+            pytest.param(
                 "SocialRlDemoActionBiasStickyKernel",
                 frozenset({"action"}),
                 id="social_demo_action_bias_sticky",
@@ -189,6 +203,8 @@ class TestRequiredSocialFields:
     @pytest.mark.parametrize(
         "kernel_cls",
         [
+            "SocialRlDemoActionKernel",
+            "SocialRlDemoActionStickyKernel",
             "SocialRlDemoActionBiasStickyKernel",
             "SocialRlDemoActionBiasKernel",
             "SocialRlSelfRewardDemoRewardKernel",
@@ -232,6 +248,8 @@ class TestRequiredSocialFields:
     "kernel_cls",
     [
         SocialRlDemoActionBiasKernel,
+        SocialRlDemoActionKernel,
+        SocialRlDemoActionStickyKernel,
         SocialRlDemoActionBiasStickyKernel,
         SocialRlSelfRewardDemoRewardKernel,
         SocialRlSelfRewardDemoRewardStickyKernel,
@@ -263,6 +281,23 @@ def test_social_kernel_transform_lookup_is_cached_per_class(kernel_cls: type[Any
                 "demo_bias": 0.3,
             },
             id="social_demo_action_bias",
+        ),
+        pytest.param(
+            SocialRlDemoActionKernel(),
+            {
+                "alpha_other_action": 0.4,
+                "beta": 0.8,
+            },
+            id="social_demo_action",
+        ),
+        pytest.param(
+            SocialRlDemoActionStickyKernel(),
+            {
+                "alpha_other_action": 0.4,
+                "beta": 0.8,
+                "stickiness": -0.6,
+            },
+            id="social_demo_action_sticky",
         ),
         pytest.param(
             SocialRlDemoActionBiasStickyKernel(),

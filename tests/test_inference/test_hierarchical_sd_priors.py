@@ -11,6 +11,8 @@ from comp_model.environments.bandit import StationaryBanditEnvironment
 from comp_model.inference.bayes.stan.adapters import (
     SocialRlDemoActionBiasStanAdapter,
     SocialRlDemoActionBiasStickyStanAdapter,
+    SocialRlDemoActionStanAdapter,
+    SocialRlDemoActionStickyStanAdapter,
     SocialRlSelfRewardDemoActionMixtureStickyStanAdapter,
 )
 from comp_model.inference.bayes.stan.adapters.asocial_q_learning import (
@@ -291,6 +293,18 @@ _SOCIAL_ADAPTER_CASES = [
     (
         "social_rl_demo_action_bias",
         SocialRlDemoActionBiasStanAdapter(),
+        _social_action_only_dataset,
+        SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    ),
+    (
+        "social_rl_demo_action",
+        SocialRlDemoActionStanAdapter(),
+        _social_action_only_dataset,
+        SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
+    ),
+    (
+        "social_rl_demo_action_sticky",
+        SocialRlDemoActionStickyStanAdapter(),
         _social_action_only_dataset,
         SOCIAL_PRE_CHOICE_ACTION_ONLY_SCHEMA,
     ),
