@@ -17,6 +17,9 @@ from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_bias import 
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_bias_sticky import (
     SocialRlDemoActionBiasStickyStanAdapter,
 )
+from comp_model.inference.bayes.stan.adapters.social_rl_demo_action_sticky import (
+    SocialRlDemoActionStickyStanAdapter,
+)
 from comp_model.inference.bayes.stan.adapters.social_rl_demo_mixture import (
     SocialRlDemoMixtureStanAdapter,
 )
@@ -56,6 +59,7 @@ __all__ = (
     "SocialRlDemoActionBiasStanAdapter",
     "SocialRlDemoActionBiasStickyStanAdapter",
     "SocialRlDemoActionStanAdapter",
+    "SocialRlDemoActionStickyStanAdapter",
     "SocialRlDemoMixtureStanAdapter",
     "SocialRlDemoMixtureStickyStanAdapter",
     "SocialRlDemoRewardStanAdapter",

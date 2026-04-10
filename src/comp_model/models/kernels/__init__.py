@@ -31,6 +31,11 @@ from comp_model.models.kernels.social_rl_demo_action_bias_sticky import (
     SocialRlDemoActionBiasStickyParams,
     SocialRlDemoActionBiasStickyState,
 )
+from comp_model.models.kernels.social_rl_demo_action_sticky import (
+    SocialRlDemoActionStickyKernel,
+    SocialRlDemoActionStickyParams,
+    SocialRlDemoActionStickyState,
+)
 from comp_model.models.kernels.social_rl_demo_mixture import (
     SocialRlDemoMixtureKernel,
     SocialRlDemoMixtureParams,
@@ -106,6 +111,9 @@ __all__ = [
     "SocialRlDemoActionKernel",
     "SocialRlDemoActionParams",
     "SocialRlDemoActionState",
+    "SocialRlDemoActionStickyKernel",
+    "SocialRlDemoActionStickyParams",
+    "SocialRlDemoActionStickyState",
     "SocialRlDemoMixtureKernel",
     "SocialRlDemoMixtureParams",
     "SocialRlDemoMixtureState",
