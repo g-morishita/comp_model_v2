@@ -138,16 +138,15 @@ class SocialRlDemoActionStickyKernel(
         view: DecisionTrialView,
         params: SocialRlDemoActionStickyParams,
     ) -> SocialRlDemoActionStickyState:
-        """Update demonstrator action tendencies and preserve own-choice history."""
-        last_self_action = state.last_self_action
+        """Update only on demonstrator-action rows.
+
+        Own-choice state is recorded in ``observe_decision`` so self UPDATE and
+        timeout rows should leave the latent state unchanged, matching the Stan
+        programs for this model family.
+        """
 
         if view.actor_id == view.learner_id:
-            if view.action is not None:
-                last_self_action = view.action
-            return SocialRlDemoActionStickyState(
-                v_tendency=list(state.v_tendency),
-                last_self_action=last_self_action,
-            )
+            return state
 
         if view.action is not None:
             alpha = params.alpha_other_action
@@ -155,10 +154,7 @@ class SocialRlDemoActionStickyKernel(
             updated_v_tendency[view.action] += alpha
             return SocialRlDemoActionStickyState(
                 v_tendency=updated_v_tendency,
-                last_self_action=last_self_action,
+                last_self_action=state.last_self_action,
             )
 
-        return SocialRlDemoActionStickyState(
-            v_tendency=list(state.v_tendency),
-            last_self_action=last_self_action,
-        )
+        return state

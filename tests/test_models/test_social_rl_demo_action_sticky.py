@@ -22,14 +22,43 @@ def test_kernel_has_three_parameters() -> None:
     assert param_names == ["alpha_other_action", "beta", "stickiness"]
 
 
-def test_self_update_stores_previous_own_choice_without_changing_tendencies() -> None:
-    """Self-updates should refresh the perseveration state only."""
+def test_observe_decision_stores_previous_own_choice() -> None:
+    """Decision rows should refresh stickiness state immediately."""
 
     kernel = SocialRlDemoActionStickyKernel()
     params = kernel.parse_params({"alpha_other_action": 0.0, "beta": 1.0, "stickiness": 0.0})
     state = kernel.initial_state(2, params)
 
-    self_view = DecisionTrialView(
+    decision_view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
+    )
+    observed = kernel.observe_decision(state, decision_view, params)
+
+    assert observed.last_self_action == 1
+    assert observed.v_tendency == state.v_tendency
+
+
+def test_self_update_leaves_state_unchanged_after_observed_choice() -> None:
+    """Self UPDATE rows should not modify state beyond the decision hook."""
+
+    kernel = SocialRlDemoActionStickyKernel()
+    params = kernel.parse_params({"alpha_other_action": 0.0, "beta": 1.0, "stickiness": 0.0})
+    state = kernel.initial_state(2, params)
+
+    decision_view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=1,
+    )
+    observed = kernel.observe_decision(state, decision_view, params)
+
+    update_view = DecisionTrialView(
         trial_index=0,
         available_actions=(0, 1),
         actor_id="subject",
@@ -37,10 +66,11 @@ def test_self_update_stores_previous_own_choice_without_changing_tendencies() ->
         action=1,
         reward=1.0,
     )
-    updated = kernel.update(state, self_view, params)
+    updated = kernel.update(observed, update_view, params)
 
     assert updated.last_self_action == 1
-    assert updated.v_tendency == state.v_tendency
+    assert updated.v_tendency == observed.v_tendency
+    assert updated is observed
 
 
 def test_social_update_preserves_previous_own_choice_and_updates_tendencies() -> None:
