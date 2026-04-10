@@ -65,6 +65,28 @@ def test_self_update_preserves_demo_action_and_refreshes_own_choice() -> None:
     assert updated.last_self_action == 0
 
 
+def test_observe_decision_stores_previous_own_choice() -> None:
+    """Decision-time observation should refresh own-choice memory."""
+
+    kernel = SocialRlDemoActionBiasStickyKernel()
+    params = kernel.parse_params({"demo_bias": 0.0, "stickiness": 0.0})
+    state = kernel.initial_state(2, params)
+    state.last_demo_action = 1
+
+    decision_view = DecisionTrialView(
+        trial_index=0,
+        available_actions=(0, 1),
+        actor_id="subject",
+        learner_id="subject",
+        action=0,
+        reward=None,
+    )
+    observed = kernel.observe_decision(state, decision_view, params)
+
+    assert observed.last_demo_action == 1
+    assert observed.last_self_action == 0
+
+
 def test_action_probabilities_favor_latest_demo_action_with_positive_demo_bias() -> None:
     """A positive demo-bias term should favor the observed demonstrator action."""
 
