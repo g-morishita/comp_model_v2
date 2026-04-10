@@ -16,6 +16,11 @@ from comp_model.models.kernels.base import (
     ModelKernelSpec,
     ParameterSpec,
 )
+from comp_model.models.kernels.social_rl_demo_action import (
+    SocialRlDemoActionKernel,
+    SocialRlDemoActionParams,
+    SocialRlDemoActionState,
+)
 from comp_model.models.kernels.social_rl_demo_action_bias import (
     SocialRlDemoActionBiasKernel,
     SocialRlDemoActionBiasParams,
@@ -98,6 +103,9 @@ __all__ = [
     "SocialRlDemoActionBiasStickyKernel",
     "SocialRlDemoActionBiasStickyParams",
     "SocialRlDemoActionBiasStickyState",
+    "SocialRlDemoActionKernel",
+    "SocialRlDemoActionParams",
+    "SocialRlDemoActionState",
     "SocialRlDemoMixtureKernel",
     "SocialRlDemoMixtureParams",
     "SocialRlDemoMixtureState",
