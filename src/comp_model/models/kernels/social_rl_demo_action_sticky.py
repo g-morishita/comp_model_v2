@@ -139,26 +139,26 @@ class SocialRlDemoActionStickyKernel(
         params: SocialRlDemoActionStickyParams,
     ) -> SocialRlDemoActionStickyState:
         """Update demonstrator action tendencies and preserve own-choice history."""
-
-        updated_v_tendency = list(state.v_tendency)
         last_self_action = state.last_self_action
 
         if view.actor_id == view.learner_id:
             if view.action is not None:
                 last_self_action = view.action
             return SocialRlDemoActionStickyState(
-                v_tendency=updated_v_tendency,
+                v_tendency=list(state.v_tendency),
                 last_self_action=last_self_action,
             )
 
         if view.action is not None:
-            for action in range(len(updated_v_tendency)):
-                target = 1.0 if action == view.action else 0.0
-                updated_v_tendency[action] += params.alpha_other_action * (
-                    target - updated_v_tendency[action]
-                )
+            alpha = params.alpha_other_action
+            updated_v_tendency = [value * (1 - alpha) for value in state.v_tendency]
+            updated_v_tendency[view.action] += alpha
+            return SocialRlDemoActionStickyState(
+                v_tendency=updated_v_tendency,
+                last_self_action=last_self_action,
+            )
 
         return SocialRlDemoActionStickyState(
-            v_tendency=updated_v_tendency,
+            v_tendency=list(state.v_tendency),
             last_self_action=last_self_action,
         )
