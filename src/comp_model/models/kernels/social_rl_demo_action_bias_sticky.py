@@ -112,6 +112,23 @@ class SocialRlDemoActionBiasStickyKernel(
             logits.append(logit)
         return stable_softmax(logits)
 
+    def observe_decision(
+        self,
+        state: SocialRlDemoActionBiasStickyState,
+        view: DecisionTrialView,
+        params: SocialRlDemoActionBiasStickyParams,
+    ) -> SocialRlDemoActionBiasStickyState:
+        """Store the participant's most recent own choice at decision time."""
+
+        del params
+        if view.actor_id != view.learner_id or view.action is None:
+            return state
+
+        return SocialRlDemoActionBiasStickyState(
+            last_demo_action=state.last_demo_action,
+            last_self_action=view.action,
+        )
+
     def update(
         self,
         state: SocialRlDemoActionBiasStickyState,
