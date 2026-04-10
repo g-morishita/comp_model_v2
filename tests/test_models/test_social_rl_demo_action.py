@@ -40,6 +40,27 @@ def test_social_demo_action_kernel_ignores_self_updates() -> None:
     updated_state = kernel.update(state, self_view, params)
 
     assert updated_state.v_tendency == state.v_tendency
+    assert updated_state is state
+
+
+def test_social_demo_action_kernel_ignores_timeout_updates() -> None:
+    """Timeout UPDATE steps should return the existing state unchanged."""
+
+    kernel = SocialRlDemoActionKernel()
+    params = kernel.parse_params({"alpha_other_action": 0.0, "beta": 1.0})
+    state = kernel.initial_state(2, params)
+    timeout_view = DecisionTrialView(
+        trial_index=1,
+        available_actions=(0, 1),
+        actor_id="demonstrator",
+        learner_id="subject",
+        action=None,
+        reward=None,
+    )
+
+    updated_state = kernel.update(state, timeout_view, params)
+
+    assert updated_state is state
 
 
 def test_social_demo_action_kernel_updates_from_demonstrator_actions() -> None:

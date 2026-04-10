@@ -107,7 +107,7 @@ class SocialRlDemoActionKernel(ModelKernel[SocialRlDemoActionState, SocialRlDemo
     ) -> SocialRlDemoActionState:
         """Update action tendencies from demonstrator action observations only."""
         if view.actor_id == view.learner_id or view.action is None:
-            return SocialRlDemoActionState(v_tendency=list(state.v_tendency))
+            return state
 
         alpha = params.alpha_other_action
         updated_v_tendency = [value * (1 - alpha) for value in state.v_tendency]
