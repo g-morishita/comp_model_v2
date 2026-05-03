@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from comp_model.io.csv.base import TrialCsvConverter
+from typing import TYPE_CHECKING
+
 from comp_model.io.csv.converters import builtin_trial_csv_converters
-from comp_model.tasks import TrialSchema
+
+if TYPE_CHECKING:
+    from comp_model.io.csv.base import TrialCsvConverter
+    from comp_model.tasks import TrialSchema
 
 _TRIAL_CSV_CONVERTERS: dict[str, TrialCsvConverter] = {}
 
