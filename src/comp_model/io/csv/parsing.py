@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 _NA_MARKERS = frozenset({"", "n/a", "na", "nan", "none", "null"})
 
 
-def _normalize_output_row(
+def normalize_output_row(
     row: Mapping[str, str], *, expected_fields: tuple[str, ...]
 ) -> dict[str, str]:
     """Validate and order a converter-produced CSV row.
@@ -45,7 +45,7 @@ def _normalize_output_row(
     return {field: row[field] for field in expected_fields}
 
 
-def _validate_header_row(
+def validate_header_row(
     fieldnames: Sequence[str] | None,
     *,
     expected_fields: tuple[str, ...],
@@ -90,7 +90,7 @@ def _validate_header_row(
     return absent_optional
 
 
-def _normalize_input_row(
+def normalize_input_row(
     raw_row: Mapping[str | None, object],
     *,
     expected_fields: tuple[str, ...],
@@ -131,7 +131,7 @@ def _normalize_input_row(
     return normalized_row
 
 
-def _format_available_actions(available_actions: tuple[int, ...]) -> str:
+def format_available_actions(available_actions: tuple[int, ...]) -> str:
     """Encode legal actions into the stable CSV string form.
 
     Parameters
@@ -148,7 +148,7 @@ def _format_available_actions(available_actions: tuple[int, ...]) -> str:
     return "|".join(str(action) for action in available_actions)
 
 
-def _parse_available_actions(value: str) -> tuple[int, ...]:
+def parse_available_actions(value: str) -> tuple[int, ...]:
     """Parse the stable CSV encoding for legal actions.
 
     Parameters
@@ -183,7 +183,7 @@ def _parse_available_actions(value: str) -> tuple[int, ...]:
     return available_actions
 
 
-def _parse_non_negative_int(value: str, *, field_name: str) -> int:
+def parse_non_negative_int(value: str, *, field_name: str) -> int:
     """Parse a non-negative integer CSV field.
 
     Parameters
@@ -210,7 +210,7 @@ def _parse_non_negative_int(value: str, *, field_name: str) -> int:
     return parsed_value
 
 
-def _parse_int_field(row: Mapping[str, str], field_name: str) -> int:
+def parse_int_field(row: Mapping[str, str], field_name: str) -> int:
     """Parse an integer field from one normalized row.
 
     Parameters
@@ -229,7 +229,7 @@ def _parse_int_field(row: Mapping[str, str], field_name: str) -> int:
     return _parse_int_value(row[field_name], field_name=field_name)
 
 
-def _parse_optional_int_field(row: Mapping[str, str], field_name: str) -> int | None:
+def parse_optional_int_field(row: Mapping[str, str], field_name: str) -> int | None:
     """Parse an integer field that may use a blank/NA marker.
 
     Parameters
@@ -251,9 +251,9 @@ def _parse_optional_int_field(row: Mapping[str, str], field_name: str) -> int | 
         Raised when the field is non-empty but not an integer.
     """
 
-    if _is_missing_csv_value(row[field_name]):
+    if is_missing_csv_value(row[field_name]):
         return None
-    return _parse_int_field(row, field_name)
+    return parse_int_field(row, field_name)
 
 
 def _parse_int_value(value: str, *, field_name: str) -> int:
@@ -283,7 +283,7 @@ def _parse_int_value(value: str, *, field_name: str) -> int:
         raise ValueError(f"Field {field_name!r} must be an integer") from error
 
 
-def _parse_float_field(row: Mapping[str, str], field_name: str) -> float:
+def parse_float_field(row: Mapping[str, str], field_name: str) -> float:
     """Parse a floating-point field from one normalized row.
 
     Parameters
@@ -310,7 +310,7 @@ def _parse_float_field(row: Mapping[str, str], field_name: str) -> float:
         raise ValueError(f"Field {field_name!r} must be a float") from error
 
 
-def _parse_optional_float_field(row: Mapping[str, str], field_name: str) -> float | None:
+def parse_optional_float_field(row: Mapping[str, str], field_name: str) -> float | None:
     """Parse a floating-point field that may use a blank/NA marker.
 
     Parameters
@@ -332,12 +332,12 @@ def _parse_optional_float_field(row: Mapping[str, str], field_name: str) -> floa
         Raised when the field is non-empty but not a floating-point value.
     """
 
-    if _is_missing_csv_value(row[field_name]):
+    if is_missing_csv_value(row[field_name]):
         return None
-    return _parse_float_field(row, field_name)
+    return parse_float_field(row, field_name)
 
 
-def _is_missing_csv_value(value: str) -> bool:
+def is_missing_csv_value(value: str) -> bool:
     """Return whether a CSV cell is using a common missing-value marker.
 
     Parameters
@@ -355,7 +355,7 @@ def _is_missing_csv_value(value: str) -> bool:
     return value.strip().lower() in _NA_MARKERS
 
 
-def _validate_action_in_available_set(
+def validate_action_in_available_set(
     *, action: int, available_actions: tuple[int, ...], field_name: str
 ) -> None:
     """Validate that an action appears in the legal action set.
@@ -416,7 +416,7 @@ def _require_reward(reward: float | None, schema_id: str, trial_index: int) -> f
     return reward
 
 
-def _subject_reward_for_csv_export(
+def subject_reward_for_csv_export(
     *,
     choice: int | None,
     reward: float | None,
@@ -462,7 +462,7 @@ def _subject_reward_for_csv_export(
     return _require_reward(reward, schema.schema_id, trial_index)
 
 
-def _require_social_action(action: int | None, schema_id: str, trial_index: int) -> int:
+def require_social_action(action: int | None, schema_id: str, trial_index: int) -> int:
     """Require a demonstrator action during social CSV export.
 
     Parameters
@@ -493,7 +493,7 @@ def _require_social_action(action: int | None, schema_id: str, trial_index: int)
     return action
 
 
-def _require_social_reward(reward: float | None, schema_id: str, trial_index: int) -> float:
+def require_social_reward(reward: float | None, schema_id: str, trial_index: int) -> float:
     """Require a demonstrator reward during social CSV export.
 
     Parameters

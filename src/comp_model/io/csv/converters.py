@@ -7,20 +7,20 @@ from typing import TYPE_CHECKING
 
 from comp_model.io.csv.base import COMMON_FIELDNAMES, SOCIAL_FIELDNAMES, TrialCsvConverter
 from comp_model.io.csv.parsing import (
-    _parse_available_actions,
-    _parse_float_field,
-    _parse_int_field,
-    _parse_optional_float_field,
-    _parse_optional_int_field,
-    _require_social_action,
-    _require_social_reward,
-    _subject_reward_for_csv_export,
-    _validate_action_in_available_set,
+    parse_available_actions,
+    parse_float_field,
+    parse_int_field,
+    parse_optional_float_field,
+    parse_optional_int_field,
+    require_social_action,
+    require_social_reward,
+    subject_reward_for_csv_export,
+    validate_action_in_available_set,
 )
 from comp_model.io.csv.views import (
-    _build_common_row,
-    _build_trial_from_schema,
-    _extract_single_view,
+    build_common_row,
+    build_trial_from_schema,
+    extract_single_view,
 )
 from comp_model.tasks import (
     ASOCIAL_BANDIT_SCHEMA,
@@ -90,14 +90,14 @@ class AsocialBanditTrialCsvConverter:
             String-valued CSV row for the asocial schema.
         """
 
-        view = _extract_single_view(trial, self.schema)
-        reward = _subject_reward_for_csv_export(
+        view = extract_single_view(trial, self.schema)
+        reward = subject_reward_for_csv_export(
             choice=view.choice,
             reward=view.reward,
             schema=self.schema,
             trial_index=trial.trial_index,
         )
-        return _build_common_row(
+        return build_common_row(
             subject_id=subject_id,
             block_index=block_index,
             condition=condition,
@@ -126,21 +126,21 @@ class AsocialBanditTrialCsvConverter:
             with ``None`` payload values.
         """
 
-        available_actions = _parse_available_actions(row["available_actions"])
-        choice = _parse_optional_int_field(row, "choice")
-        reward = _parse_optional_float_field(row, "reward")
+        available_actions = parse_available_actions(row["available_actions"])
+        choice = parse_optional_int_field(row, "choice")
+        reward = parse_optional_float_field(row, "reward")
         if choice is None:
             if reward is not None:
                 raise ValueError("Field 'reward' must be empty when 'choice' is missing")
         else:
-            _validate_action_in_available_set(
+            validate_action_in_available_set(
                 action=choice,
                 available_actions=available_actions,
                 field_name="choice",
             )
             if reward is None:
                 raise ValueError("Field 'reward' must be a float when 'choice' is present")
-        return _build_trial_from_schema(
+        return build_trial_from_schema(
             schema=self.schema,
             trial_index=trial_index,
             available_actions=available_actions,
@@ -207,15 +207,15 @@ class SocialTrialCsvConverter:
             subject outcome serialize ``reward`` as ``""``.
         """
 
-        view = _extract_single_view(trial, self.schema)
-        subject_reward = _subject_reward_for_csv_export(
+        view = extract_single_view(trial, self.schema)
+        subject_reward = subject_reward_for_csv_export(
             choice=view.choice,
             reward=view.reward,
             schema=self.schema,
             trial_index=trial.trial_index,
         )
         return {
-            **_build_common_row(
+            **build_common_row(
                 subject_id=subject_id,
                 block_index=block_index,
                 condition=condition,
@@ -226,10 +226,10 @@ class SocialTrialCsvConverter:
                 reward=subject_reward,
             ),
             "demonstrator_choice": str(
-                _require_social_action(view.social_action, self.schema_id, trial.trial_index)
+                require_social_action(view.social_action, self.schema_id, trial.trial_index)
             ),
             "demonstrator_reward": str(
-                _require_social_reward(view.social_reward, self.schema_id, trial.trial_index)
+                require_social_reward(view.social_reward, self.schema_id, trial.trial_index)
             ),
         }
 
@@ -253,11 +253,11 @@ class SocialTrialCsvConverter:
             while preserving demonstrator information.
         """
 
-        available_actions = _parse_available_actions(row["available_actions"])
-        choice = _parse_optional_int_field(row, "choice")
-        reward = _parse_optional_float_field(row, "reward")
-        demonstrator_choice = _parse_int_field(row, "demonstrator_choice")
-        demonstrator_reward = _parse_float_field(row, "demonstrator_reward")
+        available_actions = parse_available_actions(row["available_actions"])
+        choice = parse_optional_int_field(row, "choice")
+        reward = parse_optional_float_field(row, "reward")
+        demonstrator_choice = parse_int_field(row, "demonstrator_choice")
+        demonstrator_reward = parse_float_field(row, "demonstrator_reward")
         if choice is None and reward is not None:
             raise ValueError("Field 'reward' must be empty when 'choice' is missing")
         if self.schema.has_subject_reward:
@@ -266,17 +266,17 @@ class SocialTrialCsvConverter:
         elif reward is not None:
             raise ValueError(f"Field 'reward' must be empty for schema {self.schema_id!r}")
         if choice is not None:
-            _validate_action_in_available_set(
+            validate_action_in_available_set(
                 action=choice,
                 available_actions=available_actions,
                 field_name="choice",
             )
-        _validate_action_in_available_set(
+        validate_action_in_available_set(
             action=demonstrator_choice,
             available_actions=available_actions,
             field_name="demonstrator_choice",
         )
-        return _build_trial_from_schema(
+        return build_trial_from_schema(
             schema=self.schema,
             trial_index=trial_index,
             available_actions=available_actions,

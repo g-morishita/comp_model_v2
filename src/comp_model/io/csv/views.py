@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from comp_model.data import Event, EventPhase, Trial, replay_trial_steps
-from comp_model.io.csv.parsing import _format_available_actions
+from comp_model.io.csv.parsing import format_available_actions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -33,7 +33,7 @@ class _CombinedTrialView:
     observation: dict[str, Any]
 
 
-def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialView:
+def extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialView:
     """Collapse one trial into the row-shaped view used by built-in converters.
 
     Parameters
@@ -102,7 +102,7 @@ def _extract_single_view(trial: Trial, schema: TrialSchema) -> _CombinedTrialVie
     )
 
 
-def _build_common_row(
+def build_common_row(
     *,
     subject_id: str,
     block_index: int,
@@ -146,13 +146,13 @@ def _build_common_row(
         "condition": condition,
         "schema_id": schema_id,
         "trial_index": str(trial_index),
-        "available_actions": _format_available_actions(available_actions),
+        "available_actions": format_available_actions(available_actions),
         "choice": "" if choice is None else str(choice),
         "reward": "" if reward is None else str(reward),
     }
 
 
-def _build_trial_from_schema(
+def build_trial_from_schema(
     *,
     schema: TrialSchema,
     trial_index: int,
