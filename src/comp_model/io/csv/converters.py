@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from comp_model.io.csv.base import COMMON_FIELDNAMES, SOCIAL_FIELDNAMES, TrialCsvConverter
 from comp_model.io.csv.parsing import (
