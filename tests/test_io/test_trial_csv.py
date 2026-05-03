@@ -17,6 +17,7 @@ from comp_model.data import (
     replay_trial_steps,
 )
 from comp_model.io import (
+    TrialCsvConverter,
     get_trial_csv_converter,
     load_dataset_from_csv,
     register_trial_csv_converter,
@@ -73,14 +74,22 @@ def test_csv_package_exports_public_api() -> None:
     """
 
     from comp_model.io.csv import (
-        TrialCsvConverter,
+        TrialCsvConverter as DirectTrialCsvConverter,
+    )
+    from comp_model.io.csv import (
         get_trial_csv_converter as direct_get_trial_csv_converter,
+    )
+    from comp_model.io.csv import (
         load_dataset_from_csv as direct_load_dataset_from_csv,
+    )
+    from comp_model.io.csv import (
         register_trial_csv_converter as direct_register_trial_csv_converter,
+    )
+    from comp_model.io.csv import (
         save_dataset_to_csv as direct_save_dataset_to_csv,
     )
 
-    assert TrialCsvConverter is not None
+    assert DirectTrialCsvConverter is TrialCsvConverter
     assert direct_get_trial_csv_converter is get_trial_csv_converter
     assert direct_load_dataset_from_csv is load_dataset_from_csv
     assert direct_register_trial_csv_converter is register_trial_csv_converter
