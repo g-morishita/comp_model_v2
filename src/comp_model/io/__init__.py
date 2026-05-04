@@ -1,6 +1,6 @@
-"""Schema-specific CSV import and export helpers."""
+"""File import and export helpers."""
 
-from comp_model.io.trial_csv import (
+from comp_model.io.csv import (
     TrialCsvConverter,
     get_trial_csv_converter,
     load_dataset_from_csv,

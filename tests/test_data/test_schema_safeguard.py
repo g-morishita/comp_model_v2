@@ -354,7 +354,7 @@ class TestCsvSchemaIdRoundTrip:
 
     def test_load_rejects_csv_with_wrong_schema(self, tmp_path: Path) -> None:
         """A CSV exported under one schema cannot be loaded with a different one."""
-        from comp_model.io.trial_csv import load_dataset_from_csv
+        from comp_model.io import load_dataset_from_csv
 
         # Hand-craft a CSV stamped with social_pre_choice schema_id.
         csv_path = tmp_path / "social.csv"
@@ -371,7 +371,7 @@ class TestCsvSchemaIdRoundTrip:
 
     def test_round_trip_with_matching_schema_passes(self, tmp_path: Path) -> None:
         """A CSV exported and loaded with the same schema succeeds."""
-        from comp_model.io.trial_csv import load_dataset_from_csv, save_dataset_to_csv
+        from comp_model.io import load_dataset_from_csv, save_dataset_to_csv
 
         dataset = Dataset(subjects=(_subject(ASOCIAL_BANDIT_SCHEMA.schema_id, "sub_00"),))
         csv_path = tmp_path / "asocial.csv"
@@ -383,7 +383,7 @@ class TestCsvSchemaIdRoundTrip:
 
     def test_export_rejects_block_with_wrong_schema_id(self, tmp_path: Path) -> None:
         """save_dataset_to_csv rejects blocks stamped with a different schema_id."""
-        from comp_model.io.trial_csv import save_dataset_to_csv
+        from comp_model.io import save_dataset_to_csv
 
         # Block stamped with wrong schema_id but containing valid asocial trials.
         dataset = Dataset(subjects=(_subject("wrong_schema", "sub_00"),))

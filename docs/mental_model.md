@@ -63,7 +63,7 @@ Dataset
              └─ Event    (INPUT / DECISION / OUTCOME / UPDATE)
 ```
 
-Real data comes in as CSV → `io.trial_csv` reconstructs this hierarchy. Simulated data comes out of `engine.py` in the same hierarchy. Every downstream piece of code (fitting, validation, recovery) works on this hierarchy regardless of source.
+Real data comes in as CSV → `io.csv` reconstructs this hierarchy. Simulated data comes out of `engine.py` in the same hierarchy. Every downstream piece of code (fitting, validation, recovery) works on this hierarchy regardless of source.
 
 ---
 
