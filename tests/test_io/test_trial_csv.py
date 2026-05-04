@@ -17,6 +17,7 @@ from comp_model.data import (
     replay_trial_steps,
 )
 from comp_model.io import (
+    TrialCsvConverter,
     get_trial_csv_converter,
     load_dataset_from_csv,
     register_trial_csv_converter,
@@ -61,6 +62,38 @@ def test_get_trial_csv_converter_returns_registered_builtin() -> None:
         "choice",
         "reward",
     )
+
+
+def test_csv_package_exports_public_api() -> None:
+    """Ensure the direct CSV package exposes the intended public functions.
+
+    Returns
+    -------
+    None
+        This test asserts direct ``comp_model.io.csv`` imports only.
+    """
+
+    from comp_model.io.csv import (
+        TrialCsvConverter as DirectTrialCsvConverter,
+    )
+    from comp_model.io.csv import (
+        get_trial_csv_converter as direct_get_trial_csv_converter,
+    )
+    from comp_model.io.csv import (
+        load_dataset_from_csv as direct_load_dataset_from_csv,
+    )
+    from comp_model.io.csv import (
+        register_trial_csv_converter as direct_register_trial_csv_converter,
+    )
+    from comp_model.io.csv import (
+        save_dataset_to_csv as direct_save_dataset_to_csv,
+    )
+
+    assert DirectTrialCsvConverter is TrialCsvConverter
+    assert direct_get_trial_csv_converter is get_trial_csv_converter
+    assert direct_load_dataset_from_csv is load_dataset_from_csv
+    assert direct_register_trial_csv_converter is register_trial_csv_converter
+    assert direct_save_dataset_to_csv is save_dataset_to_csv
 
 
 def test_save_and_load_dataset_round_trip_preserves_fitting_views(tmp_path: Path) -> None:
